@@ -334,7 +334,7 @@ function calculateNuptiaScoreContribution(scores) {
 
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
-const { db } = require('../services/storage/sqlite.service');
+const { db } = require('../services/storage/postgres.service');
 const ocrSpaceService = require('../services/ocr/ocrSpace.service');
 const usgExtractorService = require('../services/parser/usgExtractor.service');
 
@@ -392,7 +392,7 @@ function analyzeUsg(req, res, next) {
   }
 }
 
-function persistReport(req, res, next) {
+async function persistReport(req, res, next) {
   try {
     const data = req.body;
     const analyzed = runAnalysis(data);
@@ -401,8 +401,10 @@ function persistReport(req, res, next) {
     const reportId = uuidv4();
     const slayId = data.patient?.patient_slay_id || null;
     
-    const stmt = db.prepare('INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results) VALUES (?, ?, ?, ?)');
-    stmt.run(reportId, slayId, JSON.stringify(data), JSON.stringify(analyzed));
+    await db.query(
+      'INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results) VALUES ($1, $2, $3, $4)',
+      [reportId, slayId, JSON.stringify(data), JSON.stringify(analyzed)]
+    );
     
     res.json({ reportId, analyzed });
   } catch (err) {
@@ -410,11 +412,11 @@ function persistReport(req, res, next) {
   }
 }
 
-function getReport(req, res, next) {
+async function getReport(req, res, next) {
   try {
     const { id } = req.params;
-    const stmt = db.prepare('SELECT * FROM usg_reports WHERE id = ?');
-    const row = stmt.get(id);
+    const { rows } = await db.query('SELECT * FROM usg_reports WHERE id = $1', [id]);
+    const row = rows[0];
     if (!row) return res.status(404).json({ error: 'Report not found' });
     
     res.json({
@@ -429,14 +431,15 @@ function getReport(req, res, next) {
   }
 }
 
-function analyzeCouple(req, res, next) {
+async function analyzeCouple(req, res, next) {
   try {
     const { reportId_A, reportId_B } = req.body;
     if (!reportId_A || !reportId_B) return res.status(400).json({ error: 'Both reportId_A and reportId_B required' });
     
-    const stmt = db.prepare('SELECT extracted_json, analyzed_results FROM usg_reports WHERE id = ?');
-    const rowA = stmt.get(reportId_A);
-    const rowB = stmt.get(reportId_B);
+    const rowARes = await db.query('SELECT extracted_json, analyzed_results FROM usg_reports WHERE id = $1', [reportId_A]);
+    const rowBRes = await db.query('SELECT extracted_json, analyzed_results FROM usg_reports WHERE id = $1', [reportId_B]);
+    const rowA = rowARes.rows[0];
+    const rowB = rowBRes.rows[0];
     
     if (!rowA || !rowB) return res.status(404).json({ error: 'One or both reports not found in database' });
     
@@ -455,14 +458,15 @@ function analyzeCouple(req, res, next) {
   }
 }
 
-function getCoupleSummary(req, res, next) {
+async function getCoupleSummary(req, res, next) {
   try {
     const { reportId_A, reportId_B } = req.body;
     if (!reportId_A || !reportId_B) return res.status(400).json({ error: 'Both reportId_A and reportId_B required' });
     
-    const stmt = db.prepare('SELECT analyzed_results FROM usg_reports WHERE id = ?');
-    const rowA = stmt.get(reportId_A);
-    const rowB = stmt.get(reportId_B);
+    const rowARes = await db.query('SELECT analyzed_results FROM usg_reports WHERE id = $1', [reportId_A]);
+    const rowBRes = await db.query('SELECT analyzed_results FROM usg_reports WHERE id = $1', [reportId_B]);
+    const rowA = rowARes.rows[0];
+    const rowB = rowBRes.rows[0];
     
     if (!rowA || !rowB) return res.status(404).json({ error: 'One or both reports not found in database' });
     
@@ -496,8 +500,10 @@ async function uploadReport(req, res, next) {
     // 4. Persistence
     const reportId = uuidv4();
     const slayId = extractedJson.patient?.patient_slay_id || null;
-    const stmt = db.prepare('INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results) VALUES (?, ?, ?, ?)');
-    stmt.run(reportId, slayId, JSON.stringify(extractedJson), JSON.stringify(analyzed));
+    await db.query(
+      'INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results) VALUES ($1, $2, $3, $4)',
+      [reportId, slayId, JSON.stringify(extractedJson), JSON.stringify(analyzed)]
+    );
     
     // 5. Cleanup temp file
     fs.unlinkSync(filePath);

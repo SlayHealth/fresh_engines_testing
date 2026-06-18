@@ -1,4 +1,4 @@
-const { db } = require('../services/storage/sqlite.service');
+const { db } = require('../services/storage/postgres.service');
 const { z } = require('zod');
 
 // Schema for updating a single row column dynamically
@@ -6,18 +6,27 @@ const updateRowSchema = z.record(z.string(), z.any()).refine(data => Object.keys
   message: "Updates must contain exactly one column-value pair"
 });
 
-function getTables(req, res, next) {
+async function getTables(req, res, next) {
   try {
-    const tablesQuery = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
-    const tables = tablesQuery.all();
+    const tablesResult = await db.query(
+      "SELECT table_name AS name FROM information_schema.tables WHERE table_schema='public'"
+    );
+    const tables = tablesResult.rows;
     
-    const schemaData = tables.map(t => {
-      const columnsQuery = db.prepare(`PRAGMA table_info('${t.name}')`);
-      return {
+    const schemaData = [];
+    for (const t of tables) {
+      const columnsResult = await db.query(
+        `SELECT column_name AS name, data_type AS type FROM information_schema.columns WHERE table_name = $1`,
+        [t.name]
+      );
+      schemaData.push({
         name: t.name,
-        columns: columnsQuery.all()
-      };
-    });
+        columns: columnsResult.rows.map(c => ({
+          name: c.name,
+          type: c.type
+        }))
+      });
+    }
 
     res.json({ success: true, tables: schemaData });
   } catch (error) {
@@ -25,20 +34,30 @@ function getTables(req, res, next) {
   }
 }
 
-function getTableData(req, res, next) {
+async function getTableData(req, res, next) {
   try {
     const { tableName } = req.params;
     
     // Prevent SQL injection by validating table name against schema
-    const tablesQuery = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?");
-    const tableExists = tablesQuery.get(tableName);
+    const tableExistsRes = await db.query(
+      "SELECT table_name AS name FROM information_schema.tables WHERE table_schema='public' AND table_name = $1",
+      [tableName]
+    );
+    const tableExists = tableExistsRes.rows[0];
     
     if (!tableExists) {
       return res.status(404).json({ success: false, error: 'Table not found' });
     }
 
-    const dataQuery = db.prepare(`SELECT * FROM "${tableName}" ORDER BY rowid DESC LIMIT 100`);
-    const data = dataQuery.all();
+    // Check if created_at column exists for ordering
+    const colsRes = await db.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name = 'created_at'",
+      [tableName]
+    );
+    const orderCol = colsRes.rows.length > 0 ? 'created_at' : 'id';
+
+    const dataRes = await db.query(`SELECT * FROM "${tableName}" ORDER BY "${orderCol}" DESC LIMIT 100`);
+    const data = dataRes.rows;
 
     res.json({ success: true, data });
   } catch (error) {
@@ -46,7 +65,7 @@ function getTableData(req, res, next) {
   }
 }
 
-function updateTableRow(req, res, next) {
+async function updateTableRow(req, res, next) {
   try {
     const { tableName, id } = req.params;
     
@@ -62,16 +81,22 @@ function updateTableRow(req, res, next) {
     const updates = validation.data;
 
     // Validate table name
-    const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(tableName);
+    const tableExists = (await db.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = $1",
+      [tableName]
+    )).rows[0];
+    
     if (!tableExists) return res.status(404).json({ success: false, error: 'Table not found' });
 
     const columnName = Object.keys(updates)[0];
     const value = updates[columnName];
 
-    const updateQuery = db.prepare(`UPDATE "${tableName}" SET "${columnName}" = ? WHERE id = ?`);
-    const info = updateQuery.run(value, id);
+    const result = await db.query(
+      `UPDATE "${tableName}" SET "${columnName}" = $1 WHERE id = $2`,
+      [value, id]
+    );
 
-    if (info.changes === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Row not found' });
     }
 
@@ -81,18 +106,21 @@ function updateTableRow(req, res, next) {
   }
 }
 
-function deleteTableRow(req, res, next) {
+async function deleteTableRow(req, res, next) {
   try {
     const { tableName, id } = req.params;
 
     // Validate table name
-    const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(tableName);
+    const tableExists = (await db.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = $1",
+      [tableName]
+    )).rows[0];
+    
     if (!tableExists) return res.status(404).json({ success: false, error: 'Table not found' });
 
-    const deleteQuery = db.prepare(`DELETE FROM "${tableName}" WHERE id = ?`);
-    const info = deleteQuery.run(id);
+    const result = await db.query(`DELETE FROM "${tableName}" WHERE id = $1`, [id]);
 
-    if (info.changes === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Row not found' });
     }
 

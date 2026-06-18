@@ -1,4 +1,4 @@
-const { db } = require('../services/storage/sqlite.service');
+const { db } = require('../services/storage/postgres.service');
 
 // Constants
 const FEMALE_AGE_LIMIT = 45;
@@ -188,7 +188,7 @@ function findExtractedParam(extracted_data, canonical_name) {
 }
 
 // Main Analyze Controller
-function analyzeMfr(req, res, next) {
+async function analyzeMfr(req, res, next) {
   try {
     const { 
       male_report_id, 
@@ -202,13 +202,14 @@ function analyzeMfr(req, res, next) {
     let parsedMaleData = null;
     let parsedFemaleData = null;
 
-    const getReportQuery = db.prepare("SELECT extracted_json FROM reports WHERE id = ?");
     if (male_report_id) {
-      const maleReport = getReportQuery.get(male_report_id);
+      const maleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [male_report_id]);
+      const maleReport = maleReportRes.rows[0];
       if (maleReport) parsedMaleData = JSON.parse(maleReport.extracted_json);
     }
     if (female_report_id) {
-      const femaleReport = getReportQuery.get(female_report_id);
+      const femaleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [female_report_id]);
+      const femaleReport = femaleReportRes.rows[0];
       if (femaleReport) parsedFemaleData = JSON.parse(femaleReport.extracted_json);
     }
 

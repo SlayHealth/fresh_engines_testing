@@ -8,7 +8,7 @@ const chronicRoutes = require('./routes/chronic.routes');
 const mfrRoutes = require('./routes/mfr.routes');
 const usgRoutes = require('./routes/usg.routes');
 const { healthCheck } = require('./controllers/pathology.controller');
-const { cleanupOldReports } = require('./services/storage/sqlite.service');
+const { initDB, cleanupOldReports } = require('./services/storage/postgres.service');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -32,17 +32,25 @@ app.use('/api/usg', usgRoutes);
 app.use(errorHandler);
 
 // Scheduled job for cleanup (Every hour)
-setInterval(() => {
+setInterval(async () => {
   logger.info('Running scheduled cleanup of old reports...');
   try {
-    const deletedCount = cleanupOldReports();
+    const deletedCount = await cleanupOldReports();
     logger.info(`Cleanup finished. Deleted ${deletedCount} old reports.`);
   } catch (error) {
     logger.error(`Cleanup failed: ${error.message}`);
   }
 }, 60 * 60 * 1000);
 
-// Start Server
-app.listen(PORT, () => {
-  logger.info(`SlayHealth Pathology Backend running on port ${PORT}`);
-});
+// Initialize DB and Start Server
+initDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      logger.info(`SlayHealth Pathology Backend running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    logger.error('Fatal: Failed to initialize database:', err);
+    process.exit(1);
+  });
+

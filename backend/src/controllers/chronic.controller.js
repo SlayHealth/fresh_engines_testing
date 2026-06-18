@@ -1,4 +1,4 @@
-const { db } = require('../services/storage/sqlite.service');
+const { db } = require('../services/storage/postgres.service');
 
 // HSP v2.1 Priors & Constants
 const BASELINE_RISK_PROB = 0.10;
@@ -185,7 +185,7 @@ function extractPatientData(manual_data, extracted_data, gender, shared_lifestyl
 }
 
 // 6. Main Analyze Endpoint Route
-function analyzeChronic(req, res, next) {
+async function analyzeChronic(req, res, next) {
   try {
     const { 
       male_report_id, 
@@ -199,9 +199,10 @@ function analyzeChronic(req, res, next) {
       return res.status(400).json({ success: false, error: 'Both male_report_id and female_report_id are required' });
     }
 
-    const getReportQuery = db.prepare("SELECT extracted_json FROM reports WHERE id = ?");
-    const maleReport = getReportQuery.get(male_report_id);
-    const femaleReport = getReportQuery.get(female_report_id);
+    const maleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [male_report_id]);
+    const femaleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [female_report_id]);
+    const maleReport = maleReportRes.rows[0];
+    const femaleReport = femaleReportRes.rows[0];
 
     if (!maleReport) return res.status(404).json({ success: false, error: 'Male report not found' });
     if (!femaleReport) return res.status(404).json({ success: false, error: 'Female report not found' });

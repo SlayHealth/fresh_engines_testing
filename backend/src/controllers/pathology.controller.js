@@ -2,13 +2,17 @@ const express = require('express');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const fs = require('fs');
 const ocrProvider = require('../services/ocr/ocrProvider');
 const parameterExtractor = require('../services/parser/parameterExtractor.service');
 const logger = require('../utils/logger');
-const { db } = require('../services/storage/sqlite.service');
+const { db } = require('../services/storage/postgres.service');
 
 // Configure Multer for file uploads
 const uploadDir = path.resolve(__dirname, '../temp/uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -45,29 +49,29 @@ async function extractPathology(req, res, next) {
     logger.info(`Starting extraction for report ${reportId}, file: ${req.file.originalname}`);
 
     // Insert initial report record
-    const insertReport = db.prepare(`
+    await db.query(`
       INSERT INTO reports (id, file_name, processing_status, confidence_score) 
-      VALUES (?, ?, ?, ?)
-    `);
-    insertReport.run(reportId, req.file.originalname, 'processing', 0.0);
+      VALUES ($1, $2, $3, $4)
+    `, [reportId, req.file.originalname, 'processing', 0.0]);
 
     // 1. OCR Step
     logger.info(`Extracting text via OCR for ${reportId}`);
     const ocrPages = await ocrProvider.process(filePath);
 
     // Save OCR text to DB
-    const insertPage = db.prepare(`
-      INSERT INTO ocr_pages (report_id, page_number, raw_text) 
-      VALUES (?, ?, ?)
-    `);
-    
-    // We will use a transaction for inserts
-    const insertPagesTx = db.transaction((pages) => {
-      for (const page of pages) {
-        insertPage.run(reportId, page.page, page.text);
-      }
-    });
-    insertPagesTx(ocrPages);
+    if (ocrPages.length > 0) {
+      const values = [];
+      const valuePlaceholders = [];
+      ocrPages.forEach((page, idx) => {
+        values.push(reportId, page.page, page.text);
+        const offset = idx * 3;
+        valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3})`);
+      });
+      await db.query(`
+        INSERT INTO ocr_pages (report_id, page_number, raw_text)
+        VALUES ${valuePlaceholders.join(', ')}
+      `, values);
+    }
 
     // 2. Parsing Step
     logger.info(`Parsing parameters for ${reportId}`);
@@ -88,12 +92,10 @@ async function extractPathology(req, res, next) {
     const averageConfidence = totalParams > 0 ? parseFloat((totalConfidence / totalParams).toFixed(2)) : 0.0;
     const processingTime = Date.now() - startTime;
     
-    // Update DB status
     // Update DB status and store JSON array
-    const updateReport = db.prepare(`
-      UPDATE reports SET processing_status = ?, confidence_score = ?, extracted_json = ? WHERE id = ?
-    `);
-    updateReport.run('completed', averageConfidence, JSON.stringify(extractedData), reportId);
+    await db.query(`
+      UPDATE reports SET processing_status = $1, confidence_score = $2, extracted_json = $3 WHERE id = $4
+    `, ['completed', averageConfidence, JSON.stringify(extractedData), reportId]);
 
     // 3. Return JSON Response Contract
     const responseData = {
@@ -116,10 +118,9 @@ async function extractPathology(req, res, next) {
     
     // Update DB status on error
     try {
-      const updateReportError = db.prepare(`
-        UPDATE reports SET processing_status = ? WHERE id = ?
-      `);
-      updateReportError.run('failed', reportId);
+      await db.query(`
+        UPDATE reports SET processing_status = $1 WHERE id = $2
+      `, ['failed', reportId]);
     } catch(e) {
       logger.error(`Could not update report status: ${e.message}`);
     }
@@ -138,7 +139,7 @@ function healthCheck(req, res) {
 /**
  * Mock Extraction endpoint (for testing API contract without uploading)
  */
-function mockExtract(req, res, next) {
+async function mockExtract(req, res, next) {
   try {
     const reportId = uuidv4();
     const extractedData = {
@@ -149,11 +150,10 @@ function mockExtract(req, res, next) {
     };
 
     // Insert mock report into DB so /analyze can find it
-    const insertReport = db.prepare(`
+    await db.query(`
       INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json) 
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    insertReport.run(reportId, 'mock_report.pdf', 'completed', 0.96, JSON.stringify(extractedData));
+      VALUES ($1, $2, $3, $4, $5)
+    `, [reportId, 'mock_report.pdf', 'completed', 0.96, JSON.stringify(extractedData)]);
 
     res.json({
       success: true,

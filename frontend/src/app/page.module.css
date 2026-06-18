@@ -1,0 +1,434 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 4rem;
+}
+
+.title {
+  font-size: 3rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 1rem;
+}
+
+.subtitle {
+  color: #9ca3af;
+  font-size: 1.25rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.uploadSection {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4rem;
+}
+
+.dropzone {
+  width: 100%;
+  max-width: 600px;
+  padding: 3rem 2rem;
+  text-align: center;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dropzone:hover, .dropzoneActive {
+  border-color: var(--primary);
+  background: rgba(59, 130, 246, 0.05);
+  transform: translateY(-2px);
+}
+
+.uploadIcon {
+  color: var(--primary);
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+}
+
+.uploadText {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.uploadSubtext {
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+.dashboard {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.metricCard {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.metricLabel {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metricValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sectionsContainer {
+  display: grid;
+  gap: 2rem;
+}
+
+.sectionCard {
+  padding: 2rem;
+}
+
+.sectionTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: var(--primary);
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 0.5rem;
+}
+
+.tableContainer {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 1rem;
+  color: #9ca3af;
+  font-weight: 500;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.table td {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.paramName {
+  font-weight: 500;
+  color: #fff;
+}
+
+.confidenceBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.confidenceBadge.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Loader */
+.loader {
+  border: 3px solid var(--glass-border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Dual Upload Layout */
+.dualUploadContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .dualUploadContainer {
+    grid-template-columns: 1fr;
+  }
+}
+
+.uploadWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.uploadLabel {
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Glowing Button */
+.glowingButton {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto 4rem;
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(45deg, #ec4899, #8b5cf6);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.glowingButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(236, 72, 153, 0.6);
+}
+
+.glowingButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Match Score Card */
+.matchScoreCard {
+  text-align: center;
+  padding: 3rem;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(236, 72, 153, 0.2);
+  border-radius: 16px;
+  margin-bottom: 3rem;
+}
+
+.matchScoreTitle {
+  font-size: 1.5rem;
+  color: #9ca3af;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.matchScoreValue {
+  font-size: 5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1;
+}
+
+/* Side by Side Table */
+.sideBySideTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sideBySideTable th {
+  text-align: center;
+  padding: 1rem;
+  color: #9ca3af;
+  font-weight: 500;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.sideBySideTable td {
+  padding: 1rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sideBySideTable .paramName {
+  font-weight: 600;
+  color: #fff;
+  text-align: left;
+}
+
+/* LaTeX Typography Theme for Chronic Engine */
+.latexDoc {
+  --ink: #1A2026;
+  --teal: #0E7C7B;
+  --amber: #B45309;
+  --rose: #B91C1C;
+  --rule: #C9D2DA;
+  --soft: #5A6672;
+  --boxbg: #F2F6F6;
+  
+  background-color: #FFFFFF !important;
+  color: var(--ink) !important;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.latexDoc .title {
+  background: none;
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: var(--ink);
+  color: var(--ink);
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 2.2rem;
+  font-weight: 700;
+  border-bottom: 2px solid var(--rule);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.latexDoc .subtitle, .latexDoc .docMeta {
+  color: var(--soft);
+  font-family: 'Times New Roman', Times, serif;
+  font-style: italic;
+  font-size: 1.1rem;
+}
+
+.latexDoc .docHeader {
+  text-align: center;
+  margin-bottom: 3rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.latexDoc .docPretitle {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.85rem;
+  color: var(--soft);
+  margin-bottom: 1rem;
+}
+
+.latexDoc .sectionTitle {
+  color: var(--ink);
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--rule);
+  margin-top: 2rem;
+}
+
+.latexDoc .card, .latexDoc .stepCard {
+  background: var(--boxbg) !important;
+  border: 1px solid var(--rule) !important;
+  border-radius: 4px;
+  color: var(--ink);
+  box-shadow: none !important;
+}
+
+.latexDoc .metricCard, .latexDoc .matchScoreCard {
+  background: #FFFFFF;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.latexDoc .metricLabel, .latexDoc .matchScoreTitle {
+  color: var(--soft);
+  font-family: 'Arial', sans-serif;
+  font-size: 0.85rem;
+}
+
+.latexDoc .metricValue, .latexDoc .matchScoreValue {
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  background: none !important;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.latexDoc .formulaContainer {
+  background: #FFFFFF;
+  border-left: 4px solid var(--teal);
+  padding: 1rem;
+  margin: 1rem 0;
+  font-family: monospace;
+}
+
+.latexDoc .formulaTitle {
+  color: var(--soft);
+  font-family: 'Arial', sans-serif;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.latexDoc .partnerTraceCard {
+  background: #FFFFFF;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+.latexDoc .actionButton {
+  background: var(--teal) !important;
+  color: #FFF !important;
+  border-radius: 4px;
+  font-family: 'Arial', sans-serif;
+  border: none;
+  box-shadow: none;
+}
+
+.latexDoc .traceToggleBtn {
+  background: var(--boxbg);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  border-radius: 4px;
+}
+
+.latexDoc table th {
+  color: var(--ink);
+  border-bottom: 2px solid var(--rule);
+}
+.latexDoc table td {
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+}
+.latexDoc .paramName {
+  color: var(--ink);
+}

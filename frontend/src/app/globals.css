@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap');
+@import "tailwindcss";
+
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #f0f0f0;
+  
+  --primary: #3b82f6; /* Modern trust blue */
+  --primary-hover: #2563eb;
+  
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  
+  --success: #10b981;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  
+  --font-sans: 'Inter', system-ui, sans-serif;
+  
+  /* Editorial Design Guide Tokens */
+  --ink: #1B2A3A;
+  --muted: #5E6B79;
+  --line: #E7E2D8;
+  --paper: #FAF8F4;
+  --surface: #FFFFFF;
+
+  --teal: #1D9E75;
+  --teal-d: #0F6E56;
+  --amber: #BA7517;
+  --amber-d: #854F0B;
+  --red-d: #A32D2D;
+  --info: #185FA5;
+
+  --soft-teal: #E6F3EE;
+  --soft-amber: #FBEEDA;
+  --soft-blue: #E9F0F6;
+  --soft-red: #FBEAEA;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* USG Health status colors */
+  --color-normal: #10b981;
+  --color-mild: #f59e0b;
+  --color-moderate: #f97316;
+  --color-severe: #ef4444;
+  --color-not-assessed: #6b7280;
+
+  /* USG Partner colors */
+  --partner-a: #14b8a6;
+  --partner-b: #8b5cf6;
+
+  /* Organ-specific accent */
+  --liver-color: #854d0e;
+  --kidney-color: #1d4ed8;
+  --ovary-color: #be185d;
+  --prostate-color: #1e40af;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  /* Ambient dark gradient */
+  background: radial-gradient(circle at top right, #1a1a2e, #0a0a0a 40%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}

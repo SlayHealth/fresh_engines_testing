@@ -1,11 +1,11 @@
 const { v4: uuidv4 } = require('uuid');
-const { db } = require('../services/storage/sqlite.service');
+const { db } = require('../services/storage/postgres.service');
 const logger = require('../utils/logger');
 
 /**
  * Perform a mock compatibility analysis between a male and female report.
  */
-function analyzeCompatibility(req, res, next) {
+async function analyzeCompatibility(req, res, next) {
   try {
     const { male_report_id, female_report_id, male_manual_data, female_manual_data } = req.body;
 
@@ -17,9 +17,10 @@ function analyzeCompatibility(req, res, next) {
     }
 
     // Fetch both reports from DB
-    const getReportQuery = db.prepare("SELECT extracted_json FROM reports WHERE id = ?");
-    const maleReport = getReportQuery.get(male_report_id);
-    const femaleReport = getReportQuery.get(female_report_id);
+    const maleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [male_report_id]);
+    const femaleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [female_report_id]);
+    const maleReport = maleReportRes.rows[0];
+    const femaleReport = femaleReportRes.rows[0];
 
     if (!maleReport || !maleReport.extracted_json) {
       return res.status(404).json({ success: false, error: 'Male report not found or processing not completed' });
@@ -28,19 +29,16 @@ function analyzeCompatibility(req, res, next) {
       return res.status(404).json({ success: false, error: 'Female report not found or processing not completed' });
     }
 
-    // Save manual data into the reports table extracted_json
-    const updateReportData = db.prepare("UPDATE reports SET extracted_json = ? WHERE id = ?");
-    
     let parsedMaleData = JSON.parse(maleReport.extracted_json);
     if (male_manual_data) {
       parsedMaleData.manual_data = male_manual_data;
-      updateReportData.run(JSON.stringify(parsedMaleData), male_report_id);
+      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(parsedMaleData), male_report_id]);
     }
 
     let parsedFemaleData = JSON.parse(femaleReport.extracted_json);
     if (female_manual_data) {
       parsedFemaleData.manual_data = female_manual_data;
-      updateReportData.run(JSON.stringify(parsedFemaleData), female_report_id);
+      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(parsedFemaleData), female_report_id]);
     }
 
     // Placeholder logic: generate a mock score
@@ -63,11 +61,10 @@ function analyzeCompatibility(req, res, next) {
     };
 
     // Save to matches table
-    const insertMatch = db.prepare(`
+    await db.query(`
       INSERT INTO matches (id, male_report_id, female_report_id, status, compatibility_score, analysis_json)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    insertMatch.run(matchId, male_report_id, female_report_id, 'completed', compatibility_score, JSON.stringify(analysisResult));
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [matchId, male_report_id, female_report_id, 'completed', compatibility_score, JSON.stringify(analysisResult)]);
 
     logger.info(`Compatibility analysis completed for match ${matchId}`);
 
