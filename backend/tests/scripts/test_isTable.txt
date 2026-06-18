@@ -1,0 +1,208 @@
+URINE ROUTINE & MICROSCOPY EXAMINATION	
+Parameter	Result	Reference	Unit	
+Pale	
+Colour	Pale Yellow	
+Yellow	
+Appearance / Clarity / Turbidity	Clear	Clear	
+Specific Gravity	1.015	1.005-1.030	
+pH	6.0	4.5-8.0	
+Urinary Protein	Absent	Absent	
+Urinary Glucose	Absent	Absent	
+Urinary Ketones	Absent	Absent	
+Urinary Bilirubin	Absent	Absent	
+Urobilinogen	Normal	Normal	
+Blood / Haemoglobin in Urine	Absent	Absent	
+Nitrites	Absent	Absent	
+Leukocyte Esterase	Absent	Absent	
+Pus Cells (WBCs) per HPF	1-2	0-5	per HPF	
+Red Blood Cells (RBCs) per HPF	0-1	0-2	per HPF	
+Epithelial Cells	Rare	Rare	per HPF	
+Casts	< 40	
+Crystals	Absent	Absent	
+Bacteria	Absent	Absent	
+Yeast / Fungi	< 40	
+Mucus Threads	Absent	Absent	
+Amorphous Material	6.0	4.5-8.0	
+*** End of Report *** I Electronically generated	
+
+HEMOGLOBIN HPLC / VARIANT ANALYSIS	SYPHILIS - VDRL / RPR	
+Parameter	Result	Reference	Unit	Parameter	Result	Reference	Unit	
+Hemoglobin A (HbA)	96.1	> 95.0	VDRL / RPR Result (Reactive /	Non-	Non-Reactive	
+Non-Reactive)	Reactive	
+Hemoglobin A2 (HbA2)	2.6	1.5-3.5	
+Not	
+Hemoglobin F (HbF / Fetal	0.5	< 2.0	RPR Titre (if reactive)	Not Applicable	
+Applicable	
+Hemoglobin)	
+Hemoglobin S (HbS)	0.0	0.0	
+HEPATITIS B SURFACE ANTIGEN (HBSAG)	
+Hemoglobin C (HbC)	0.0	0.0	
+Parameter	Result	Reference	Unit	
+Hemoglobin D (HbD)	0.0	0.0	
+HBsAg - Qualitative Result	
+Hemoglobin E (HbE)	0.0	0.0	(Reactive / Non-Reactive)	Reactive	Non-Reactive	
+Total Hemoglobin (g/dL)	12.6	12.0-16 0	g/dL	HBsAg - OD Value / Signal-to-	
+2.5	< 0.9	S/CO	
+Unknown / Other Hemoglobin	0.0	0.0	Cutoff Ratio	
+Fractions	
+Normal	HEPATITIS C VIRUS ANTIBODY (ANTI-HCV)	
+Interpretation / Diagnosis	Normal Study	
+Study	Parameter	Result	Reference	Unit	
+Anti-HCV Antibody - Qualitative	Non-	
+HEMOGLOBIN A2	Result (Reactive / Non-Reactive)	Reactive	Non-Reactive	
+Parameter	Result	Reference	Unit	Anti-HCV - OD Value / Signal-to-	
+0.1	< 0.9	S/CO	
+Hemoglobin A2 (HbA2) %	2.6	1.5-3.5	0/0	Cutoff Ratio	
+HEMOGLOBIN C	HIV 1 & 2 ANTIBODY TEST	
+Parameter	Result	Reference	Unit	Parameter	Result	Reference	Unit	
+Hemoglobin C (HbC) %	0.0	0.0	HIV 1 & 2 Antibody - Result	Non-	Non-Reactive	
+(Reactive / Non-Reactive)	Reactive	
+HEMOGLOBIN D	HIV ICT	Non-	
+(Immunochromatographic Test)	Non-Reactive	
+Parameter	Result	Reference	Unit	Result	Reactive	
+Hemoglobin D (HbD) %	0.0	0.0	0/0	
+HIV COMBO (P24 ANTIGEN + ANTIBODY) TEST	
+HEMOGLOBIN F	Parameter	Result	Reference	Unit	
+Parameter	Result	Reference	Unit	HIV P24 Antigen - Result	Not	
+Not Detected	
+Hemoglobin F / Fetal	0.5	< 2.0	(Detected / Not Detected)	
+Hemoglobin (HbF) %	HIV I & 2 Antibody - Result	Non-	
+Non-Reactive	
+(Reactive / Non-Reactive)	Reactive	
+HEMOGLOBIN S	HIV Combo Assay - OD Value /	
+0.1	< 0.9	S/CO	
+S/CO Ratio	
+Parameter	Result	Reference	Unit	
+HIV I Differentiation Result	
+Hemoglobin S (HbS) %	0.0	0.0	0/0	Negative	Negative	
+HIV 2 Differentiation Result	Negative	Negative	
+THYROID STIMULATING HORMONE (TSH)	
+RUBELLA VIRUS IGG ANTIBODY	
+Parameter	Result	Reference	Unit	
+Parameter	Result	Reference	Unit	
+Thyroid Stimulating Hormone	
+2.44	0.4-4.0	plU/mL	
+(TSH / uTSH)	Rubella IgG Antibody -	
+28.2	> 10 (Immune)	IU/mL	
+Triiodothyronine (T3) - Total	120	80-200	ng/dL	Quantitative (IU/mL)	
+Thyroxine (T4) - Total	8.0	5.0-12.0	pg/dL	Rubella IgG - Interpretation	Immune	Immune	
+(Immune / Non-lmmune)	
+Free T3 (FT3)	2.9	2.3-4.2	pg/mL	
+Free T4 (FT4)	1.4	0.9-1.7	ng/dL	
+VITAMIN B12 (CYANOCOBALAMIN)	
+Parameter	Result	Reference	Unit	
+Vitamin B12 (Cobalamin) - Serum 504	200-900	pg/mL	
+LIPID PROFILE / LIPID SCREEN	
+Parameter	Result	Reference	Unit	
+Total Cholesterol	160	< 200	mg/dL	
+High-Density Lipoprotein	
+55	> 50	mg/dL	
+Cholesterol (HDL-C)	
+Low-Density Lipoprotein	
+80	< 100	mg/dL	
+Cholesterol (LDL-C)	
+Very Low-Density Lipoprotein	
+19	2-30	mg/dL	
+(VLDL-C)	
+Triglycerides	97	< 150	mg/dL	
+Non-HDL Cholesterol	105	< 130	mg/dL	
+Total Cholesterol / HDL Ratio	
+2.9	< 5.0	Ratio	
+(TC:HDL)	
+LDL / HDL Ratio	1.5	< 3.0	Ratio	
+
+Apex Diagnostics	
+Comprehensive Pre-Marital Health Report	
+linical Profile:Female He	
+Name: Ms. Kiran Joshi	Age/Sex: 23 Yrs / F	Date: 02 Jun 2026, 03:50 PM	II): ADX-42855	
+BLOOD GROUP - ABO TYPING	GLYCATED HEMOGLOBIN (HBAIC)	
+Parameter	Result	Reference	Unit	Parameter	Result	Reference	Unit	
+Blood Group (A/ B/ AB / 0)	o	HbA1c (0/0)	5.1	4.0-5.6	
+Estimated Average Glucose	
+99.7	70-126	mg/dL	
+BLOOD GROUP - RH (RHESUS) TYPING	(eAG)	
+Parameter	Result	Reference	Unit	
+Positive	AVERAGE BLOOD GLUCOSE (ABG)	
+Rh Factor (Positive / Negative)	
+Parameter	Result	Reference	Unit	
+COMPLETE BLOOD COUNT (CBC) / HEMOGRAM	Average Blood Glucose (ABG)	106.6	< 117	mg/dL	
+Parameter	Result	Reference	Unit	
+LIVER FUNCTION TEST (LFT) - TOTAL BILIRUBIN	
+Total Red Blood Cell Count (RBC)	4.86	4.0-5.2	mill/pL	
+Parameter	Result	Reference	Unit	
+Hemoglobin (Hb)	12.6	12.0-15 5	g/dL	
+Total Bilirubin	0.53	0.3-1.2	
+Hematocrit / Packed Cell Volume	mg/dL	
+41.1	36.0-46 0	
+(PCV)	Direct (Conjugated) Bilirubin	0.13	< 0.3	mg/dL	
+Mean Corpuscular Volume (MCV)	84.5	80.0-100.0	fL	Indirect (Unconjugated) Bilirubin 0.13	< 0.3	mg/dL	
+Mean Corpuscular Hemoglobin	
+28.4	27.0-33 0	pg	
+(MCH)	LIVER FUNCTION TEST (LFT) - SGPT / ALT	
+Mean Corpuscular Hemoglobin	
+30.7	32.0-36 0	g/dL	Parameter	Result	Reference	Unit	
+Concentration (MCHC)	
+Alanine Aminotransferase	
+Red Cell Distribution Width - CV	69	< 41	
+12.8	11 .5-145	(SGPT / ALT)	
+(RDW-CV)	
+Red Cell Distribution Width - SD	
+40.4	39.0-46 0	fL	LIVER FUNCTION TEST (LFT) - SCOT / AST	
+(RDW-SD)	
+Parameter	Result	Reference	Unit	
+Total White Blood Cell Count	
+6.7	4.5-11 .O	thou/pL	Aspartate Aminotransferase	
+(WBC / TLC)	< 40	
+(SGOT / AST)	
+Neutrophils (%)	60.6	40-80	
+Neutrophils - Absolute Count	4.06	2.0-7.0	thou/pL	KIDNEY FUNCTION TEST (KFT)	
+Lymphocytes (%)	32.6	20-40	Parameter	Result	Reference	Unit	
+Lymphocytes - Absolute Count	2.01	1.0-3.0	thou/pL	Serum Creatinine	0.9	0.5-1.1	
+mg/dL	
+Monocytes (%)	8.0	2-10	13	7-20	
+Blood Urea Nitrogen (BUN)	mg/dL	
+Monocytes - Absolute Count	0.4	0.2-1 .o	thou/pL	BUN / Creatinine Ratio	14.4	10-20	Ratio	
+Eosinophils (%)	1.3	1-6	Serum Uric Acid	3.2	2.6-6.0	
+mg/dL	
+Eosinophils - Absolute Count	0.09	0.02-0.5	thou/pL	Serum Urea	15-40	
+mg/dL	
+Basophils (%)	0.5	0-2	Estimated Glomerular Filtration	
+109	> 90	mL/min	
+Basophils - Absolute Count	0.03	0.0-0.1	thou/pL	Rate (eGFR)	
+Immature Granulocytes (%)	0.2	0-0.5	Serum Sodium (Na+)	140	135-145	mEq/L	
+Immature Granulocytes -	Serum Potassium (K+)	4.2	3.5-5.1	mEq/L	
+Absolute Count	0.01	0-0.03	thou/pL	
+Serum Chloride (CD	102	98-107	mEq/L	
+Nucleated Red Blood Cells	
+0.0	0.0	thou/pL	Serum Bicarbonate (HCOö)	26	22-29	mEq/L	
+(NRBC) - Absolute Count	
+Nucleated Red Blood Cells	
+0.0	0.0	SERUM IRON	
+(NRBC) %	
+Platelet Count	281	150-450	thou/pL	Parameter	Result	Reference	Unit	
+Mean Platelet Volume (MPV)	9.5	7.5-11.5	fL	Serum Iron	95	50-170	vg/dL	
+Platelet Distribution Width (PDW)	12.0	9.0-17.0	fL	
+TOTAL IRON BINDING CAPACITY (TIBC)	
+Plateletcrit (PCT)	0.25	o. 15-0.35	
+Parameter	Result	Reference	Unit	
+Platelet-Large Cell Ratio (P-LCR)	25.0	15.0-35.0	
+Total Iron Binding Capacity	331	250-450	
+pg/dL	
+(TEC)	
+ERYTHROCYTE SEDIMENTATION RATE (ESR)	
+Parameter	Result	Reference	Unit	UNSATURATED IRON BINDING CAPACITY (UIBC)	
+Erythrocyte Sedimentation Rate	
+10	< 15	mm/hr	Parameter	Result	Reference	Unit	
+(ESR)	
+Unsaturated Iron Binding	236	110-370	
+vg/dL	
+Capacity (UIBC)	
+BLOOD SUGAR - FASTING (FBS / FBG)	
+Parameter	Result	Reference	Unit	TRANSFERRIN SATURATION (0/0)	
+Fasting Blood Glucose (FBG)	91.6	70-100	mg/dL	Parameter	Result	Reference	Unit	
+Transferrin Saturation (%)	29	20-50	
+BLOOD SUGAR - RANDOM (RBS / BSR)	
+Parameter	Result	Reference	Unit	SERUM FERRITIN	
+Random Blood Sugar (RBS)	113.8	70-140	mg/dL	Parameter	Result	Reference	Unit	
+Serum Ferritin	40	10-120	ng/mL	
+

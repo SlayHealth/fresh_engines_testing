@@ -1,0 +1,171 @@
+Apex Diagnostics
+Comprehensive Pre-Marital Health Report
+Clinical Profile: Female HepB
+Name: Ms. Kiran Joshi
+Age/Sex: 23 Yrs / F
+Date: 02 Jun 2026, 03:50 PM
+ID: ADX-42855
+BLOOD GROUP - ABO TYPING
+Parameter
+Result
+Reference
+Unit
+Blood Group (A / B / AB / O)
+O
+-
+-
+BLOOD GROUP - RH (RHESUS) TYPING
+Parameter
+Result
+Reference
+Unit
+Rh Factor (Positive / Negative)
+Positive
+-
+-
+COMPLETE BLOOD COUNT (CBC) / HEMOGRAM
+Parameter
+Result
+Reference
+Unit
+Total Red Blood Cell Count (RBC)
+4.86
+4.0-5.2
+mill/µL
+Hemoglobin (Hb)
+12.6
+12.0-15.5
+g/dL
+Hematocrit / Packed Cell Volume
+(PCV)
+41.1
+36.0-46.0
+%
+Mean Corpuscular Volume (MCV)
+84.5
+80.0-100.0
+fL
+Mean Corpuscular Hemoglobin
+(MCH)
+28.4
+27.0-33.0
+pg
+Mean Corpuscular Hemoglobin
+Concentration (MCHC)
+30.7
+32.0-36.0
+g/dL
+Red Cell Distribution Width - CV
+(RDW-CV)
+12.8
+11.5-14.5
+%
+Red Cell Distribution Width - SD
+(RDW-SD)
+40.4
+39.0-46.0
+fL
+Total White Blood Cell Count
+(WBC / TLC)
+6.7
+4.5-11.0
+thou/µL
+Neutrophils (%)
+60.6
+40-80
+%
+Neutrophils - Absolute Count
+4.06
+2.0-7.0
+thou/µL
+Lymphocytes (%)
+32.6
+20-40
+%
+Lymphocytes - Absolute Count
+2.01
+1.0-3.0
+thou/µL
+Monocytes (%)
+8.0
+2-10
+%
+Monocytes - Absolute Count
+0.4
+0.2-1.0
+thou/µL
+Eosinophils (%)
+1.3
+1-6
+%
+Eosinophils - Absolute Count
+0.09
+0.02-0.5
+thou/µL
+Basophils (%)
+0.5
+0-2
+%
+Basophils - Absolute Count
+0.03
+0.0-0.1
+thou/µL
+Immature Granulocytes (%)
+0.2
+0-0.5
+%
+Immature Granulocytes -
+Absolute Count
+0.01
+0-0.03
+thou/µL
+Nucleated Red Blood Cells
+(NRBC) - Absolute Count
+0.0
+0.0
+thou/µL
+Nucleated Red Blood Cells
+(NRBC) %
+0.0
+0.0
+%
+Platelet Count
+281
+150-450
+thou/µL
+Mean Platelet Volume (MPV)
+9.5
+7.5-11.5
+fL
+Platelet Distribution Width (PDW)
+12.0
+9.0-17.0
+fL
+Plateletcrit (PCT)
+0.25
+0.15-0.35
+%
+Platelet-Large Cell Ratio (P-LCR)
+25.0
+15.0-35.0
+%
+ERYTHROCYTE SEDIMENTATION RATE (ESR)
+Parameter
+Result
+Reference
+Unit
+Erythrocyte Sedimentation Rate
+(ESR)
+10
+< 15
+mm/hr
+BLOOD SUGAR - FASTING (FBS / FBG)
+Parameter
+Result
+Reference
+Unit
+Fasting Blood Glucose (FBG)
+91.6
+70-100
+mg/dL
+BLOOD SUGAR - RANDOM (RBS 

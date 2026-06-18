@@ -1,0 +1,179 @@
+const express = require('express');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+const ocrProvider = require('../services/ocr/ocrProvider');
+const parameterExtractor = require('../services/parser/parameterExtractor.service');
+const logger = require('../utils/logger');
+const { db } = require('../services/storage/sqlite.service');
+
+// Configure Multer for file uploads
+const uploadDir = path.resolve(__dirname, '../temp/uploads');
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${uuidv4()}-${file.originalname}`);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max size
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  }
+});
+
+/**
+ * Handle PDF extraction request
+ */
+async function extractPathology(req, res, next) {
+  const startTime = Date.now();
+  const reportId = uuidv4();
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No PDF file uploaded' });
+    }
+
+    const filePath = req.file.path;
+    logger.info(`Starting extraction for report ${reportId}, file: ${req.file.originalname}`);
+
+    // Insert initial report record
+    const insertReport = db.prepare(`
+      INSERT INTO reports (id, file_name, processing_status, confidence_score) 
+      VALUES (?, ?, ?, ?)
+    `);
+    insertReport.run(reportId, req.file.originalname, 'processing', 0.0);
+
+    // 1. OCR Step
+    logger.info(`Extracting text via OCR for ${reportId}`);
+    const ocrPages = await ocrProvider.process(filePath);
+
+    // Save OCR text to DB
+    const insertPage = db.prepare(`
+      INSERT INTO ocr_pages (report_id, page_number, raw_text) 
+      VALUES (?, ?, ?)
+    `);
+    
+    // We will use a transaction for inserts
+    const insertPagesTx = db.transaction((pages) => {
+      for (const page of pages) {
+        insertPage.run(reportId, page.page, page.text);
+      }
+    });
+    insertPagesTx(ocrPages);
+
+    // 2. Parsing Step
+    logger.info(`Parsing parameters for ${reportId}`);
+    const extractedData = parameterExtractor.extract(ocrPages);
+
+    let totalParams = 0;
+    let totalConfidence = 0;
+    
+    // Calculate total confidence directly from data array
+    for (const section of Object.keys(extractedData)) {
+      for (const paramKey of Object.keys(extractedData[section])) {
+        const param = extractedData[section][paramKey];
+        totalParams++;
+        totalConfidence += param.confidence;
+      }
+    }
+
+    const averageConfidence = totalParams > 0 ? parseFloat((totalConfidence / totalParams).toFixed(2)) : 0.0;
+    const processingTime = Date.now() - startTime;
+    
+    // Update DB status
+    // Update DB status and store JSON array
+    const updateReport = db.prepare(`
+      UPDATE reports SET processing_status = ?, confidence_score = ?, extracted_json = ? WHERE id = ?
+    `);
+    updateReport.run('completed', averageConfidence, JSON.stringify(extractedData), reportId);
+
+    // 3. Return JSON Response Contract
+    const responseData = {
+      success: true,
+      report_metadata: {
+        report_id: reportId,
+        processing_time_ms: processingTime,
+        parameters_extracted: totalParams,
+        confidence_score: averageConfidence,
+        raw_ocr_text: ocrPages.map(p => p.text).join('\n\n--- PAGE BREAK ---\n\n')
+      },
+      sections: extractedData
+    };
+
+    logger.info(`Finished extraction for report ${reportId} in ${processingTime}ms`);
+    return res.json(responseData);
+
+  } catch (error) {
+    logger.error(`Extraction failed for report ${reportId}: ${error.message}`);
+    
+    // Update DB status on error
+    try {
+      const updateReportError = db.prepare(`
+        UPDATE reports SET processing_status = ? WHERE id = ?
+      `);
+      updateReportError.run('failed', reportId);
+    } catch(e) {
+      logger.error(`Could not update report status: ${e.message}`);
+    }
+
+    next(error);
+  }
+}
+
+/**
+ * Health check endpoint
+ */
+function healthCheck(req, res) {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+}
+
+/**
+ * Mock Extraction endpoint (for testing API contract without uploading)
+ */
+function mockExtract(req, res, next) {
+  try {
+    const reportId = uuidv4();
+    const extractedData = {
+      cbc: {
+        hemoglobin: { value: 16.0, unit: 'g/dL', reference_range: '13.5-17.5', confidence: 0.98 },
+        total_rbc_count: { value: 4.5, unit: 'mill/uL', reference_range: '4.5-5.5', confidence: 0.94 }
+      }
+    };
+
+    // Insert mock report into DB so /analyze can find it
+    const insertReport = db.prepare(`
+      INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json) 
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    insertReport.run(reportId, 'mock_report.pdf', 'completed', 0.96, JSON.stringify(extractedData));
+
+    res.json({
+      success: true,
+      report_metadata: {
+        report_id: reportId,
+        processing_time_ms: 120,
+        parameters_extracted: 2,
+        confidence_score: 0.96,
+        raw_ocr_text: "COMPLETE BLOOD COUNT\nHemoglobin (Hb)\t16.0\t13.5-17.5\tg/dL\nTotal RBC Count\t4.5\t4.5-5.5\tmill/uL\n\n--- PAGE BREAK ---\n\nMock page 2 text..."
+      },
+      sections: extractedData
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = {
+  upload,
+  extractPathology,
+  healthCheck,
+  mockExtract
+};
