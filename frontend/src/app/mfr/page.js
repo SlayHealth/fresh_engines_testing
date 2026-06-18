@@ -709,7 +709,10 @@ export default function FertilityPage() {
 
           <div className={styles.tabs}>
             <Link href="/" className={`${styles.tabLink} ${styles.tabInactive}`}>
-              Compatibility Analysis
+              Home
+            </Link>
+            <Link href="/usg" className={`${styles.tabLink} ${styles.tabInactive}`}>
+              USG Abdomen
             </Link>
             <Link href="/chronic" className={`${styles.tabLink} ${styles.tabInactive}`}>
               Chronic Health Engine

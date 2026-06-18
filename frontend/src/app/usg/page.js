@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import Link from 'next/link';
 import OrganHealthRadar from '@/components/usg/OrganHealthRadar';
 import OrganStatusGrid from '@/components/usg/OrganStatusGrid';
 import CoupleRadarComparison from '@/components/usg/CoupleRadarComparison';
@@ -68,8 +69,24 @@ export default function USGAbdomenEngine() {
   return (
     <div style={{ padding: '40px', maxWidth: '1400px', margin: '0 auto' }}>
       <header style={{ marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '24px', textAlign: 'center' }}>USG Abdomen Engine</h1>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '16px', textAlign: 'center' }}>USG Abdomen Engine</h1>
         
+        {/* Tab Navigation */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '2.5rem', flexWrap: 'wrap' }}>
+          <Link href="/" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: '#9ca3af', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
+            Home
+          </Link>
+          <Link href="/usg" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'var(--primary)', color: '#fff', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--primary)' }}>
+            USG Abdomen
+          </Link>
+          <Link href="/chronic" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: '#9ca3af', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
+            Chronic Health
+          </Link>
+          <Link href="/mfr" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: '#9ca3af', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
+            Fertility Analysis
+          </Link>
+        </div>
+
         <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', marginBottom: '24px' }}>
           <PDFUploader 
             partnerLabel="Partner A" 

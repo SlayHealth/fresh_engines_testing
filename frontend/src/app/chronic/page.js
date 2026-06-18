@@ -796,7 +796,10 @@ export default function ChronicPage() {
           {/* Tab Navigation */}
           <div className={styles.tabs}>
             <Link href="/" className={`${styles.tabLink} ${styles.tabInactive}`}>
-              Compatibility Analysis
+              Home
+            </Link>
+            <Link href="/usg" className={`${styles.tabLink} ${styles.tabInactive}`}>
+              USG Abdomen
             </Link>
             <Link href="/chronic" className={`${styles.tabLink} ${styles.tabActive}`}>
               Chronic Health Engine
