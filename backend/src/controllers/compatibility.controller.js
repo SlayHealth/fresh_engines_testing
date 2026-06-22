@@ -81,6 +81,37 @@ async function analyzeCompatibility(req, res, next) {
   }
 }
 
+async function listMatches(req, res, next) {
+  try {
+    const result = await db.query('SELECT * FROM matches ORDER BY created_at DESC LIMIT 10');
+    const matches = result.rows.map(row => {
+      let analysis = {};
+      try {
+        analysis = JSON.parse(row.analysis_json || '{}');
+      } catch (e) {
+        analysis = {};
+      }
+      return {
+        id: row.id,
+        score: Math.round((row.compatibility_score || 0.85) * 100),
+        createdAt: row.created_at,
+        user: {
+          name: analysis.details?.male_manual_data?.name || 'Partner A'
+        },
+        prospect: {
+          name: analysis.details?.female_manual_data?.name || 'Partner B',
+          meetingSource: analysis.details?.female_manual_data?.meetingSource || 'Family Introduction'
+        }
+      };
+    });
+    res.json(matches);
+  } catch (error) {
+    logger.error(`Failed to list matches: ${error.message}`);
+    next(error);
+  }
+}
+
 module.exports = {
-  analyzeCompatibility
+  analyzeCompatibility,
+  listMatches
 };

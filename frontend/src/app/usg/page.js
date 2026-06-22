@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { MessageSquare } from 'lucide-react';
 import OrganHealthRadar from '@/components/usg/OrganHealthRadar';
 import OrganStatusGrid from '@/components/usg/OrganStatusGrid';
 import CoupleRadarComparison from '@/components/usg/CoupleRadarComparison';
@@ -12,6 +13,7 @@ import MetabolicHealthDashboard from '@/components/usg/MetabolicHealthDashboard'
 import NuptiaScoreUSGSlice from '@/components/usg/NuptiaScoreUSGSlice';
 import SharedRiskIntelligence from '@/components/usg/SharedRiskIntelligence';
 import PDFUploader from '@/components/usg/PDFUploader';
+import ReportChatDrawer from '@/components/ReportChatDrawer';
 import { API_URL } from '@/config/api';
 
 export default function USGAbdomenEngine() {
@@ -22,11 +24,14 @@ export default function USGAbdomenEngine() {
   const [error, setError] = useState(null);
   const [showTrace, setShowTrace] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
+  const [chatSessionId, setChatSessionId] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const fetchCoupleAnalysis = async (overrideA = reportA, overrideB = reportB) => {
     if (!overrideA) return;
     setLoading(true);
     setError(null);
+    setChatSessionId(null);
     try {
       let finalData = {};
       if (overrideA && !overrideB) {
@@ -73,16 +78,16 @@ export default function USGAbdomenEngine() {
         
         {/* Tab Navigation */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '2.5rem', flexWrap: 'wrap' }}>
-          <Link href="/" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: '#9ca3af', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
+          <Link href="/" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(27, 42, 58, 0.05)', color: 'var(--muted)', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
             Home
           </Link>
           <Link href="/usg" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'var(--primary)', color: '#fff', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--primary)' }}>
             USG Abdomen
           </Link>
-          <Link href="/chronic" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: '#9ca3af', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
+          <Link href="/chronic" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(27, 42, 58, 0.05)', color: 'var(--muted)', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
             Chronic Health
           </Link>
-          <Link href="/mfr" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: '#9ca3af', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
+          <Link href="/mfr" style={{ padding: '0.6rem 1.5rem', borderRadius: '20px', background: 'rgba(27, 42, 58, 0.05)', color: 'var(--muted)', textDecoration: 'none', fontWeight: 'bold', border: '1px solid var(--glass-border)' }}>
             Fertility Analysis
           </Link>
         </div>
@@ -99,10 +104,10 @@ export default function USGAbdomenEngine() {
         </div>
 
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center' }}>
-          <span style={{ color: 'var(--muted)' }}>Or manually enter Report IDs:</span>
-          <input placeholder="Partner A ID" value={reportA} onChange={e => setReportA(e.target.value)} style={{ padding: '8px', background: 'var(--glass-bg)', color: 'white', border: '1px solid var(--line)', borderRadius: '4px' }} />
-          <input placeholder="Partner B ID" value={reportB} onChange={e => setReportB(e.target.value)} style={{ padding: '8px', background: 'var(--glass-bg)', color: 'white', border: '1px solid var(--line)', borderRadius: '4px' }} />
-          <button onClick={() => fetchCoupleAnalysis()} disabled={loading} style={{ padding: '8px 16px', background: 'var(--teal)', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>
+          <span style={{ color: 'var(--muted)', fontWeight: '500' }}>Or manually enter Report IDs:</span>
+          <input placeholder="Partner A ID" value={reportA} onChange={e => setReportA(e.target.value)} style={{ padding: '8px 12px', background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--line)', borderRadius: '6px', outline: 'none' }} />
+          <input placeholder="Partner B ID" value={reportB} onChange={e => setReportB(e.target.value)} style={{ padding: '8px 12px', background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--line)', borderRadius: '6px', outline: 'none' }} />
+          <button onClick={() => fetchCoupleAnalysis()} disabled={loading} style={{ padding: '8px 16px', background: 'var(--teal)', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '6px', fontWeight: '600' }}>
             {loading ? 'Analyzing...' : 'Fetch Existing'}
           </button>
         </div>
@@ -331,6 +336,54 @@ export default function USGAbdomenEngine() {
             )}
           </div>
         </div>
+      )}
+
+      {data && (
+        <>
+          <button
+            onClick={() => setIsChatOpen(true)}
+            style={{
+              position: 'fixed',
+              bottom: '24px',
+              right: '24px',
+              zIndex: 999,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              borderRadius: '24px',
+              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: '600',
+              fontSize: '14px',
+              boxShadow: '0 8px 20px rgba(37, 99, 235, 0.25)',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 10px 25px rgba(37, 99, 235, 0.35)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 8px 20px rgba(37, 99, 235, 0.25)';
+            }}
+          >
+            <MessageSquare size={16} />
+            Consult AI Counselor
+          </button>
+          <ReportChatDrawer
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+            sessionId={chatSessionId}
+            onSessionCreated={setChatSessionId}
+            reportId={reportA}
+            partnerReportId={reportB || null}
+            engineType="usg"
+            contextMetadata={data}
+          />
+        </>
       )}
     </div>
   );

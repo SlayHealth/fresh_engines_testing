@@ -48,6 +48,47 @@ class OpenRouterService {
       throw error;
     }
   }
+
+  async chatCompletion(messages, model = 'deepseek/deepseek-v4-flash') {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENROUTER_API_KEY is missing from environment variables.");
+    }
+
+    try {
+      logger.info(`Sending chat completion request to OpenRouter model: ${model}`);
+      const response = await axios.post(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          model: model,
+          messages: messages
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'http://localhost:3000', 
+            'X-Title': 'SlayHealth AI Counselor',
+            'Content-Type': 'application/json'
+          },
+          timeout: 45000
+        }
+      );
+
+      return response.data.choices[0].message.content;
+    } catch (error) {
+      logger.error(`OpenRouter Chat API failed for model ${model}: ${error.message}`);
+      if (model !== 'deepseek/deepseek-chat') {
+        logger.info('Attempting fallback to deepseek/deepseek-chat...');
+        try {
+          return await this.chatCompletion(messages, 'deepseek/deepseek-chat');
+        } catch (fallbackError) {
+          logger.error(`Fallback failed: ${fallbackError.message}`);
+          throw fallbackError;
+        }
+      }
+      throw error;
+    }
+  }
 }
 
 module.exports = new OpenRouterService();

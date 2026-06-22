@@ -247,13 +247,186 @@ async function analyzeMfr(req, res, next) {
 
     // Convert string categories to adj points
     const reserveModifiers = { 'High for age': 5, 'Normal': 0, 'Low': -10, 'Very Low': -20 };
-    const fReserveAdj = reserveModifiers[ovarianReserve] || 0;
+    let fReserveAdj = reserveModifiers[ovarianReserve] || 0;
 
     const semenModifiers = { 'Normal': 0, 'Mild Deficit': -8, 'Moderate Deficit': -18, 'Severe Deficit': -30 };
-    const mSemenAdj = semenModifiers[semenQuality] || 0;
+    let mSemenAdj = semenModifiers[semenQuality] || 0;
+
+    // Retrieve evaluationTier from request body
+    const evaluationTier = parseInt(req.body.evaluationTier) || 1;
+
+    // Tiers 2 & 3: Radiology (USG) Modifiers
+    let radWarnings = [];
+    let physicalBlock = false;
+
+    if (evaluationTier >= 2) {
+      // Female Pelvic USG / HSG modifiers
+      const uterineLining = female_manual_data.uterineLining || 'Normal';
+      const fibroids = female_manual_data.fibroids || 'None';
+      const tubalPatency = female_manual_data.tubalPatency || 'Both open';
+      const pcosMorphology = female_manual_data.pcosMorphology || 'None';
+      const ovarianVolume = female_manual_data.ovarianVolume || 'Normal';
+      const pelvicFluid = female_manual_data.pelvicFluid || 'No';
+      const fFattyLiver = female_manual_data.fattyLiverGrade || 'None';
+
+      if (uterineLining === 'Thin') {
+        fReserveAdj -= 8;
+        radWarnings.push('Thin endometrial lining (<7mm) reduces implantation success probability');
+      } else if (uterineLining === 'Thick') {
+        fReserveAdj -= 3;
+      }
+
+      if (fibroids === 'Submucosal') {
+        fReserveAdj -= 15;
+        radWarnings.push('Submucosal uterine fibroid/polyp significantly impedes implantation');
+      } else if (fibroids === 'Intramural') {
+        fReserveAdj -= 6;
+      }
+
+      if (tubalPatency === 'One blocked') {
+        fReserveAdj -= 12;
+        radWarnings.push('Unilateral fallopian tubal obstruction reduces monthly egg transport chance');
+      } else if (tubalPatency === 'Both blocked') {
+        physicalBlock = true;
+        radWarnings.push('Bilateral fallopian tubal obstruction blocks natural fertilization pathway');
+      }
+
+      if (pcosMorphology === 'Bilateral') {
+        fReserveAdj -= 15;
+        radWarnings.push('Bilateral polycystic ovarian morphology (BCOM) suggests risk of ovulatory dysfunction');
+      } else if (pcosMorphology === 'Unilateral') {
+        fReserveAdj -= 8;
+        radWarnings.push('Unilateral polycystic ovarian morphology indicates potential ovulatory irregularity');
+      }
+
+      if (ovarianVolume === 'Enlarged') {
+        fReserveAdj -= 5;
+        radWarnings.push('Enlarged ovarian volume (>10cc) exceeds the standard Rotterdam classification threshold');
+      }
+
+      if (pelvicFluid === 'Yes') {
+        fReserveAdj -= 5;
+        radWarnings.push('Significant free fluid in the Pouch of Douglas (POD) may indicate pelvic inflammatory response or endometriosis');
+      }
+
+      if (fFattyLiver === 'Grade I') {
+        fReserveAdj -= 2;
+        radWarnings.push('Female: Mild fatty liver (Grade I) indicates early metabolic overload');
+      } else if (fFattyLiver === 'Grade II') {
+        fReserveAdj -= 5;
+        radWarnings.push('Female: Moderate fatty liver (Grade II) is associated with insulin resistance, potentially affecting egg quality');
+      } else if (fFattyLiver === 'Grade III') {
+        fReserveAdj -= 10;
+        radWarnings.push('Female: Severe fatty liver (Grade III) represents a high metabolic inflammatory burden impacting systemic reproductive reserve');
+      }
+
+      // Male Scrotal & Abdominal USG modifiers
+      const varicoceleGrade = male_manual_data.varicoceleGrade || 'None';
+      const testicularVolume = male_manual_data.testicularVolume || 'Normal';
+      const scrotalObstruction = male_manual_data.scrotalObstruction || 'No';
+      const prostateGrade = male_manual_data.prostateGrade || 'None';
+      const pvrVolume = male_manual_data.pvrVolume || 'Normal';
+      const mFattyLiver = male_manual_data.fattyLiverGrade || 'None';
+
+      if (varicoceleGrade === 'Grade 1') {
+        mSemenAdj -= 3;
+      } else if (varicoceleGrade === 'Grade 2') {
+        mSemenAdj -= 7;
+        radWarnings.push('Moderate varicocele (Grade 2) may increase scrotal heat and oxidative stress');
+      } else if (varicoceleGrade === 'Grade 3') {
+        mSemenAdj -= 12;
+        radWarnings.push('Severe varicocele (Grade 3) significantly impairs spermatogenesis');
+      }
+
+      if (testicularVolume === 'Low') {
+        mSemenAdj -= 5;
+        radWarnings.push('Reduced testicular volume suggests lower sperm production capacity');
+      }
+
+      if (scrotalObstruction === 'Yes') {
+        physicalBlock = true;
+        radWarnings.push('Epididymal/scrotal tract obstruction impedes natural sperm ejaculation');
+      }
+
+      if (prostateGrade === 'Grade I') {
+        mSemenAdj -= 3;
+      } else if (prostateGrade === 'Grade II') {
+        mSemenAdj -= 6;
+        radWarnings.push('Male: Moderate prostatomegaly (Grade II) may cause urinary tract and reproductive pathway pressure');
+      } else if (prostateGrade === 'Grade III') {
+        mSemenAdj -= 12;
+        radWarnings.push('Male: Severe prostatomegaly (Grade III) represents a high risk for retrograde ejaculation or prostatic duct occlusion');
+      }
+
+      if (pvrVolume === 'Borderline') {
+        mSemenAdj -= 2;
+      } else if (pvrVolume === 'Significant') {
+        mSemenAdj -= 5;
+        radWarnings.push('Male: Significant post-void residual (PVR >100cc) indicates bladder voiding inefficiency and pelvic floor strain');
+      }
+
+      if (mFattyLiver === 'Grade I') {
+        mSemenAdj -= 2;
+        radWarnings.push('Male: Mild fatty liver (Grade I) indicates early metabolic overload');
+      } else if (mFattyLiver === 'Grade II') {
+        mSemenAdj -= 5;
+        radWarnings.push('Male: Moderate fatty liver (Grade II) is associated with metabolic syndrome, which may increase sperm DNA fragmentation');
+      } else if (mFattyLiver === 'Grade III') {
+        mSemenAdj -= 10;
+        radWarnings.push('Male: Severe fatty liver (Grade III) represents a high metabolic inflammatory burden impacting spermatogenesis');
+      }
+    }
+
+    // Tier 3: Genomics Modifiers
+    let genomicWarnings = [];
+    let geneticBlock = false;
+
+    if (evaluationTier === 3) {
+      // Male Genomics
+      const yDeletion = male_manual_data.yDeletion || 'None';
+      const maleKaryotype = male_manual_data.maleKaryotype || 'Normal 46,XY';
+
+      if (yDeletion === 'AZFa' || yDeletion === 'AZFb') {
+        geneticBlock = true;
+        genomicWarnings.push('Y-chromosome microdeletion in AZFa/AZFb region prevents mature sperm production');
+      } else if (yDeletion === 'AZFc') {
+        mSemenAdj -= 25;
+        genomicWarnings.push('AZFc microdeletion causes progressive severe reduction in sperm count');
+      }
+
+      if (maleKaryotype !== 'Normal 46,XY') {
+        geneticBlock = true;
+        genomicWarnings.push('Abnormal male karyotype (e.g. 47,XXY Klinefelter) typically leads to azoospermia');
+      }
+
+      // Female Genomics
+      const mthfr = female_manual_data.mthfr || 'None';
+      const femaleKaryotype = female_manual_data.femaleKaryotype || 'Normal 46,XX';
+      const cftrCarrier = female_manual_data.cftrCarrier || 'No';
+
+      if (mthfr === 'Homozygous') {
+        fReserveAdj -= 8;
+        genomicWarnings.push('Homozygous MTHFR mutation increases homocysteine and gestational loss risk');
+      } else if (mthfr === 'Heterozygous') {
+        fReserveAdj -= 3;
+      }
+
+      if (femaleKaryotype !== 'Normal 46,XX') {
+        fReserveAdj -= 20;
+        genomicWarnings.push('Abnormal female karyotype (e.g. 45,X Turner variant) impairs ovarian reserve');
+      }
+
+      // CFTR carrier transmission warning
+      const hasCBAVD = male_manual_data.scrotalFinding === 'Obstruction / CBAVD' || male_manual_data.b_azoo;
+      if (cftrCarrier === 'Yes' && hasCBAVD) {
+        genomicWarnings.push('CFTR Carrier status + Male CBAVD risk suggests a high chance of cystic fibrosis transmission');
+      }
+    }
 
     // Absolute Barriers
-    const gate = barriers.b_tubal || barriers.b_azoo || barriers.b_uterus || male_manual_data.scrotalFinding === 'Obstruction / CBAVD';
+    const gate = barriers.b_tubal || barriers.b_azoo || barriers.b_uterus || 
+                 male_manual_data.scrotalFinding === 'Obstruction / CBAVD' || 
+                 physicalBlock || geneticBlock;
 
     // Shared Lifestyle
     const smokeVal = shared_lifestyle.smoke !== undefined ? parseFloat(shared_lifestyle.smoke) : 0;
@@ -339,7 +512,15 @@ async function analyzeMfr(req, res, next) {
     // Narrative details
     let summary = '';
     if (gate) {
-      summary = 'Natural pathways are currently blocked due to an absolute barrier. Standard natural conception is not expected. The model routes to a specialist / IVF pathway rather than producing a probability.';
+      const reasons = [];
+      if (barriers.b_tubal) reasons.push('bilateral tubal block');
+      if (barriers.b_azoo) reasons.push('azoospermia');
+      if (barriers.b_uterus) reasons.push('absent uterus');
+      if (male_manual_data.scrotalFinding === 'Obstruction / CBAVD') reasons.push('CBAVD obstruction');
+      if (physicalBlock) reasons.push('radiological tract obstruction');
+      if (geneticBlock) reasons.push('genetic production block');
+
+      summary = `Natural pathways are currently blocked due to an absolute barrier (${reasons.join(', ')}). Standard natural conception is not expected. The model routes to a specialist / IVF pathway rather than producing a probability.`;
     } else if (state !== 'Aligned') {
       const drivers = [];
       if (ovarianReserve === 'Low' || ovarianReserve === 'Very Low') drivers.push(`diminished ovarian reserve`);
@@ -383,6 +564,8 @@ async function analyzeMfr(req, res, next) {
       positive_findings,
       summary,
       validation_issue: validationIssue,
+      rad_warnings: radWarnings,
+      genomic_warnings: genomicWarnings,
       projection: {
         current: projection_current,
         optimised: projection_optimised,

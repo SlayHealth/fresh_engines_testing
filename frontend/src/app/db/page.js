@@ -138,7 +138,7 @@ export default function DatabaseViewer() {
           <Database size={32} style={{display:'inline', marginRight:'12px', verticalAlign:'bottom'}}/>
           Database Viewer
         </h1>
-        <p style={{color: '#9ca3af', marginTop: '0.5rem'}}>
+        <p style={{color: 'var(--muted)', marginTop: '0.5rem'}}>
           Inspect internal SQLite tables and extraction logs.
         </p>
       </header>
@@ -153,7 +153,7 @@ export default function DatabaseViewer() {
       <div className={styles.layout}>
         {/* Sidebar */}
         <aside className={styles.sidebar}>
-          <h3 style={{color: '#fff', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem', marginLeft: '0.5rem'}}>Tables</h3>
+          <h3 style={{color: 'var(--ink)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem', marginLeft: '0.5rem'}}>Tables</h3>
           <ul className={styles.tableList}>
             {tables.map(table => (
               <li 
@@ -290,19 +290,20 @@ export default function DatabaseViewer() {
             overflow: 'hidden'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ margin: 0, color: '#fff' }}>Extracted JSON Data</h3>
-              <button onClick={() => setViewingJson(null)} style={{ background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
+              <h3 style={{ margin: 0, color: 'var(--ink)' }}>Extracted JSON Data</h3>
+              <button onClick={() => setViewingJson(null)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
             </div>
             <div style={{
               overflowY: 'auto',
-              background: 'rgba(0,0,0,0.3)',
+              background: 'rgba(27, 42, 58, 0.03)',
               padding: '1rem',
               borderRadius: '8px',
+              border: '1px solid var(--line)',
               flex: 1
             }}>
-              <pre style={{ margin: 0, color: '#e5e7eb', fontSize: '0.85rem', fontFamily: 'monospace' }}>
+              <pre style={{ margin: 0, color: 'var(--ink)', fontSize: '0.85rem', fontFamily: 'monospace' }}>
                 {(() => {
                   try {
                     return JSON.stringify(JSON.parse(viewingJson), null, 2);

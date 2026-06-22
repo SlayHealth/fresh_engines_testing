@@ -561,3 +561,181 @@
   color: var(--ink);
 }
 
+/* Tree Selector Styles */
+.treeSelectorContainer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.treeSelectorTitle {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.treeSvgWrapper {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.treeNode rect {
+  cursor: pointer;
+}
+
+.treeNode:hover rect {
+  stroke: var(--teal) !important;
+  fill: var(--soft-teal) !important;
+}
+
+/* Upload Slots Layout */
+.uploadSlotsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.uploadSlotContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.uploadSlotLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.compactDropzone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  position: relative;
+  height: 44px;
+  box-sizing: border-box;
+}
+
+.compactDropzone:hover {
+  border-color: var(--teal);
+  background: var(--soft-teal);
+}
+
+.uploadSlotIcon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.uploadSlotText {
+  color: var(--ink);
+  font-weight: 500;
+  flex-grow: 1;
+}
+
+.slotMockBtn {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: var(--soft-blue);
+  color: var(--info);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.slotMockBtn:hover {
+  background: #dbeafe;
+}
+
+.slotClearBtn {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: var(--soft-red);
+  color: var(--red-d);
+  border: 1px solid #EDC9C9;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.slotClearBtn:hover {
+  background: #fecaca;
+}
+
+.slotErrorText {
+  color: var(--red-d);
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+/* Warnings Layout */
+.warningsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.warningCard {
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  text-align: left;
+}
+
+.warningCardTitle {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+/* Grid Layout definitions (missing from original CSS) */
+.dualUploadContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.uploadWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+}
+
+@media (max-width: 860px) {
+  .dualUploadContainer {
+    grid-template-columns: 1fr;
+  }
+}
+

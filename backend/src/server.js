@@ -7,6 +7,8 @@ const compatibilityRoutes = require('./routes/compatibility.routes');
 const chronicRoutes = require('./routes/chronic.routes');
 const mfrRoutes = require('./routes/mfr.routes');
 const usgRoutes = require('./routes/usg.routes');
+const chatRoutes = require('./routes/chat.routes');
+const authRoutes = require('./routes/auth.routes');
 const { healthCheck } = require('./controllers/pathology.controller');
 const { initDB, cleanupOldReports } = require('./services/storage/postgres.service');
 const logger = require('./utils/logger');
@@ -27,6 +29,8 @@ app.use('/api/compatibility', compatibilityRoutes);
 app.use('/api/chronic', chronicRoutes);
 app.use('/api/mfr', mfrRoutes);
 app.use('/api/usg', usgRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/auth', authRoutes);
 
 // Global Error Handler (must be after routes)
 app.use(errorHandler);

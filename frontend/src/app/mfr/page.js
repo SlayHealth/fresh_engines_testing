@@ -1,39 +1,63 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { UploadCloud, CheckCircle, AlertCircle, HeartPulse, RefreshCw, Sparkles, Award } from 'lucide-react';
+import { UploadCloud, CheckCircle, AlertCircle, HeartPulse, RefreshCw, Sparkles, Award, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import styles from './page.module.css';
 import ManualInputs from '../../components/ManualInputs';
+import ReportChatDrawer from '../../components/ReportChatDrawer';
 import { API_URL } from '../../config/api';
+import { parsePatientMeta, findExtractedParam, classifyOvarianReserve, parseMaleRadiology, parseFemaleRadiology, parseMaleGenomics, parseFemaleGenomics } from '../../utils/reportParser';
 
 export default function FertilityPage() {
   const defaultMaleManual = {
-    name: 'Prospect 1',
-    age: 30,
-    semenQuality: 'Normal',
-    scrotalFinding: 'Normal',
+    name: '',
+    age: '',
+    semenQuality: '',
+    scrotalFinding: '',
     b_azoo: false,
+    varicoceleGrade: '',
+    testicularVolume: '',
+    scrotalObstruction: '',
+    prostateGrade: '',
+    pvrVolume: '',
+    fattyLiverGrade: '',
+    yDeletion: '',
+    maleKaryotype: '',
   };
 
   const defaultFemaleManual = {
-    name: 'Prospect 2',
-    age: 30,
-    ovarianReserve: 'Normal',
+    name: '',
+    age: '',
+    ovarianReserve: '',
     b_tubal: false,
     b_uterus: false,
+    uterineLining: '',
+    fibroids: '',
+    tubalPatency: '',
+    pcosMorphology: '',
+    ovarianVolume: '',
+    pelvicFluid: '',
+    fattyLiverGrade: '',
+    mthfr: '',
+    femaleKaryotype: '',
+    cftrCarrier: '',
   };
 
   const defaultSharedLifestyle = {
-    smoke: 0,
-    bmi: 0,
-    act: 0,
-    alc: 0,
-    stress: 0,
-    freq: 0.92,
+    smoke: '',
+    bmi: '',
+    act: '',
+    alc: '',
+    stress: '',
+    freq: '',
   };
 
+  // State for evaluation tier
+  const [evaluationTier, setEvaluationTier] = useState(1);
+
   // State for uploads
+  // pathology
   const [maleReport, setMaleReport] = useState(null);
   const [isMaleUploading, setIsMaleUploading] = useState(false);
   const [maleError, setMaleError] = useState(null);
@@ -46,12 +70,36 @@ export default function FertilityPage() {
   const [femaleManualData, setFemaleManualData] = useState(defaultFemaleManual);
   const femaleInputRef = useRef(null);
 
+  // radiology
+  const [maleRadReport, setMaleRadReport] = useState(null);
+  const [isMaleRadUploading, setIsMaleRadUploading] = useState(false);
+  const [maleRadError, setMaleRadError] = useState(null);
+  const maleRadInputRef = useRef(null);
+
+  const [femaleRadReport, setFemaleRadReport] = useState(null);
+  const [isFemaleRadUploading, setIsFemaleRadUploading] = useState(false);
+  const [femaleRadError, setFemaleRadError] = useState(null);
+  const femaleRadInputRef = useRef(null);
+
+  // genomics
+  const [maleGenReport, setMaleGenReport] = useState(null);
+  const [isMaleGenUploading, setIsMaleGenUploading] = useState(false);
+  const [maleGenError, setMaleGenError] = useState(null);
+  const maleGenInputRef = useRef(null);
+
+  const [femaleGenReport, setFemaleGenReport] = useState(null);
+  const [isFemaleGenUploading, setIsFemaleGenUploading] = useState(false);
+  const [femaleGenError, setFemaleGenError] = useState(null);
+  const femaleGenInputRef = useRef(null);
+
   const [sharedLifestyle, setSharedLifestyle] = useState(defaultSharedLifestyle);
 
   // Analysis states
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [matchResult, setMatchResult] = useState(null);
   const [matchError, setMatchError] = useState(null);
+  const [chatSessionId, setChatSessionId] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [showCalculations, setShowCalculations] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [selectedProjYear, setSelectedProjYear] = useState(0);
@@ -61,15 +109,65 @@ export default function FertilityPage() {
 
   // Auto-analysis on data changes
   useEffect(() => {
-    if (maleReport && femaleReport) {
+    const hasMaleReport = maleReport;
+    const hasFemaleReport = femaleReport;
+    const hasMaleRadReport = evaluationTier < 2 || maleRadReport;
+    const hasFemaleRadReport = evaluationTier < 2 || femaleRadReport;
+    const hasMaleGenReport = evaluationTier < 3 || maleGenReport;
+    const hasFemaleGenReport = evaluationTier < 3 || femaleGenReport;
+
+    // Only auto-analyze if all manual inputs are already filled (to avoid showing validation error prematurely)
+    const isFormFilled = () => {
+      // Partner A
+      if (!maleManualData.name?.trim() || !maleManualData.age || !maleManualData.semenQuality || !maleManualData.scrotalFinding) return false;
+      if (evaluationTier >= 2) {
+        if (!maleManualData.varicoceleGrade || !maleManualData.testicularVolume || !maleManualData.scrotalObstruction || !maleManualData.prostateGrade || !maleManualData.pvrVolume || !maleManualData.fattyLiverGrade) return false;
+      }
+      if (evaluationTier === 3) {
+        if (!maleManualData.yDeletion || !maleManualData.maleKaryotype) return false;
+      }
+      // Partner B
+      if (!femaleManualData.name?.trim() || !femaleManualData.age || !femaleManualData.ovarianReserve) return false;
+      if (evaluationTier >= 2) {
+        if (!femaleManualData.uterineLining || !femaleManualData.fibroids || !femaleManualData.tubalPatency || !femaleManualData.pcosMorphology || !femaleManualData.ovarianVolume || !femaleManualData.pelvicFluid || !femaleManualData.fattyLiverGrade) return false;
+      }
+      if (evaluationTier === 3) {
+        if (!femaleManualData.mthfr || !femaleManualData.femaleKaryotype || !femaleManualData.cftrCarrier) return false;
+      }
+      // Lifestyle
+      if (sharedLifestyle.smoke === '' || sharedLifestyle.bmi === '' || sharedLifestyle.act === '' || sharedLifestyle.alc === '' || sharedLifestyle.stress === '' || sharedLifestyle.freq === '') return false;
+      return true;
+    };
+
+    if (hasMaleReport && hasFemaleReport && hasMaleRadReport && hasFemaleRadReport && hasMaleGenReport && hasFemaleGenReport && isFormFilled()) {
       handleAnalyzeMfr();
     }
-  }, [maleManualData, femaleManualData, sharedLifestyle, maleReport, femaleReport]);
+  }, [
+    maleManualData, femaleManualData, sharedLifestyle, 
+    maleReport, femaleReport, 
+    maleRadReport, femaleRadReport, 
+    maleGenReport, femaleGenReport,
+    evaluationTier
+  ]);
 
-  const triggerMockExtraction = async (gender) => {
-    const setIsUploading = gender === 'male' ? setIsMaleUploading : setIsFemaleUploading;
-    const setError = gender === 'male' ? setMaleError : setFemaleError;
-    const setReport = gender === 'male' ? setMaleReport : setFemaleReport;
+  const triggerMockExtraction = async (gender, reportType = 'pathology') => {
+    const setIsUploading = reportType === 'pathology' 
+      ? (gender === 'male' ? setIsMaleUploading : setIsFemaleUploading)
+      : reportType === 'radiology'
+      ? (gender === 'male' ? setIsMaleRadUploading : setIsFemaleRadUploading)
+      : (gender === 'male' ? setIsMaleGenUploading : setIsFemaleGenUploading);
+      
+    const setError = reportType === 'pathology'
+      ? (gender === 'male' ? setMaleError : setFemaleError)
+      : reportType === 'radiology'
+      ? (gender === 'male' ? setMaleRadError : setFemaleRadError)
+      : (gender === 'male' ? setMaleGenError : setFemaleGenError);
+
+    const setReport = reportType === 'pathology'
+      ? (gender === 'male' ? setMaleReport : setFemaleReport)
+      : reportType === 'radiology'
+      ? (gender === 'male' ? setMaleRadReport : setFemaleRadReport)
+      : (gender === 'male' ? setMaleGenReport : setFemaleGenReport);
 
     setIsUploading(true);
     setError(null);
@@ -78,8 +176,83 @@ export default function FertilityPage() {
       const data = await response.json();
       if (data.success) {
         setReport(data);
+        if (reportType === 'pathology') {
+          if (gender === 'male') {
+            setMaleManualData(prev => ({
+              ...prev,
+              name: prev.name || 'John',
+              age: prev.age || 32,
+              semenQuality: 'Normal',
+              scrotalFinding: 'Normal',
+              b_azoo: false,
+            }));
+            setSharedLifestyle({
+              smoke: 0,
+              bmi: 0,
+              act: 0,
+              alc: 0,
+              stress: 0,
+              freq: 0.92,
+            });
+          } else {
+            setFemaleManualData(prev => ({
+              ...prev,
+              name: prev.name || 'Jane',
+              age: prev.age || 30,
+              ovarianReserve: 'Normal',
+              b_tubal: false,
+              b_uterus: false,
+            }));
+          }
+        } else if (reportType === 'radiology') {
+          if (gender === 'male') {
+            setMaleManualData(prev => ({
+              ...prev,
+              name: prev.name || 'John',
+              age: prev.age || 32,
+              varicoceleGrade: 'Grade 2',
+              testicularVolume: 'Normal',
+              scrotalObstruction: 'No',
+              prostateGrade: 'Grade I',
+              pvrVolume: 'Normal',
+              fattyLiverGrade: 'Grade II'
+            }));
+          } else {
+            setFemaleManualData(prev => ({
+              ...prev,
+              name: prev.name || 'Jane',
+              age: prev.age || 30,
+              uterineLining: 'Normal',
+              fibroids: 'Intramural',
+              tubalPatency: 'Both open',
+              pcosMorphology: 'Bilateral',
+              ovarianVolume: 'Enlarged',
+              pelvicFluid: 'No',
+              fattyLiverGrade: 'Grade I'
+            }));
+          }
+        } else if (reportType === 'genomics') {
+          if (gender === 'male') {
+            setMaleManualData(prev => ({
+              ...prev,
+              name: prev.name || 'John',
+              age: prev.age || 32,
+              yDeletion: 'None',
+              maleKaryotype: 'Normal 46,XY'
+            }));
+          } else {
+            setFemaleManualData(prev => ({
+              ...prev,
+              name: prev.name || 'Jane',
+              age: prev.age || 30,
+              mthfr: 'Heterozygous',
+              femaleKaryotype: 'Normal 46,XX',
+              cftrCarrier: 'No'
+            }));
+          }
+        }
       } else {
-        setError(data.error || 'Failed to extract data');
+        setError(data.error || 'Failed to extract mock data');
       }
     } catch (err) {
       setError('Connection to backend failed. Make sure the server is running.');
@@ -88,10 +261,24 @@ export default function FertilityPage() {
     }
   };
 
-  const handleFileUpload = async (file, gender) => {
-    const setIsUploading = gender === 'male' ? setIsMaleUploading : setIsFemaleUploading;
-    const setError = gender === 'male' ? setMaleError : setFemaleError;
-    const setReport = gender === 'male' ? setMaleReport : setFemaleReport;
+  const handleFileUpload = async (file, gender, reportType = 'pathology') => {
+    const setIsUploading = reportType === 'pathology' 
+      ? (gender === 'male' ? setIsMaleUploading : setIsFemaleUploading)
+      : reportType === 'radiology'
+      ? (gender === 'male' ? setIsMaleRadUploading : setIsFemaleRadUploading)
+      : (gender === 'male' ? setIsMaleGenUploading : setIsFemaleGenUploading);
+      
+    const setError = reportType === 'pathology'
+      ? (gender === 'male' ? setMaleError : setFemaleError)
+      : reportType === 'radiology'
+      ? (gender === 'male' ? setMaleRadError : setFemaleRadError)
+      : (gender === 'male' ? setMaleGenError : setFemaleGenError);
+
+    const setReport = reportType === 'pathology'
+      ? (gender === 'male' ? setMaleReport : setFemaleReport)
+      : reportType === 'radiology'
+      ? (gender === 'male' ? setMaleRadReport : setFemaleRadReport)
+      : (gender === 'male' ? setMaleGenReport : setFemaleGenReport);
 
     if (file.type !== 'application/pdf') {
       setError('Please upload a valid PDF file.');
@@ -128,6 +315,164 @@ export default function FertilityPage() {
       const data = await response.json();
       if (data.success) {
         setReport(data);
+        
+        const rawText = data.report_metadata?.raw_ocr_text || '';
+        const meta = parsePatientMeta(rawText);
+        const extracted = data.sections || {};
+        
+        if (reportType === 'pathology') {
+          if (gender === 'male') {
+            let volume = parseFloat(findExtractedParam(extracted, 'semen_volume')?.value);
+            let concentration = parseFloat(findExtractedParam(extracted, 'sperm_concentration')?.value);
+            let totalCount = parseFloat(findExtractedParam(extracted, 'total_sperm_count_per_ejaculate')?.value || findExtractedParam(extracted, 'total_sperm_count')?.value);
+            let totalMotility = parseFloat(findExtractedParam(extracted, 'total_sperm_motility')?.value || findExtractedParam(extracted, 'total_motility')?.value);
+            let progressive = parseFloat(findExtractedParam(extracted, 'progressive_motility')?.value);
+            let vitality = parseFloat(findExtractedParam(extracted, 'sperm_vitality_viability')?.value || findExtractedParam(extracted, 'vitality')?.value);
+            let morphology = parseFloat(findExtractedParam(extracted, 'sperm_morphology_normal_forms')?.value || findExtractedParam(extracted, 'morphology')?.value);
+            let ph = parseFloat(findExtractedParam(extracted, 'semen_ph')?.value || findExtractedParam(extracted, 'ph')?.value);
+
+            // Regex fallbacks for semen parameters from raw OCR text
+            if (isNaN(volume)) {
+              const match = rawText.match(/(?:Semen\s*)?Volume\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*m[lL]/i);
+              if (match) volume = parseFloat(match[1]);
+            }
+            if (isNaN(concentration)) {
+              const match = rawText.match(/(?:Sperm\s*)?Concentration\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:M|Million)/i);
+              if (match) concentration = parseFloat(match[1]);
+            }
+            if (isNaN(totalCount)) {
+              const match = rawText.match(/Total\s*(?:Sperm\s*)?Count\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:M|Million)/i);
+              if (match) totalCount = parseFloat(match[1]);
+            }
+            if (isNaN(totalMotility)) {
+              const match = rawText.match(/(?:Total\s*)?Motility\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%/i);
+              if (match) totalMotility = parseFloat(match[1]);
+            }
+            if (isNaN(progressive)) {
+              const match = rawText.match(/Progressive\s*(?:Motility)?\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%/i);
+              if (match) progressive = parseFloat(match[1]);
+            }
+            if (isNaN(vitality)) {
+              const match = rawText.match(/Vitality\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%/i);
+              if (match) vitality = parseFloat(match[1]);
+            }
+            if (isNaN(morphology)) {
+              const match = rawText.match(/Morphology\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%/i) || rawText.match(/Normal\s*Forms\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%/i);
+              if (match) morphology = parseFloat(match[1]);
+            }
+            if (isNaN(ph)) {
+              const match = rawText.match(/pH\s*[:\-]?\s*(\d+(?:\.\d+)?)/i);
+              if (match) ph = parseFloat(match[1]);
+            }
+
+            // Semen Quality classification logic
+            let semenQuality = '';
+            let b_azoo = false;
+            
+            if (concentration === 0 || totalCount === 0) {
+              semenQuality = 'Severe Deficit';
+              b_azoo = true;
+            } else if (!isNaN(volume) || !isNaN(concentration) || !isNaN(totalMotility)) {
+              let belowCount = 0;
+              if (!isNaN(concentration) && concentration < 16) belowCount++;
+              if (!isNaN(totalCount) && totalCount < 39) belowCount++;
+              if (!isNaN(volume) && volume < 1.4) belowCount++;
+              if (!isNaN(totalMotility) && totalMotility < 42) belowCount++;
+              if (!isNaN(progressive) && progressive < 30) belowCount++;
+              if (!isNaN(vitality) && vitality < 54) belowCount++;
+              if (!isNaN(morphology) && morphology < 4) belowCount++;
+              if (!isNaN(ph) && ph < 7.2) belowCount++;
+
+              if (belowCount >= 3 || (!isNaN(concentration) && concentration < 5)) {
+                semenQuality = 'Severe Deficit';
+              } else if (belowCount === 2) {
+                semenQuality = 'Moderate Deficit';
+              } else if (belowCount === 1) {
+                semenQuality = 'Mild Deficit';
+              } else {
+                semenQuality = 'Normal';
+              }
+            }
+
+            setMaleManualData(prev => ({
+              ...prev,
+              name: meta.name || prev.name,
+              age: meta.age || prev.age,
+              semenQuality: semenQuality || prev.semenQuality,
+              b_azoo: b_azoo || prev.b_azoo,
+              scrotalFinding: prev.scrotalFinding || 'Normal'
+            }));
+          } else {
+            // Female Pathology
+            let amh = parseFloat(findExtractedParam(extracted, 'amh')?.value);
+            let afc = parseFloat(findExtractedParam(extracted, 'afc')?.value);
+
+            if (isNaN(amh)) {
+              const amhMatch = rawText.match(/(?:AMH|Anti\s*-?\s*Mullerian\s*Hormone)\s*[:\-]?\s*(\d+(?:\.\d+)?)/i);
+              if (amhMatch) amh = parseFloat(amhMatch[1]);
+            }
+            if (isNaN(afc)) {
+              const afcMatch = rawText.match(/(?:AFC|Antral\s*Follicle\s*Count)\s*[:\-]?\s*(\d+)/i);
+              if (afcMatch) afc = parseFloat(afcMatch[1]);
+            }
+
+            const ageNum = meta.age || femaleManualData.age || 30;
+            let ovarianReserve = '';
+            if (!isNaN(amh) || !isNaN(afc)) {
+              ovarianReserve = classifyOvarianReserve(amh, afc, ageNum);
+            }
+
+            setFemaleManualData(prev => ({
+              ...prev,
+              name: meta.name || prev.name,
+              age: meta.age || prev.age,
+              ovarianReserve: ovarianReserve || prev.ovarianReserve
+            }));
+          }
+        } else if (reportType === 'radiology') {
+          if (gender === 'male') {
+            const rad = parseMaleRadiology(rawText);
+            setMaleManualData(prev => ({
+              ...prev,
+              name: prev.name || meta.name,
+              age: prev.age || meta.age,
+              varicoceleGrade: rad.varicoceleGrade,
+              testicularVolume: rad.testicularVolume,
+              scrotalObstruction: rad.scrotalObstruction
+            }));
+          } else {
+            const rad = parseFemaleRadiology(rawText);
+            setFemaleManualData(prev => ({
+              ...prev,
+              name: prev.name || meta.name,
+              age: prev.age || meta.age,
+              uterineLining: rad.uterineLining,
+              fibroids: rad.fibroids,
+              tubalPatency: rad.tubalPatency
+            }));
+          }
+        } else if (reportType === 'genomics') {
+          if (gender === 'male') {
+            const gen = parseMaleGenomics(rawText);
+            setMaleManualData(prev => ({
+              ...prev,
+              name: prev.name || meta.name,
+              age: prev.age || meta.age,
+              yDeletion: gen.yDeletion,
+              maleKaryotype: gen.maleKaryotype
+            }));
+          } else {
+            const gen = parseFemaleGenomics(rawText);
+            setFemaleManualData(prev => ({
+              ...prev,
+              name: prev.name || meta.name,
+              age: prev.age || meta.age,
+              mthfr: gen.mthfr,
+              femaleKaryotype: gen.femaleKaryotype,
+              cftrCarrier: gen.cftrCarrier
+            }));
+          }
+        }
       } else {
         throw new Error(data.error || 'Failed to extract data');
       }
@@ -146,6 +491,60 @@ export default function FertilityPage() {
   const handleAnalyzeMfr = async () => {
     if (!maleReport || !femaleReport) return;
     
+    const missing = [];
+
+    // Partner A
+    if (!maleManualData.name?.trim()) missing.push("Prospect A Name");
+    if (!maleManualData.age) missing.push("Prospect A Age");
+    if (!maleManualData.semenQuality) missing.push("Prospect A Semen Quality");
+    if (!maleManualData.scrotalFinding) missing.push("Prospect A Scrotal Findings");
+
+    if (evaluationTier >= 2) {
+      if (!maleManualData.varicoceleGrade) missing.push("Prospect A Varicocele Grade");
+      if (!maleManualData.testicularVolume) missing.push("Prospect A Testicular Volume");
+      if (!maleManualData.scrotalObstruction) missing.push("Prospect A Scrotal Obstruction");
+      if (!maleManualData.prostateGrade) missing.push("Prospect A Prostate BPH Grade");
+      if (!maleManualData.pvrVolume) missing.push("Prospect A Post-Void Residual Volume");
+      if (!maleManualData.fattyLiverGrade) missing.push("Prospect A Fatty Liver Grade");
+    }
+    if (evaluationTier === 3) {
+      if (!maleManualData.yDeletion) missing.push("Prospect A Y-Chromosome Deletion");
+      if (!maleManualData.maleKaryotype) missing.push("Prospect A Male Karyotype");
+    }
+
+    // Partner B
+    if (!femaleManualData.name?.trim()) missing.push("Prospect B Name");
+    if (!femaleManualData.age) missing.push("Prospect B Age");
+    if (!femaleManualData.ovarianReserve) missing.push("Prospect B Ovarian Reserve");
+
+    if (evaluationTier >= 2) {
+      if (!femaleManualData.uterineLining) missing.push("Prospect B Uterine Lining");
+      if (!femaleManualData.fibroids) missing.push("Prospect B Fibroids");
+      if (!femaleManualData.tubalPatency) missing.push("Prospect B Tubal Patency");
+      if (!femaleManualData.pcosMorphology) missing.push("Prospect B PCOS Ovarian Morphology");
+      if (!femaleManualData.ovarianVolume) missing.push("Prospect B Ovarian Volume");
+      if (!femaleManualData.pelvicFluid) missing.push("Prospect B Pelvic Free Fluid");
+      if (!femaleManualData.fattyLiverGrade) missing.push("Prospect B Fatty Liver Grade");
+    }
+    if (evaluationTier === 3) {
+      if (!femaleManualData.mthfr) missing.push("Prospect B MTHFR Mutation");
+      if (!femaleManualData.femaleKaryotype) missing.push("Prospect B Female Karyotype");
+      if (!femaleManualData.cftrCarrier) missing.push("Prospect B CFTR Carrier Status");
+    }
+
+    // Shared Lifestyle
+    if (sharedLifestyle.smoke === undefined || sharedLifestyle.smoke === '') missing.push("Smoking");
+    if (sharedLifestyle.bmi === undefined || sharedLifestyle.bmi === '') missing.push("Body weight (BMI)");
+    if (sharedLifestyle.act === undefined || sharedLifestyle.act === '') missing.push("Physical activity");
+    if (sharedLifestyle.alc === undefined || sharedLifestyle.alc === '') missing.push("Alcohol");
+    if (sharedLifestyle.stress === undefined || sharedLifestyle.stress === '') missing.push("Stress");
+    if (sharedLifestyle.freq === undefined || sharedLifestyle.freq === '') missing.push("Intercourse frequency");
+
+    if (missing.length > 0) {
+      setMatchError(`Please fill in the following columns to proceed: ${missing.join(", ")}`);
+      return;
+    }
+
     setIsAnalyzing(true);
     setMatchError(null);
 
@@ -161,10 +560,11 @@ export default function FertilityPage() {
           male_manual_data: maleManualData,
           female_manual_data: femaleManualData,
           shared_lifestyle: sharedLifestyle,
+          evaluationTier,
           barriers: {
-            b_tubal: femaleManualData.b_tubal,
+            b_tubal: femaleManualData.b_tubal || femaleManualData.tubalPatency === 'Both blocked',
             b_uterus: femaleManualData.b_uterus,
-            b_azoo: maleManualData.b_azoo
+            b_azoo: maleManualData.b_azoo || maleManualData.scrotalObstruction === 'Yes'
           }
         })
       });
@@ -214,16 +614,31 @@ export default function FertilityPage() {
   const resetAll = () => {
     setMaleReport(null);
     setFemaleReport(null);
+    setMaleRadReport(null);
+    setFemaleRadReport(null);
+    setMaleGenReport(null);
+    setFemaleGenReport(null);
+    
     setMatchResult(null);
     setMatchError(null);
+    
     setMaleError(null);
     setFemaleError(null);
+    setMaleRadError(null);
+    setFemaleRadError(null);
+    setMaleGenError(null);
+    setFemaleGenError(null);
+    
     setMaleManualData(defaultMaleManual);
     setFemaleManualData(defaultFemaleManual);
     setSharedLifestyle(defaultSharedLifestyle);
+    setEvaluationTier(1);
+    
     syncedMaleReportId.current = null;
     syncedFemaleReportId.current = null;
     setShowCalculations(false);
+    setChatSessionId(null);
+    setIsChatOpen(false);
   };
 
   const handleLifestyleChange = (e) => {
@@ -698,6 +1113,102 @@ export default function FertilityPage() {
     );
   };
 
+  const renderUploadSlot = (gender, reportType) => {
+    const isMale = gender === 'male';
+    let isUploading = false;
+    let report = null;
+    let error = null;
+    let inputRef = null;
+    let label = '';
+    
+    if (reportType === 'pathology') {
+      isUploading = isMale ? isMaleUploading : isFemaleUploading;
+      report = isMale ? maleReport : femaleReport;
+      error = isMale ? maleError : femaleError;
+      inputRef = isMale ? maleInputRef : femaleInputRef;
+      label = isMale ? 'Pathology (Semen Report)' : 'Pathology (AMH Report)';
+    } else if (reportType === 'radiology') {
+      isUploading = isMale ? isMaleRadUploading : isFemaleRadUploading;
+      report = isMale ? maleRadReport : femaleRadReport;
+      error = isMale ? maleRadError : femaleRadError;
+      inputRef = isMale ? maleRadInputRef : femaleRadInputRef;
+      label = isMale ? 'Radiology (Scrotal USG)' : 'Radiology (Pelvic USG/HSG)';
+    } else if (reportType === 'genomics') {
+      isUploading = isMale ? isMaleGenUploading : isFemaleGenUploading;
+      report = isMale ? maleGenReport : femaleGenReport;
+      error = isMale ? maleGenError : femaleGenError;
+      inputRef = isMale ? maleGenInputRef : femaleGenInputRef;
+      label = isMale ? 'Genomics (Y-Deletion)' : 'Genomics (MTHFR / Karyotype)';
+    }
+
+    return (
+      <div className={styles.uploadSlotContainer} key={reportType}>
+        <div className={styles.uploadSlotLabel}>{label}</div>
+        <div 
+          className={styles.compactDropzone}
+          onClick={() => !report && inputRef.current?.click()}
+          style={report ? { borderColor: 'var(--teal)', background: 'var(--soft-teal)' } : {}}
+        >
+          <input 
+            type="file" 
+            ref={inputRef} 
+            onChange={(e) => e.target.files.length && handleFileUpload(e.target.files[0], gender, reportType)} 
+            accept=".pdf" 
+            style={{ display: 'none' }} 
+          />
+          {isUploading ? (
+            <div className={styles.loader} style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
+          ) : report ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <CheckCircle size={18} color="var(--teal)" style={{ flexShrink: 0 }} />
+              <span className={styles.uploadSlotText} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Extracted
+              </span>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (reportType === 'pathology') {
+                    if (isMale) { setMaleReport(null); setMaleManualData(defaultMaleManual); }
+                    else { setFemaleReport(null); setFemaleManualData(defaultFemaleManual); }
+                  } else if (reportType === 'radiology') {
+                    if (isMale) { setMaleRadReport(null); setMaleManualData(prev => ({ ...prev, varicoceleGrade: '', testicularVolume: '', scrotalObstruction: '' })); }
+                    else { setFemaleRadReport(null); setFemaleManualData(prev => ({ ...prev, uterineLining: '', fibroids: '', tubalPatency: '' })); }
+                  } else if (reportType === 'genomics') {
+                    if (isMale) { setMaleGenReport(null); setMaleManualData(prev => ({ ...prev, yDeletion: '', maleKaryotype: '' })); }
+                    else { setFemaleGenReport(null); setFemaleManualData(prev => ({ ...prev, mthfr: '', femaleKaryotype: '', cftrCarrier: '' })); }
+                  }
+                }} 
+                className={styles.slotClearBtn}
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <>
+              <UploadCloud size={18} className={styles.uploadSlotIcon} />
+              <span className={styles.uploadSlotText}>Upload PDF</span>
+              {!isUploading && !report && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); triggerMockExtraction(gender, reportType); }} 
+                  className={styles.slotMockBtn}
+                >
+                  Mock
+                </button>
+              )}
+            </>
+          )}
+          {error && <div className={styles.slotErrorText}>{error}</div>}
+        </div>
+      </div>
+    );
+  };
+
+  const isUploadRequiredFilled = 
+    maleReport && 
+    femaleReport && 
+    (evaluationTier < 2 || (maleRadReport && femaleRadReport)) && 
+    (evaluationTier < 3 || (maleGenReport && femaleGenReport));
+
   return (
     <div className={styles.mfrThemeWrapper}>
       <main className={styles.container}>
@@ -725,39 +1236,167 @@ export default function FertilityPage() {
 
         {!matchResult && (
           <>
+            {/* Interactive Evaluation Tree Selector */}
+            <div className={styles.treeSelectorContainer}>
+              <h3 className={styles.treeSelectorTitle}>Evaluation Tier</h3>
+              <div className={styles.treeSvgWrapper}>
+                <svg viewBox="0 0 600 200" width="100%" height="200" style={{ overflow: 'visible' }}>
+                  <defs>
+                    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
+
+                  {/* Branches (Connection Lines) */}
+                  <path
+                    d="M 300 35 C 300 80, 115 80, 115 120"
+                    fill="none"
+                    stroke={evaluationTier >= 1 ? "var(--teal)" : "var(--line)"}
+                    strokeWidth={evaluationTier === 1 ? "3" : "1.5"}
+                    strokeDasharray={evaluationTier >= 1 ? "none" : "4 4"}
+                    style={{ transition: 'stroke 0.3s, stroke-width 0.3s' }}
+                  />
+                  <path
+                    d="M 300 35 L 300 120"
+                    fill="none"
+                    stroke={evaluationTier >= 2 ? "var(--teal)" : "var(--line)"}
+                    strokeWidth={evaluationTier === 2 ? "3" : "1.5"}
+                    strokeDasharray={evaluationTier >= 2 ? "none" : "4 4"}
+                    style={{ transition: 'stroke 0.3s, stroke-width 0.3s' }}
+                  />
+                  <path
+                    d="M 300 35 C 300 80, 485 80, 485 120"
+                    fill="none"
+                    stroke={evaluationTier === 3 ? "var(--teal)" : "var(--line)"}
+                    strokeWidth={evaluationTier === 3 ? "3" : "1.5"}
+                    strokeDasharray={evaluationTier === 3 ? "none" : "4 4"}
+                    style={{ transition: 'stroke 0.3s, stroke-width 0.3s' }}
+                  />
+
+                  {/* Root Node (Fertility Assessment Center) */}
+                  <g transform="translate(300, 35)">
+                    <rect
+                      x="-80"
+                      y="-20"
+                      width="160"
+                      height="36"
+                      rx="18"
+                      fill="var(--ink)"
+                      stroke="none"
+                    />
+                    <text
+                      x="0"
+                      y="5"
+                      textAnchor="middle"
+                      fill="var(--paper)"
+                      fontSize="12.5"
+                      fontWeight="bold"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      Fertility Engine
+                    </text>
+                  </g>
+
+                  {/* Tier 1 Node */}
+                  <g 
+                    onClick={() => setEvaluationTier(1)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <rect
+                      x="25"
+                      y="120"
+                      width="180"
+                      height="70"
+                      rx="12"
+                      style={{
+                        fill: evaluationTier === 1 ? 'var(--soft-teal)' : 'var(--surface)',
+                        stroke: evaluationTier === 1 ? 'var(--teal)' : 'var(--line)',
+                        strokeWidth: evaluationTier === 1 ? '2.5px' : '1px',
+                        transition: 'all 0.3s ease'
+                      }}
+                    />
+                    <text x="115" y="142" textAnchor="middle" fontWeight="bold" fontSize="13" fill={evaluationTier === 1 ? 'var(--teal-d)' : 'var(--ink)'}>
+                      Tier 1
+                    </text>
+                    <text x="115" y="160" textAnchor="middle" fontSize="11" fill={evaluationTier === 1 ? 'var(--teal-d)' : 'var(--muted)'}>
+                      Pathology + Lifestyle
+                    </text>
+                    <text x="115" y="176" textAnchor="middle" fontSize="9.5" fill="var(--muted)" opacity="0.8">
+                      AMH, Semen Profile
+                    </text>
+                  </g>
+
+                  {/* Tier 2 Node */}
+                  <g 
+                    onClick={() => setEvaluationTier(2)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <rect
+                      x="210"
+                      y="120"
+                      width="180"
+                      height="70"
+                      rx="12"
+                      style={{
+                        fill: evaluationTier === 2 ? 'var(--soft-teal)' : 'var(--surface)',
+                        stroke: evaluationTier === 2 ? 'var(--teal)' : 'var(--line)',
+                        strokeWidth: evaluationTier === 2 ? '2.5px' : '1px',
+                        transition: 'all 0.3s ease'
+                      }}
+                    />
+                    <text x="300" y="142" textAnchor="middle" fontWeight="bold" fontSize="13" fill={evaluationTier === 2 ? 'var(--teal-d)' : 'var(--ink)'}>
+                      Tier 2
+                    </text>
+                    <text x="300" y="160" textAnchor="middle" fontSize="11" fill={evaluationTier === 2 ? 'var(--teal-d)' : 'var(--muted)'}>
+                      Radiology + Path + Lifestyle
+                    </text>
+                    <text x="300" y="176" textAnchor="middle" fontSize="9.5" fill="var(--muted)" opacity="0.8">
+                      Adds Pelvic/Scrotal USG
+                    </text>
+                  </g>
+
+                  {/* Tier 3 Node */}
+                  <g 
+                    onClick={() => setEvaluationTier(3)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <rect
+                      x="395"
+                      y="120"
+                      width="180"
+                      height="70"
+                      rx="12"
+                      style={{
+                        fill: evaluationTier === 3 ? 'var(--soft-teal)' : 'var(--surface)',
+                        stroke: evaluationTier === 3 ? 'var(--teal)' : 'var(--line)',
+                        strokeWidth: evaluationTier === 3 ? '2.5px' : '1px',
+                        transition: 'all 0.3s ease'
+                      }}
+                    />
+                    <text x="485" y="142" textAnchor="middle" fontWeight="bold" fontSize="13" fill={evaluationTier === 3 ? 'var(--teal-d)' : 'var(--ink)'}>
+                      Tier 3
+                    </text>
+                    <text x="485" y="160" textAnchor="middle" fontSize="11" fill={evaluationTier === 3 ? 'var(--teal-d)' : 'var(--muted)'}>
+                      Genomics + Rad + Path
+                    </text>
+                    <text x="485" y="176" textAnchor="middle" fontSize="9.5" fill="var(--muted)" opacity="0.8">
+                      Adds Karyotype, MTHFR, CFTR
+                    </text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
             <div className={styles.dualUploadContainer}>
               <div className={styles.uploadWrapper}>
                 <div className={styles.uploadLabel}>
-                  {maleManualData.name ? `${maleManualData.name}'s Semen Report` : "Prospect 1's Report"}
+                  {maleManualData.name ? `${maleManualData.name}'s Reports` : "Prospect 1's Reports"}
                 </div>
-                <div 
-                  className={styles.dropzone}
-                  onClick={() => !maleReport && maleInputRef.current?.click()}
-                  style={maleReport ? { borderColor: 'var(--teal)', background: 'var(--soft-teal)' } : {}}
-                >
-                  <input 
-                    type="file" 
-                    ref={maleInputRef} 
-                    onChange={(e) => e.target.files.length && handleFileUpload(e.target.files[0], 'male')} 
-                    accept=".pdf" 
-                    style={{ display: 'none' }} 
-                  />
-                  {isMaleUploading ? (
-                    <div className={styles.loader}></div>
-                  ) : maleReport ? (
-                    <CheckCircle size={36} color="var(--teal)" />
-                  ) : (
-                    <UploadCloud className={styles.uploadIcon} />
-                  )}
-                  <div className={styles.uploadText}>
-                    {isMaleUploading ? 'Extracting...' : maleReport ? 'Semen Report Extracted' : 'Upload Semen PDF'}
-                  </div>
-                  {maleError && <div style={{ color: 'var(--red-d)', fontSize: '12.5px' }}>{maleError}</div>}
-                  {!isMaleUploading && !maleReport && (
-                    <button onClick={(e) => { e.stopPropagation(); triggerMockExtraction('male'); }} className={styles.mockButton}>
-                      Use Mock Data
-                    </button>
-                  )}
+                <div className={styles.uploadSlotsGrid}>
+                  {renderUploadSlot('male', 'pathology')}
+                  {evaluationTier >= 2 && renderUploadSlot('male', 'radiology')}
+                  {evaluationTier === 3 && renderUploadSlot('male', 'genomics')}
                 </div>
                 <ManualInputs 
                   title={maleManualData.name ? `${maleManualData.name}'s Parameters` : "Prospect 1's Parameters"} 
@@ -765,41 +1404,18 @@ export default function FertilityPage() {
                   onChange={setMaleManualData} 
                   gender="male"
                   engine="mfr"
+                  evaluationTier={evaluationTier}
                 />
               </div>
 
               <div className={styles.uploadWrapper}>
                 <div className={styles.uploadLabel}>
-                  {femaleManualData.name ? `${femaleManualData.name}'s AMH Report` : "Prospect 2's Report"}
+                  {femaleManualData.name ? `${femaleManualData.name}'s Reports` : "Prospect 2's Reports"}
                 </div>
-                <div 
-                  className={styles.dropzone}
-                  onClick={() => !femaleReport && femaleInputRef.current?.click()}
-                  style={femaleReport ? { borderColor: 'var(--teal)', background: 'var(--soft-teal)' } : {}}
-                >
-                  <input 
-                    type="file" 
-                    ref={femaleInputRef} 
-                    onChange={(e) => e.target.files.length && handleFileUpload(e.target.files[0], 'female')} 
-                    accept=".pdf" 
-                    style={{ display: 'none' }} 
-                  />
-                  {isFemaleUploading ? (
-                    <div className={styles.loader}></div>
-                  ) : femaleReport ? (
-                    <CheckCircle size={36} color="var(--teal)" />
-                  ) : (
-                    <UploadCloud className={styles.uploadIcon} />
-                  )}
-                  <div className={styles.uploadText}>
-                    {isFemaleUploading ? 'Extracting...' : femaleReport ? 'Pathology Extracted' : 'Upload AMH PDF'}
-                  </div>
-                  {femaleError && <div style={{ color: 'var(--red-d)', fontSize: '12.5px' }}>{femaleError}</div>}
-                  {!isFemaleUploading && !femaleReport && (
-                    <button onClick={(e) => { e.stopPropagation(); triggerMockExtraction('female'); }} className={styles.mockButton}>
-                      Use Mock Data
-                    </button>
-                  )}
+                <div className={styles.uploadSlotsGrid}>
+                  {renderUploadSlot('female', 'pathology')}
+                  {evaluationTier >= 2 && renderUploadSlot('female', 'radiology')}
+                  {evaluationTier === 3 && renderUploadSlot('female', 'genomics')}
                 </div>
                 <ManualInputs 
                   title={femaleManualData.name ? `${femaleManualData.name}'s Parameters` : "Prospect 2's Parameters"} 
@@ -807,6 +1423,7 @@ export default function FertilityPage() {
                   onChange={setFemaleManualData} 
                   gender="female"
                   engine="mfr"
+                  evaluationTier={evaluationTier}
                 />
               </div>
             </div>
@@ -816,48 +1433,54 @@ export default function FertilityPage() {
               <h2 className={styles.sectionTitle}>Shared Household Lifestyle & Timing</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
                 <div>
-                  <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: '500' }}>Smoking</label>
+                  <label style={{ color: 'var(--muted)', fontSize: '0.85rem', fontWeight: '500' }}>Smoking</label>
                   <select name="smoke" value={sharedLifestyle.smoke} onChange={handleLifestyleChange} className={styles.formSelect}>
+                    <option value="">Select Smoking...</option>
                     <option value="0">Neither smokes</option>
                     <option value="10">One smokes</option>
                     <option value="22">Both smoke</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: '500' }}>Body weight (BMI)</label>
+                  <label style={{ color: 'var(--muted)', fontSize: '0.85rem', fontWeight: '500' }}>Body weight (BMI)</label>
                   <select name="bmi" value={sharedLifestyle.bmi} onChange={handleLifestyleChange} className={styles.formSelect}>
+                    <option value="">Select BMI Range...</option>
                     <option value="0">Both healthy range</option>
                     <option value="6">One outside range</option>
                     <option value="14">Both outside range</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: '500' }}>Physical activity</label>
+                  <label style={{ color: 'var(--muted)', fontSize: '0.85rem', fontWeight: '500' }}>Physical activity</label>
                   <select name="act" value={sharedLifestyle.act} onChange={handleLifestyleChange} className={styles.formSelect}>
+                    <option value="">Select Activity...</option>
                     <option value="0">Active</option>
                     <option value="6">Mixed</option>
                     <option value="14">Sedentary</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: '500' }}>Alcohol</label>
+                  <label style={{ color: 'var(--muted)', fontSize: '0.85rem', fontWeight: '500' }}>Alcohol</label>
                   <select name="alc" value={sharedLifestyle.alc} onChange={handleLifestyleChange} className={styles.formSelect}>
+                    <option value="">Select Alcohol...</option>
                     <option value="0">None / light</option>
                     <option value="4">Moderate</option>
                     <option value="12">Heavy</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: '500' }}>Stress</label>
+                  <label style={{ color: 'var(--muted)', fontSize: '0.85rem', fontWeight: '500' }}>Stress</label>
                   <select name="stress" value={sharedLifestyle.stress} onChange={handleLifestyleChange} className={styles.formSelect}>
+                    <option value="">Select Stress...</option>
                     <option value="0">Low</option>
                     <option value="4">Moderate</option>
                     <option value="10">High</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: '500' }}>Intercourse frequency</label>
+                  <label style={{ color: 'var(--muted)', fontSize: '0.85rem', fontWeight: '500' }}>Intercourse frequency</label>
                   <select name="freq" value={sharedLifestyle.freq} onChange={handleLifestyleChange} className={styles.formSelect}>
+                    <option value="">Select Frequency...</option>
                     <option value="1">3+ times / week</option>
                     <option value="0.92">About twice / week</option>
                     <option value="0.82">About once / week</option>
@@ -869,7 +1492,7 @@ export default function FertilityPage() {
 
             <button 
               className={styles.actionButton}
-              disabled={!maleReport || !femaleReport || isAnalyzing}
+              disabled={!isUploadRequiredFilled || isAnalyzing}
               onClick={handleAnalyzeMfr}
             >
               {isAnalyzing ? 'Analyzing Fertility...' : 'Analyze Fertility Profiles'}
@@ -938,6 +1561,40 @@ export default function FertilityPage() {
                   <div className={styles.warnBanner} style={{ marginTop: '16px', marginBottom: '0', textAlign: 'left' }}>
                     <AlertCircle size={16} />
                     <span>{matchResult.validation_issue}</span>
+                  </div>
+                )}
+
+                {/* Radiology & Genomics Warnings */}
+                {((matchResult.rad_warnings && matchResult.rad_warnings.length > 0) || 
+                  (matchResult.genomic_warnings && matchResult.genomic_warnings.length > 0)) && (
+                  <div className={styles.warningsContainer} style={{ marginTop: '16px' }}>
+                    {matchResult.rad_warnings && matchResult.rad_warnings.length > 0 && (
+                      <div className={styles.warningCard} style={{ borderColor: 'var(--amber)', background: 'var(--soft-amber)', marginBottom: matchResult.genomic_warnings?.length > 0 ? '12px' : '0' }}>
+                        <h4 className={styles.warningCardTitle} style={{ color: 'var(--amber-d)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px' }}>
+                          <AlertCircle size={16} />
+                          Radiology Assessment Flags (USG/HSG)
+                        </h4>
+                        <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--amber-d)', fontSize: '12px', lineHeight: '1.5', textAlign: 'left' }}>
+                          {matchResult.rad_warnings.map((w, idx) => (
+                            <li key={idx}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {matchResult.genomic_warnings && matchResult.genomic_warnings.length > 0 && (
+                      <div className={styles.warningCard} style={{ borderColor: 'var(--red-d)', background: 'var(--soft-red)' }}>
+                        <h4 className={styles.warningCardTitle} style={{ color: 'var(--red-d)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px' }}>
+                          <AlertCircle size={16} />
+                          Genomics Assessment Flags
+                        </h4>
+                        <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--red-d)', fontSize: '12px', lineHeight: '1.5', textAlign: 'left' }}>
+                          {matchResult.genomic_warnings.map((w, idx) => (
+                            <li key={idx}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1226,6 +1883,62 @@ export default function FertilityPage() {
           );
         })()}
       </main>
+
+      {matchResult && (
+        <>
+          <button
+            onClick={() => setIsChatOpen(true)}
+            style={{
+              position: 'fixed',
+              bottom: '24px',
+              right: '24px',
+              zIndex: 999,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              borderRadius: '24px',
+              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: '600',
+              fontSize: '14px',
+              boxShadow: '0 8px 20px rgba(37, 99, 235, 0.25)',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 10px 25px rgba(37, 99, 235, 0.35)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 8px 20px rgba(37, 99, 235, 0.25)';
+            }}
+          >
+            <MessageSquare size={16} />
+            Consult AI Counselor
+          </button>
+          <ReportChatDrawer
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+            sessionId={chatSessionId}
+            onSessionCreated={setChatSessionId}
+            reportId={maleReport?.report_metadata?.report_id}
+            partnerReportId={femaleReport?.report_metadata?.report_id}
+            engineType="mfr"
+            contextMetadata={{
+              analysisResult: matchResult,
+              malePathologyRaw: maleReport?.sections || null,
+              femalePathologyRaw: femaleReport?.sections || null,
+              maleRadiologyRaw: maleRadReport?.sections || null,
+              femaleRadiologyRaw: femaleRadReport?.sections || null,
+              maleGenomicsRaw: maleGenReport?.sections || null,
+              femaleGenomicsRaw: femaleGenReport?.sections || null
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

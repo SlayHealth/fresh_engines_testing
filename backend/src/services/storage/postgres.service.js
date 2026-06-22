@@ -70,11 +70,52 @@ async function initDB() {
           analyzed_results TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+          id TEXT PRIMARY KEY,
+          report_id TEXT,
+          partner_report_id TEXT,
+          engine_type TEXT NOT NULL,
+          context_metadata TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+          id SERIAL PRIMARY KEY,
+          session_id TEXT REFERENCES chat_sessions(id) ON DELETE CASCADE,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          phone_number TEXT UNIQUE NOT NULL,
+          name TEXT,
+          gender TEXT,
+          dob TEXT,
+          city TEXT,
+          activity_level TEXT,
+          daily_steps TEXT,
+          occupation_style TEXT,
+          drinking_habits TEXT,
+          smoking_habits TEXT,
+          tobacco_habits TEXT,
+          sleep_cycle TEXT,
+          height REAL,
+          weight REAL,
+          waist REAL,
+          runs_used INTEGER DEFAULT 0,
+          chats_used INTEGER DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Create indexes if they don't exist
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_usg_reports_patient_slay_id ON usg_reports(patient_slay_id);
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
+      CREATE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
     `);
 
     logger.info('Database schema successfully initialized.');
