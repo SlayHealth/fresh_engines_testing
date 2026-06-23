@@ -81,9 +81,48 @@ async function analyzeCompatibility(req, res, next) {
   }
 }
 
+async function saveMatch(req, res, next) {
+  try {
+    const { userId, chronicResult, mfrResult, maleManual, femaleManual } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+    const matchId = uuidv4();
+    // Calculate an overall score if not provided, just mock for now
+    const compatibility_score = chronicResult?.compatibility_score || 0.85;
+
+    const analysisResult = {
+      score: compatibility_score,
+      chronicResult,
+      mfrResult,
+      details: {
+        male_manual_data: maleManual || {},
+        female_manual_data: femaleManual || {}
+      }
+    };
+
+    // Grab report IDs from chronic result if available
+    const male_report_id = chronicResult?.details?.male_report_id || null;
+    const female_report_id = chronicResult?.details?.female_report_id || null;
+
+    await db.query(`
+      INSERT INTO matches (id, user_id, male_report_id, female_report_id, status, compatibility_score, analysis_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [matchId, userId, male_report_id, female_report_id, 'completed', compatibility_score, JSON.stringify(analysisResult)]);
+
+    logger.info(`Session saved for user ${userId}, match ${matchId}`);
+    return res.json({ success: true, match_id: matchId });
+  } catch (error) {
+    logger.error(`Failed to save match session: ${error.message}`);
+    next(error);
+  }
+}
+
 async function listMatches(req, res, next) {
   try {
-    const result = await db.query('SELECT * FROM matches ORDER BY created_at DESC LIMIT 10');
+    const { userId } = req.query;
+    if (!userId) return res.json([]);
+
+    const result = await db.query('SELECT * FROM matches WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [userId]);
     const matches = result.rows.map(row => {
       let analysis = {};
       try {
@@ -95,8 +134,9 @@ async function listMatches(req, res, next) {
         id: row.id,
         score: Math.round((row.compatibility_score || 0.85) * 100),
         createdAt: row.created_at,
+        analysis, // Pass the full payload back for restoration
         user: {
-          name: analysis.details?.male_manual_data?.name || 'Partner A'
+          name: analysis.details?.male_manual_data?.name || analysis.details?.female_manual_data?.name || 'Partner A'
         },
         prospect: {
           name: analysis.details?.female_manual_data?.name || 'Partner B',
@@ -113,5 +153,6 @@ async function listMatches(req, res, next) {
 
 module.exports = {
   analyzeCompatibility,
+  saveMatch,
   listMatches
 };

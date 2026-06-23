@@ -55,6 +55,7 @@ async function initDB() {
 
       CREATE TABLE IF NOT EXISTS matches (
           id TEXT PRIMARY KEY,
+          user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
           male_report_id TEXT REFERENCES reports(id) ON DELETE CASCADE,
           female_report_id TEXT REFERENCES reports(id) ON DELETE CASCADE,
           status TEXT,
@@ -116,6 +117,12 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_usg_reports_patient_slay_id ON usg_reports(patient_slay_id);
       CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
       CREATE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
+    `);
+
+    // Schema migrations
+    await pool.query(`
+      ALTER TABLE matches ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE;
+      CREATE INDEX IF NOT EXISTS idx_matches_user_id ON matches(user_id);
     `);
 
     logger.info('Database schema successfully initialized.');

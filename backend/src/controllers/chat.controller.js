@@ -11,6 +11,24 @@ async function createChatSession(req, res, next) {
       return res.status(400).json({ success: false, error: 'engine_type is required' });
     }
 
+    // Check if a session already exists
+    const existingRes = await db.query(
+      `SELECT id FROM chat_sessions 
+       WHERE (report_id = $1 OR report_id IS NULL) 
+         AND (partner_report_id = $2 OR partner_report_id IS NULL) 
+         AND engine_type = $3
+       ORDER BY created_at DESC LIMIT 1`,
+      [report_id || null, partner_report_id || null, engine_type]
+    );
+
+    if (existingRes.rows.length > 0) {
+      return res.status(200).json({
+        success: true,
+        sessionId: existingRes.rows[0].id,
+        message: 'Resumed existing chat session'
+      });
+    }
+
     const sessionId = uuidv4();
     const contextMetadataStr = typeof context_metadata === 'object' 
       ? JSON.stringify(context_metadata) 

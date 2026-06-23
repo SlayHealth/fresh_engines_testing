@@ -20,6 +20,7 @@ export default function DashboardPage() {
     matchesList, 
     isMatchesLoading, 
     fetchRecentMatches, 
+    restoreMatchSession,
     handleResetQuota, 
     handleLogout,
     chronicResult,
@@ -146,11 +147,8 @@ export default function DashboardPage() {
                     key={match.id}
                     className="p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                     onClick={() => {
-                      if (chronicResult && mfrResult) {
-                        router.push('/core-engine/chronic');
-                      } else {
-                        alert("Clicking past match in demo. The active reports results are loaded in the tabs workspace!");
-                      }
+                      restoreMatchSession(match);
+                      router.push('/core-engine/chronic');
                     }}
                   >
                     <div className="flex items-center gap-4">
