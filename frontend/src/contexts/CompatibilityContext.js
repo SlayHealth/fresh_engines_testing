@@ -552,6 +552,7 @@ export function CompatibilityProvider({ children }) {
       isChatOpen, setIsChatOpen,
       showCalculations, setShowCalculations,
       fetchRecentMatches,
+      restoreMatchSession,
       handleResetQuota,
       handleLogout,
       handleCompatibilityMatch
