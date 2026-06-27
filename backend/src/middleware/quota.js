@@ -3,13 +3,12 @@ const logger = require('../utils/logger');
 
 async function checkMatchQuota(req, res, next) {
   try {
-    const userId = req.headers['x-user-id'] || req.body.userId;
+    const userId = req.user ? req.user.id : (req.headers['x-user-id'] || req.body.userId);
     
     // If no userId is supplied, let the request proceed (fail-safe / developer testing)
     if (!userId) {
       return next();
     }
-
     const userRes = await db.query('SELECT runs_used FROM users WHERE id = $1', [userId]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User profile not found' });
@@ -34,7 +33,7 @@ async function checkMatchQuota(req, res, next) {
 
 async function checkChatQuota(req, res, next) {
   try {
-    const userId = req.headers['x-user-id'] || req.body.userId;
+    const userId = req.user ? req.user.id : (req.headers['x-user-id'] || req.body.userId);
     
     // If no userId is supplied, let the request proceed
     if (!userId) {

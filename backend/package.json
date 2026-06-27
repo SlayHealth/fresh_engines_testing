@@ -6,23 +6,31 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "start:prod": "pm2 start src/server.js --name slayhealth-backend"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "axios": "^1.18.0",
+    "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.11.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
     "form-data": "^4.0.6",
     "fuse.js": "^7.4.2",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.19.1",
     "pg": "^8.21.0",
+    "pm2": "^7.0.1",
     "uuid": "^14.0.0",
     "winston": "^3.19.0",
     "zod": "^4.4.3"

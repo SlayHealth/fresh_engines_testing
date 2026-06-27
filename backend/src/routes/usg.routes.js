@@ -3,8 +3,12 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { analyzeUsg, persistReport, getReport, analyzeCouple, getCoupleSummary, uploadReport } = require('../controllers/usg.controller');
+const { authenticateToken } = require('../middleware/auth.middleware');
 
 const router = express.Router();
+
+// Apply auth middleware to all endpoints in this router
+router.use(authenticateToken);
 
 const uploadDir = path.resolve(__dirname, '../../uploads');
 if (!fs.existsSync(uploadDir)) {

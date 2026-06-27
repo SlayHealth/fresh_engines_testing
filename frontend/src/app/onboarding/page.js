@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
 
 const LIFESTYLE_ACTIVITIES = [
   { val: 'Sedentary', label: 'Sedentary', desc: 'Little to no regular exercise', icon: Coffee },
@@ -168,9 +169,8 @@ export default function OnboardingPage() {
           weight: onboardingForm.weight,
           waist: onboardingForm.waist
         };
-        const res = await fetch(`${API_URL}/api/auth/profile`, {
+        const res = await apiFetch(`${API_URL}/api/auth/profile`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         const data = await res.json();

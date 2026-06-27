@@ -126,11 +126,8 @@ export default function ChronicEnginePage() {
             </div>
             <h2 className={`text-xl font-semibold text-${stateMeta.c}-700`}>{stateMeta.label}</h2>
             <p className="mt-1 text-sm leading-relaxed text-slate-600">
-              {chronicTimeline.state === "Aligned" && "Your health baselines are aligned today. No immediate warning flags were detected in your clinical panels. The focus now is on protecting this strong foundation as your household routines merge."}
-              {chronicTimeline.state === "Plan together" && `Your health profiles show minor variations that can be managed together. ${chronicTimeline.markersFlagged > 0 ? `${chronicTimeline.markersFlagged} health signal${chronicTimeline.markersFlagged > 1 ? "s" : ""} to watch across both partners — ` : ""}Setting shared diet, activity, and sleep habits early on will prevent these risks from drifting upwards.`}
-              {chronicTimeline.state === "Specialist conversation" && chronicTimeline.tier === "escalated" && `Your profiles show clinical markers that warrant review. ${chronicTimeline.markersFlagged} flags detected${chronicTimeline.diabeticCount === 2 ? ", including diabetic-range glucose in both partners" : ""}. This is a genuine shared matter, best worked through with a clinician-led plan before finalizing family and household timelines. Useful information, not a verdict.`}
-              {chronicTimeline.state === "Specialist conversation" && chronicTimeline.tier === "soft" && "One established clinical marker has been flagged, with other parameters remaining reasonable. This is manageable with a clear shared routine and a clinician conversation."}
-              {chronicTimeline.state === "Specialist conversation" && chronicTimeline.tier === "baseline" && `An elevated baseline risk score${chronicTimeline.markersFlagged ? ` alongside ${chronicTimeline.markersFlagged} flagged health signals` : ""} is worth checking in with a clinician before finalising household plans — valuable screening context, not a verdict.`}
+              {chronicResult.dynamic_insights?.conversation_needed_summary || 
+               "Your health profiles show variations that warrant attention. A clinician conversation is recommended to establish a shared routine."}
             </p>
           </div>
         </div>
@@ -177,22 +174,38 @@ export default function ChronicEnginePage() {
             </div>
 
             <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
-              <div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">What this means today</div>
-                <p className="mt-0.5 text-xs text-slate-600">{band.note}</p>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">What drove it</div>
-                <p className="mt-0.5 text-xs text-slate-600">{getRiskDrivers(origData, age)}</p>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">What to do next</div>
-                <p className="mt-0.5 text-xs text-slate-600">
-                  {band.label === 'Low' && "Continue your current physical activity and diet routines to maintain this healthy baseline."}
-                  {band.label === 'Moderate' && "Improving active habits (e.g., walking 15-20 minutes daily) and monitoring nutrition can lower this score substantially."}
-                  {band.label === 'High' && "We recommend consulting a doctor for a standard screening test and working on a structured nutrition and exercise routine."}
+            {/* Insights Section - now using a responsive grid to reduce clutter */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+              {/* What this means today */}
+              <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-2">What this means today</div>
+                <p className="text-xs text-slate-600">
+                  {tag === (chronicResult.partner_A.name || "Prospect 1")
+                    ? chronicResult.dynamic_insights?.partnerA_insight?.what_it_means
+                    : chronicResult.dynamic_insights?.partnerB_insight?.what_it_means}
                 </p>
               </div>
+
+              {/* What drove it */}
+              <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-2">What drove it</div>
+                <p className="text-xs text-slate-600">
+                  {tag === (chronicResult.partner_A.name || "Prospect 1")
+                    ? chronicResult.dynamic_insights?.partnerA_insight?.what_drove_it
+                    : chronicResult.dynamic_insights?.partnerB_insight?.what_drove_it}
+                </p>
+              </div>
+
+              {/* What to do next */}
+              <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-2">What to do next</div>
+                <p className="text-xs text-slate-600">
+                  {tag === (chronicResult.partner_A.name || "Prospect 1")
+                    ? chronicResult.dynamic_insights?.partnerA_insight?.what_to_do_next
+                    : chronicResult.dynamic_insights?.partnerB_insight?.what_to_do_next}
+                </p>
+              </div>
+            </div>
             </div>
           </div>
         ))}

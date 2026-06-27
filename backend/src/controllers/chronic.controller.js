@@ -1,4 +1,5 @@
 const { db } = require('../services/storage/postgres.service');
+const { generateStructuredInsight } = require('../services/llm.service');
 
 // HSP v2.1 Priors & Constants
 const BASELINE_RISK_PROB = 0.10;
@@ -192,7 +193,8 @@ async function analyzeChronic(req, res, next) {
       female_report_id, 
       male_manual_data = {}, 
       female_manual_data = {},
-      shared_lifestyle_data = null
+      shared_lifestyle_data = null,
+      match_id
     } = req.body;
 
     if (!male_report_id || !female_report_id) {
@@ -326,6 +328,51 @@ async function analyzeChronic(req, res, next) {
       coupleIndex
     };
 
+    // LLM Dynamic Insights Generation
+    let dynamic_insights = {};
+    try {
+      const llmMessages = [
+        {
+          role: "system",
+          content: "You are an expert cardiometabolic clinician analyzing a premarital health screening. Provide a supportive, medically accurate evaluation in JSON format containing:\n1. 'conversation_needed_summary': A 2-3 sentence paragraph explaining the overall couple alignment state and if they need a clinician conversation (based on the provided state).\n2. 'partnerA_insight' and 'partnerB_insight': objects each containing 'what_it_means' (1 sentence), 'what_drove_it' (1 sentence), and 'what_to_do_next' (1-2 sentences) based on their specific risk markers."
+        },
+        {
+          role: "user",
+          content: `Please analyze this couple's chronic/metabolic profile:
+Overall State: ${state} (Diabetic Range Detected: ${gateOpen})
+Partner A (Age ${partnerA.age}, Sex ${partnerA.sex}): IDRS Score ${idrsA}/100, Waist: ${partnerA.waist}, Activity: ${partnerA.lifestyle.activity}, Glucose: ${partnerA.glucose}, Lipids: ${partnerA.lipids}, BP: ${partnerA.bloodPressure}
+Partner B (Age ${partnerB.age}, Sex ${partnerB.sex}): IDRS Score ${idrsB}/100, Waist: ${partnerB.waist}, Activity: ${partnerB.lifestyle.activity}, Glucose: ${partnerB.glucose}, Lipids: ${partnerB.lipids}, BP: ${partnerB.bloodPressure}
+Respond ONLY with JSON matching the schema: { "conversation_needed_summary": "...", "partnerA_insight": { "what_it_means": "...", "what_drove_it": "...", "what_to_do_next": "..." }, "partnerB_insight": { ... } }`
+        }
+      ];
+
+      const fallbackObj = {
+        conversation_needed_summary: state === "Aligned" ? "Your health baselines are aligned today. No immediate warning flags were detected in your clinical panels. The focus now is on protecting this strong foundation as your household routines merge." : "Your health profiles show variations that warrant attention. A clinician conversation is recommended to establish a shared routine.",
+        partnerA_insight: {
+          what_it_means: "Risk score reflects current baseline.",
+          what_drove_it: "Influenced by age, lifestyle, and detected biomarkers.",
+          what_to_do_next: "Maintain a healthy lifestyle and monitor any elevated markers."
+        },
+        partnerB_insight: {
+          what_it_means: "Risk score reflects current baseline.",
+          what_drove_it: "Influenced by age, lifestyle, and detected biomarkers.",
+          what_to_do_next: "Maintain a healthy lifestyle and monitor any elevated markers."
+        }
+      };
+
+      const cacheKey = match_id ? `chronic_insights_${match_id}` : null;
+      dynamic_insights = await generateStructuredInsight(llmMessages, fallbackObj, { temperature: 0.3, max_tokens: 400, cacheKey });
+      // Ensure all fields exist
+      if (!dynamic_insights.conversation_needed_summary) dynamic_insights = fallbackObj;
+    } catch (err) {
+      console.error("[Chronic] LLM Generation failed:", err);
+      dynamic_insights = {
+        conversation_needed_summary: state === "Aligned" ? "Health baselines are aligned." : "Please consult a clinician regarding your elevated markers.",
+        partnerA_insight: { what_it_means: "Baseline calculated.", what_drove_it: "Standard inputs.", what_to_do_next: "Review with a doctor." },
+        partnerB_insight: { what_it_means: "Baseline calculated.", what_drove_it: "Standard inputs.", what_to_do_next: "Review with a doctor." }
+      };
+    }
+
     res.json({
       success: true,
       partnerARisk: parseFloat(uiRiskA.toFixed(1)),
@@ -351,6 +398,7 @@ async function analyzeChronic(req, res, next) {
         pathologyScore: gB,
         risk: uiRiskB
       },
+      dynamic_insights,
       calculations,
       details: {
         male_data: parsedMaleData,

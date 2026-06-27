@@ -4,9 +4,11 @@ import { useEffect, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   Sparkles, LogOut, Activity, MessageSquare, HeartPulse, 
-  ShieldCheck, ArrowLeft, RotateCcw
+  ShieldCheck, ArrowLeft, RotateCcw, Brain, Download
 } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
+import { API_URL } from '../../config/api';
+import { getAccessToken } from '../../utils/api';
 import styles from '../page.module.css';
 import ReportChatDrawer from '../../components/ReportChatDrawer';
 
@@ -23,6 +25,7 @@ export default function CoreEngineLayout({ children }) {
     handleLogout,
     chronicResult,
     mfrResult,
+    mentalResult,
     selectedProjYear,
     setSelectedProjYear,
     isChatOpen,
@@ -33,7 +36,10 @@ export default function CoreEngineLayout({ children }) {
     userReport,
     prospectReport,
     setChronicResult,
-    setMfrResult
+    setMfrResult,
+    setMentalResult,
+    setActiveMatchId,
+    activeMatchId
   } = useCompatibility();
 
   // Auth & Data guards
@@ -52,6 +58,7 @@ export default function CoreEngineLayout({ children }) {
     if (pathname.includes('/mfr')) return 'mfr';
     if (pathname.includes('/usg')) return 'usg';
     if (pathname.includes('/genomics')) return 'genomics';
+    if (pathname.includes('/mental')) return 'mental';
     return 'chronic';
   }, [pathname]);
 
@@ -65,12 +72,13 @@ export default function CoreEngineLayout({ children }) {
     return {
       chronicResult,
       mfrResult,
+      mentalResult,
       userProfile: user,
       prospectProfile: prospectForm,
       userPathologyRaw: userReport?.sections || null,
       prospectPathologyRaw: prospectReport?.sections || null
     };
-  }, [chronicResult, mfrResult, user, prospectForm, userReport, prospectReport]);
+  }, [chronicResult, mfrResult, mentalResult, user, prospectForm, userReport, prospectReport]);
 
   if (!user || !chronicResult || !mfrResult) return null;
 
@@ -137,7 +145,20 @@ export default function CoreEngineLayout({ children }) {
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
           </button>
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Report Workspace Active</span>
+          <div className="flex items-center gap-4">
+            {activeMatchId && (
+              <a
+                href={`${API_URL}/api/compatibility/matches/${activeMatchId}/pdf?token=${getAccessToken()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-white bg-teal-600 hover:bg-teal-700 px-3.5 py-1.5 rounded-lg font-bold transition-all text-xs cursor-pointer shadow-sm"
+              >
+                <Download size={14} />
+                Download PDF Report
+              </a>
+            )}
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Report Workspace Active</span>
+          </div>
         </div>
       </div>
 
@@ -146,13 +167,6 @@ export default function CoreEngineLayout({ children }) {
         {/* Tab Header Bar */}
         <div className={styles.tabsNavList}>
           <button 
-            className={`${styles.tabItemBtn} ${selectedTab === 'chronic' ? styles.tabItemBtnActive : ''}`}
-            onClick={() => handleTabClick('chronic')}
-          >
-            <Activity size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            Chronic Risk & Trajectory
-          </button>
-          <button 
             className={`${styles.tabItemBtn} ${selectedTab === 'mfr' ? styles.tabItemBtnActive : ''}`}
             onClick={() => handleTabClick('mfr')}
           >
@@ -160,11 +174,25 @@ export default function CoreEngineLayout({ children }) {
             Fertility Timeline (MFR)
           </button>
           <button 
+            className={`${styles.tabItemBtn} ${selectedTab === 'chronic' ? styles.tabItemBtnActive : ''}`}
+            onClick={() => handleTabClick('chronic')}
+          >
+            <Activity size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+            Chronic Risk & Trajectory
+          </button>
+          <button 
+            className={`${styles.tabItemBtn} ${selectedTab === 'mental' ? styles.tabItemBtnActive : ''}`}
+            onClick={() => handleTabClick('mental')}
+          >
+            <Brain size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+            Mental Wellbeing Analysis
+          </button>
+          <button 
             className={`${styles.tabItemBtn} ${selectedTab === 'usg' ? styles.tabItemBtnActive : ''}`}
             onClick={() => handleTabClick('usg')}
           >
             <ShieldCheck size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            USG Organ status
+            Radiology & Organ Wellness
           </button>
           <button 
             className={`${styles.tabItemBtn} ${selectedTab === 'genomics' ? styles.tabItemBtnActive : ''}`}
@@ -220,6 +248,8 @@ export default function CoreEngineLayout({ children }) {
               onClick={() => {
                 setChronicResult(null);
                 setMfrResult(null);
+                setMentalResult(null);
+                setActiveMatchId(null);
                 setChatSessionId(null);
                 setIsChatOpen(false);
                 router.push('/dashboard');

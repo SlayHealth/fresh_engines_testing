@@ -1,4 +1,5 @@
 const { db } = require('../services/storage/postgres.service');
+const { generateStructuredInsight } = require('../services/llm.service');
 
 // Constants
 const FEMALE_AGE_LIMIT = 45;
@@ -196,7 +197,8 @@ async function analyzeMfr(req, res, next) {
       male_manual_data = {}, 
       female_manual_data = {},
       shared_lifestyle = {},
-      barriers = {}
+      barriers = {},
+      match_id
     } = req.body;
 
     let parsedMaleData = null;
@@ -485,52 +487,51 @@ async function analyzeMfr(req, res, next) {
       state = 'Specialist conversation';
     }
 
-    // Extract Positive Fertility Findings (Strengths)
-    const positive_findings = [];
-    if (fAge < 35) {
-      positive_findings.push('✓ Female age is optimal for natural conception timeline');
-    }
-    if (ovarianReserve === 'Normal' || ovarianReserve === 'High for age') {
-      positive_findings.push(`✓ Ovarian reserve appropriate for age`);
-    }
-    if (semenQuality === 'Normal') {
-      positive_findings.push('✓ Semen parameters meet standard WHO reference values');
-    }
-    if (!gate) {
-      positive_findings.push('✓ No evidence of obstruction');
-      if (p_monthly_current * 100 >= 18) {
-        positive_findings.push('✓ Fertility markers broadly aligned');
-      }
-    }
-    if (fAge < 35 && mAge < 40) {
-      positive_findings.push('✓ Combined age profiles support a healthy timeline');
-    }
-    if (L >= 85) {
-      positive_findings.push('✓ Personal lifestyle profiles strongly support healthy fertility');
-    }
-
-    // Narrative details
+    // Narrative details & Strengths via LLM (Dynamic Insights)
+    let positive_findings = [];
     let summary = '';
-    if (gate) {
-      const reasons = [];
-      if (barriers.b_tubal) reasons.push('bilateral tubal block');
-      if (barriers.b_azoo) reasons.push('azoospermia');
-      if (barriers.b_uterus) reasons.push('absent uterus');
-      if (male_manual_data.scrotalFinding === 'Obstruction / CBAVD') reasons.push('CBAVD obstruction');
-      if (physicalBlock) reasons.push('radiological tract obstruction');
-      if (geneticBlock) reasons.push('genetic production block');
+    
+    try {
+      const llmMessages = [
+        {
+          role: "system",
+          content: "You are a specialized reproductive endocrinologist AI. Your task is to analyze clinical fertility metrics and provide two things in a JSON format: a list of 'positive_findings' (clinical strengths, 1-4 short bullet points) and a 'summary' (a supportive, professional 2-4 sentence clinician assessment summary). Keep the tone encouraging but medically accurate. Avoid definitive guarantees."
+        },
+        {
+          role: "user",
+          content: `Please analyze this couple's fertility profile:
+Female: Age ${fAge}, Ovarian Reserve: ${ovarianReserve}
+Male: Age ${mAge}, Semen Quality: ${semenQuality}
+Shared Lifestyle Score: ${L}/100 (where >80 is good)
+Absolute Barrier Present: ${gate} (Reasons: ${gate ? JSON.stringify(barriers) + (physicalBlock ? ' radiological block ' : '') + (geneticBlock ? ' genetic block ' : '') : 'None'})
+Current State Category: ${state} (Aligned, Plan together, or Specialist conversation)
+Current Monthly Conception Chance: ${(p_monthly_current * 100).toFixed(1)}%
+Respond ONLY with JSON matching this schema: { "positive_findings": ["str1", "str2"], "summary": "string" }`
+        }
+      ];
+      
+      const fallbackObj = {
+        positive_findings: [
+          fAge < 35 ? '✓ Female age is optimal for natural conception timeline' : '✓ Female age incorporated into baseline',
+          ovarianReserve === 'Normal' || ovarianReserve === 'High for age' ? '✓ Ovarian reserve appropriate for age' : null,
+          semenQuality === 'Normal' ? '✓ Semen parameters meet standard WHO reference values' : null,
+          !gate ? '✓ No evidence of obstruction' : null,
+          L >= 85 ? '✓ Personal lifestyle profiles strongly support healthy fertility' : null
+        ].filter(Boolean),
+        summary: gate 
+          ? "Natural pathways are currently blocked due to an absolute barrier. The model routes to a specialist / IVF pathway rather than producing a probability."
+          : (state !== 'Aligned' ? "Fertility potential shows moderate reduction. Lifestyle enhancements and tracking ovulation present key recovery pathways." : "Fertility parameters are aligned. The biological age profile, healthy ovarian reserve, and unimpeded physical pathways indicate highly favorable natural conception markers.")
+      };
 
-      summary = `Natural pathways are currently blocked due to an absolute barrier (${reasons.join(', ')}). Standard natural conception is not expected. The model routes to a specialist / IVF pathway rather than producing a probability.`;
-    } else if (state !== 'Aligned') {
-      const drivers = [];
-      if (ovarianReserve === 'Low' || ovarianReserve === 'Very Low') drivers.push(`diminished ovarian reserve`);
-      if (semenQuality !== 'Normal') drivers.push(`reduced semen parameters`);
-      if (L < 60) drivers.push('poor household lifestyle profiles');
-      if (freqVal < 0.92) drivers.push('intercourse frequency lower than typical');
-
-      summary = `Fertility potential shows moderate reduction, driven primarily by: ${drivers.join(', ')}. Lifestyle enhancements and tracking ovulation present key recovery pathways.`;
-    } else {
-      summary = 'Fertility parameters are aligned. The biological age profile, healthy ovarian reserve, and unimpeded physical pathways indicate highly favorable natural conception markers.';
+      const cacheKey = match_id ? `mfr_insights_${match_id}` : null;
+      const llmResult = await generateStructuredInsight(llmMessages, fallbackObj, { temperature: 0.3, max_tokens: 400, cacheKey });
+      positive_findings = llmResult.positive_findings || fallbackObj.positive_findings;
+      summary = llmResult.summary || fallbackObj.summary;
+    } catch (err) {
+      console.error("[MFR] LLM Generation failed:", err);
+      // Ensure fallbacks are populated if exception occurs
+      positive_findings = ['✓ Core metrics processed successfully'];
+      summary = gate ? "Specialist consultation recommended due to detected barriers." : "Fertility baseline established successfully.";
     }
 
     const calculations = {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Lock, AlertCircle, RefreshCw } from 'lucide-react';
 import { useCompatibility } from '../contexts/CompatibilityContext';
 import { API_URL } from '../config/api';
+import { setAccessToken } from '../utils/api';
 import styles from './page.module.css';
 
 export default function RootPage() {
@@ -30,6 +31,7 @@ export default function RootPage() {
   } = useCompatibility();
 
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [cooldown, setCooldown] = useState(0);
 
   // Authentication status checker & guard redirect
   useEffect(() => {
@@ -52,11 +54,23 @@ export default function RootPage() {
     }
   }, [router, setOnboardingStep]);
 
+  // Cooldown timer effect
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
   // Phone Authentication Submit
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     if (authStep === 'phone') {
       if (!authPhone.trim()) return;
+      if (cooldown > 0) {
+        setAuthError(`Please wait ${cooldown}s before requesting a new OTP.`);
+        return;
+      }
       setIsAuthLoading(true);
       setAuthError(null);
       try {
@@ -68,6 +82,7 @@ export default function RootPage() {
         const data = await res.json();
         if (data.success) {
           setAuthStep('otp');
+          setCooldown(60); // Start 60-second frontend cooldown
         } else {
           throw new Error(data.error || 'Login failed');
         }
@@ -77,7 +92,7 @@ export default function RootPage() {
         setIsAuthLoading(false);
       }
     } else {
-      if (!authOtp.trim() || authOtp.length !== 4) return;
+      if (!authOtp.trim() || authOtp.length !== 6) return;
       setIsAuthLoading(true);
       setAuthError(null);
       try {
@@ -88,6 +103,7 @@ export default function RootPage() {
         });
         const data = await res.json();
         if (data.success) {
+          setAccessToken(data.accessToken); // Store access token in memory
           localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
           setUser(data.user);
           setRunsUsed(data.user.runs_used || 0);
@@ -156,21 +172,21 @@ export default function RootPage() {
             </div>
           ) : (
             <div className={styles.inputGroup}>
-              <label className={styles.inputLabel}>Enter 4-Digit OTP Code</label>
+              <label className={styles.inputLabel}>Enter 6-Digit OTP Code</label>
               <div className={styles.otpGrid}>
                 <input
                   type="text"
-                  maxLength="4"
-                  placeholder="0000"
+                  maxLength="6"
+                  placeholder="000000"
                   className={styles.otpInput}
                   value={authOtp}
                   onChange={(e) => setAuthOtp(e.target.value)}
-                  style={{ width: '100px' }}
+                  style={{ width: '120px' }}
                   required
                 />
               </div>
               <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '6px' }}>
-                Demo mode: Enter any 4-digit code to continue.
+                OTP sent via WhatsApp. Verification required.
               </p>
             </div>
           )}

@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { API_URL } from '../config/api';
 import { parsePatientMeta, findExtractedParam } from '../utils/reportParser';
+import { apiFetch, setAccessToken } from '../utils/api';
 
 const CompatibilityContext = createContext(null);
 
@@ -227,6 +228,8 @@ export function CompatibilityProvider({ children }) {
   const [matchError, setMatchError] = useState(null);
   const [chronicResult, setChronicResult] = useState(null);
   const [mfrResult, setMfrResult] = useState(null);
+  const [mentalResult, setMentalResult] = useState(null);
+  const [activeMatchId, setActiveMatchId] = useState(null);
   const [selectedTab, setSelectedTab] = useState('chronic');
   const [selectedProjYear, setSelectedProjYear] = useState(0);
 
@@ -237,29 +240,68 @@ export function CompatibilityProvider({ children }) {
 
   // Load user session on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem('slayhealth_user');
-    if (savedUser) {
+    const silentRefresh = async () => {
       try {
-        const parsed = JSON.parse(savedUser);
-        setUser(parsed);
-        setRunsUsed(parsed.runs_used || 0);
-        setChatsUsed(parsed.chats_used || 0);
-        fetchRecentMatches(parsed.id);
-        
-        if (!parsed.name || !parsed.gender || !parsed.activity_level) {
-          setOnboardingStep(1);
+        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.accessToken) {
+            setAccessToken(data.accessToken);
+            if (data.user) {
+              localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
+              setUser(data.user);
+              setRunsUsed(data.user.runs_used || 0);
+              setChatsUsed(data.user.chats_used || 0);
+              fetchRecentMatches(data.user.id);
+            }
+          }
         }
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error('Silent refresh failed on mount:', err);
       }
-    }
+    };
+
+    const handleSessionExpired = () => {
+      setUser(null);
+      setAccessToken(null);
+      localStorage.removeItem('slayhealth_user');
+      window.location.href = '/';
+    };
+    window.addEventListener('auth_session_expired', handleSessionExpired);
+
+    silentRefresh().finally(() => {
+      const savedUser = localStorage.getItem('slayhealth_user');
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          setUser(parsed);
+          setRunsUsed(parsed.runs_used || 0);
+          setChatsUsed(parsed.chats_used || 0);
+          fetchRecentMatches(parsed.id);
+          
+          if (!parsed.name || !parsed.gender || !parsed.activity_level) {
+            setOnboardingStep(1);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+
+    return () => {
+      window.removeEventListener('auth_session_expired', handleSessionExpired);
+    };
   }, []);
 
   const fetchRecentMatches = async (userId) => {
     if (!userId) return;
     setIsMatchesLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/compatibility/matches?userId=${userId}`);
+      const res = await apiFetch(`${API_URL}/api/compatibility/matches?userId=${userId}`);
       if (res.ok) {
         const data = await res.json();
         setMatchesList(data);
@@ -275,9 +317,8 @@ export function CompatibilityProvider({ children }) {
     if (!user) return;
     setIsUpgradingQuota(true);
     try {
-      const res = await fetch(`${API_URL}/api/auth/reset-quota`, {
+      const res = await apiFetch(`${API_URL}/api/auth/reset-quota`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: user.id })
       });
       const data = await res.json();
@@ -288,6 +329,8 @@ export function CompatibilityProvider({ children }) {
         setChatsUsed(0);
         setChronicResult(null);
         setMfrResult(null);
+        setMentalResult(null);
+        setActiveMatchId(null);
         setChatSessionId(null);
         setIsChatOpen(false);
         alert('Quota has been reset! (Free Match and Counselor messages restored)');
@@ -299,7 +342,13 @@ export function CompatibilityProvider({ children }) {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await apiFetch(`${API_URL}/api/auth/logout`, { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to logout cleanly from server:', err);
+    }
+    setAccessToken(null);
     localStorage.removeItem('slayhealth_user');
     setUser(null);
     setAuthPhone('');
@@ -308,6 +357,8 @@ export function CompatibilityProvider({ children }) {
     setOnboardingStep(0);
     setChronicResult(null);
     setMfrResult(null);
+    setMentalResult(null);
+    setActiveMatchId(null);
     setChatSessionId(null);
     setIsChatOpen(false);
     setUserReport(null);
@@ -409,27 +460,21 @@ export function CompatibilityProvider({ children }) {
     };
 
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'x-user-id': user.id
-      };
-
       const [chronicResponse, mfrResponse] = await Promise.all([
-        fetch(`${API_URL}/api/chronic/analyze`, {
+        apiFetch(`${API_URL}/api/chronic/analyze`, {
           method: 'POST',
-          headers,
           body: JSON.stringify({
             userId: user.id,
             male_report_id: isUserMale ? userReport.report_metadata.report_id : prospectReport.report_metadata.report_id,
             female_report_id: isUserMale ? prospectReport.report_metadata.report_id : userReport.report_metadata.report_id,
             male_manual_data: maleManual,
             female_manual_data: femaleManual,
-            shared_lifestyle_data: sharedLifestyle
+            shared_lifestyle_data: sharedLifestyle,
+            match_id: activeMatchId
           })
         }),
-        fetch(`${API_URL}/api/mfr/analyze`, {
+        apiFetch(`${API_URL}/api/mfr/analyze`, {
           method: 'POST',
-          headers,
           body: JSON.stringify({
             userId: user.id,
             male_report_id: isUserMale ? userReport.report_metadata.report_id : prospectReport.report_metadata.report_id,
@@ -451,13 +496,15 @@ export function CompatibilityProvider({ children }) {
               act: sharedLifestyle.activity === 'Sedentary' ? 0.5 : 0,
               alc: sharedLifestyle.drinking === 'Never' ? 0 : 0.5,
               stress: 0.2,
-              freq: 0.92
+              freq: 0.92,
+              lifestyle_index: sharedLifestyle.overall_score || 85
             },
             barriers: {
               b_tubal: false,
               b_azoo: false,
               b_uterus: false
-            }
+            },
+            match_id: activeMatchId
           })
         })
       ]);
@@ -475,23 +522,29 @@ export function CompatibilityProvider({ children }) {
 
       // Save match to backend
       try {
-        await fetch(`${API_URL}/api/compatibility/save-match`, {
+        const saveRes = await apiFetch(`${API_URL}/api/compatibility/save-match`, {
           method: 'POST',
-          headers,
           body: JSON.stringify({
             userId: user.id,
             chronicResult: cData,
             mfrResult: mData,
             maleManual: maleManual,
-            femaleManual: femaleManual
+            femaleManual: femaleManual,
+            maleReportId: isUserMale ? userReport?.report_metadata?.report_id : prospectReport?.report_metadata?.report_id,
+            femaleReportId: isUserMale ? prospectReport?.report_metadata?.report_id : userReport?.report_metadata?.report_id
           })
         });
+        const saveData = await saveRes.json();
+        if (saveData.success && saveData.match_id) {
+          setActiveMatchId(saveData.match_id);
+        }
       } catch (saveErr) {
         console.error('Failed to save match to history', saveErr);
       }
 
       setChronicResult(cData);
       setMfrResult(mData);
+      setMentalResult(null); // Reset mental result for the new match scan
       setRunsUsed(prev => prev + 1);
       fetchRecentMatches(user.id);
       return true; // Match succeeded
@@ -506,18 +559,62 @@ export function CompatibilityProvider({ children }) {
   const restoreMatchSession = (match) => {
     if (!match || !match.analysis) return;
     
-    // Attempt to safely grab the raw underlying report data and IDs to put back into user/prospect states
-    // but the main requirement is restoring the results directly
     if (match.analysis.chronicResult) {
       setChronicResult(match.analysis.chronicResult);
     }
     if (match.analysis.mfrResult) {
       setMfrResult(match.analysis.mfrResult);
     }
+    if (match.analysis.mentalResult) {
+      setMentalResult(match.analysis.mentalResult);
+    } else {
+      setMentalResult(null);
+    }
+    setActiveMatchId(match.id);
+
+    // Restore prospect details from stored manual data or matches list
+    const details = match.analysis.details || {};
+    const isUserMale = user?.gender === 'male';
+    const restoredProspectName = isUserMale 
+      ? details.female_manual_data?.name 
+      : details.male_manual_data?.name;
+
+    if (restoredProspectName) {
+      setProspectForm(prev => ({ ...prev, name: restoredProspectName }));
+    } else if (match.prospect?.name && match.prospect.name !== 'Partner B') {
+      setProspectForm(prev => ({ ...prev, name: match.prospect.name }));
+    }
     
     // Clear current chat to force it to refetch the saved session
     setChatSessionId(null);
     setIsChatOpen(false);
+  };
+
+  const handleMentalAnalysis = async (partnerAAnswers, partnerBAnswers) => {
+    try {
+      const res = await apiFetch(`${API_URL}/api/mental/analyze`, {
+        method: 'POST',
+        body: JSON.stringify({
+          partner_A_answers: partnerAAnswers,
+          partner_B_answers: partnerBAnswers,
+          match_id: activeMatchId
+        })
+      });
+      if (!res.ok) {
+        throw new Error('Analysis request failed on server');
+      }
+      const data = await res.json();
+      if (data.success && data.mentalResult) {
+        setMentalResult(data.mentalResult);
+        fetchRecentMatches(user.id);
+        return true;
+      } else {
+        throw new Error(data.error || 'Failed to process mental profile analysis.');
+      }
+    } catch (err) {
+      alert(err.message || 'An error occurred during profiling.');
+      return false;
+    }
   };
 
   return (
@@ -546,6 +643,8 @@ export function CompatibilityProvider({ children }) {
       matchError, setMatchError,
       chronicResult, setChronicResult,
       mfrResult, setMfrResult,
+      mentalResult, setMentalResult,
+      activeMatchId, setActiveMatchId,
       selectedTab, setSelectedTab,
       selectedProjYear, setSelectedProjYear,
       chatSessionId, setChatSessionId,
@@ -555,7 +654,8 @@ export function CompatibilityProvider({ children }) {
       restoreMatchSession,
       handleResetQuota,
       handleLogout,
-      handleCompatibilityMatch
+      handleCompatibilityMatch,
+      handleMentalAnalysis
     }}>
       {children}
     </CompatibilityContext.Provider>

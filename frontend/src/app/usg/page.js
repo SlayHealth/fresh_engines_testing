@@ -15,6 +15,10 @@ import SharedRiskIntelligence from '@/components/usg/SharedRiskIntelligence';
 import PDFUploader from '@/components/usg/PDFUploader';
 import ReportChatDrawer from '@/components/ReportChatDrawer';
 import { API_URL } from '@/config/api';
+import ModalityBadgeRow from '@/components/usg/ModalityBadgeRow';
+import ScrotalHealthPanel from '@/components/usg/ScrotalHealthPanel';
+import EchoPanel from '@/components/usg/EchoPanel';
+import DexaPanel from '@/components/usg/DexaPanel';
 
 export default function USGAbdomenEngine() {
   const [reportA, setReportA] = useState('');
@@ -117,6 +121,22 @@ export default function USGAbdomenEngine() {
 
       {data && data.partner_A && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '24px' }}>
+          {/* Modality Badges */}
+          <div style={{ gridColumn: 'span 12' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner A Modalities:</span>
+                <ModalityBadgeRow modalities={data.partner_A.modalities_detected} />
+              </div>
+              {data.partner_B && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner B Modalities:</span>
+                  <ModalityBadgeRow modalities={data.partner_B.modalities_detected} />
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Top Row: Overall scores */}
           <div style={{ gridColumn: 'span 4' }}>
             <NuptiaScoreUSGSlice contribution={data.partner_A.nuptia_score_usg_contribution} />
@@ -147,6 +167,60 @@ export default function USGAbdomenEngine() {
           <div style={{ gridColumn: 'span 6' }}>
             <RiskMatrix flags={data.partner_A.risk_flags} />
           </div>
+
+          {/* Conditional Scrotal Health Panel */}
+          {(data.partner_A.findings_all?.USG_SCROTUM_DOPPLER || data.partner_B?.findings_all?.USG_SCROTUM_DOPPLER) && (
+            <>
+              {data.partner_A.findings_all?.USG_SCROTUM_DOPPLER && (
+                <div style={{ gridColumn: data.partner_B?.findings_all?.USG_SCROTUM_DOPPLER ? 'span 6' : 'span 12' }}>
+                  <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner A Scrotal Health & Doppler</div>
+                  <ScrotalHealthPanel scrotumData={data.partner_A.findings_all.USG_SCROTUM_DOPPLER} />
+                </div>
+              )}
+              {data.partner_B?.findings_all?.USG_SCROTUM_DOPPLER && (
+                <div style={{ gridColumn: data.partner_A.findings_all?.USG_SCROTUM_DOPPLER ? 'span 6' : 'span 12' }}>
+                  <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner B Scrotal Health & Doppler</div>
+                  <ScrotalHealthPanel scrotumData={data.partner_B.findings_all.USG_SCROTUM_DOPPLER} />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Conditional Echo Panel */}
+          {(data.partner_A.findings_all?.ECHO || data.partner_B?.findings_all?.ECHO) && (
+            <>
+              {data.partner_A.findings_all?.ECHO && (
+                <div style={{ gridColumn: data.partner_B?.findings_all?.ECHO ? 'span 6' : 'span 12' }}>
+                  <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner A Echocardiography (Echo)</div>
+                  <EchoPanel echoData={data.partner_A.findings_all.ECHO} />
+                </div>
+              )}
+              {data.partner_B?.findings_all?.ECHO && (
+                <div style={{ gridColumn: data.partner_A.findings_all?.ECHO ? 'span 6' : 'span 12' }}>
+                  <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner B Echocardiography (Echo)</div>
+                  <EchoPanel echoData={data.partner_B.findings_all.ECHO} />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Conditional DEXA Panel */}
+          {(data.partner_A.findings_all?.DEXA || data.partner_B?.findings_all?.DEXA) && (
+            <>
+              {data.partner_A.findings_all?.DEXA && (
+                <div style={{ gridColumn: data.partner_B?.findings_all?.DEXA ? 'span 6' : 'span 12' }}>
+                  <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner A Bone Density (DEXA)</div>
+                  <DexaPanel dexaData={data.partner_A.findings_all.DEXA} />
+                </div>
+              )}
+              {data.partner_B?.findings_all?.DEXA && (
+                <div style={{ gridColumn: data.partner_A.findings_all?.DEXA ? 'span 6' : 'span 12' }}>
+                  <div style={{ marginBottom: '8px', fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 'bold' }}>Partner B Bone Density (DEXA)</div>
+                  <DexaPanel dexaData={data.partner_B.findings_all.DEXA} />
+                </div>
+              )}
+            </>
+          )}
 
           {/* Couple Row */}
           <div style={{ gridColumn: 'span 6' }}>

@@ -6,7 +6,7 @@ import {
   Sparkles, LogOut, Activity, MessageSquare, User, Lock, 
   MapPin, Heart, ChevronDown, Check, ArrowLeft, ArrowRight,
   FlaskConical, AlertCircle, RefreshCw, Trophy, Zap, Footprints,
-  Briefcase, Beer, Moon, Flame, Coffee, Calendar, Users
+  Briefcase, Beer, Moon, Flame, Coffee, Calendar, Users, ShieldCheck
 } from 'lucide-react';
 import { useCompatibility, calculateAge, classifyWaist } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
@@ -104,12 +104,214 @@ export default function AddProspectPage() {
   const [isMeetingDropdownOpen, setIsMeetingDropdownOpen] = useState(false);
   const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
 
+  // Radiology States
+  const [userRadiology, setUserRadiology] = useState(null);
+  const [prospectRadiology, setProspectRadiology] = useState(null);
+  const [isUserRadUploading, setIsUserRadUploading] = useState(false);
+  const [isProspectRadUploading, setIsProspectRadUploading] = useState(false);
+  const [userRadError, setUserRadError] = useState(null);
+  const [prospectRadError, setProspectRadError] = useState(null);
+
   // Refs
   const prospectGenderDropdownRef = useRef(null);
   const meetingDropdownRef = useRef(null);
   const platformDropdownRef = useRef(null);
   const userFileInputRef = useRef(null);
   const prospectFileInputRef = useRef(null);
+  const userRadFileInputRef = useRef(null);
+  const prospectRadFileInputRef = useRef(null);
+
+  // Radiology Upload Handler
+  const handleRadiologyUpload = async (file, isProspect) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a valid radiology report (PDF).');
+      return;
+    }
+
+    if (isProspect) {
+      if (!prospectForm.name || !prospectForm.gender || !prospectForm.dob) {
+        alert("Please enter the prospect's Name, Gender, and DOB first so we can parse and store their radiology report correctly.");
+        return;
+      }
+    }
+
+    const setIsUploading = isProspect ? setIsProspectRadUploading : setIsUserRadUploading;
+    const setError = isProspect ? setProspectRadError : setUserRadError;
+    const setReport = isProspect ? setProspectRadiology : setUserRadiology;
+
+    setIsUploading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('pdf', file);
+    
+    const sexVal = isProspect 
+      ? (prospectForm.gender === 'Male' ? 'Male' : 'Female') 
+      : (user.gender.toLowerCase() === 'male' ? 'Male' : 'Female');
+    const ageVal = isProspect ? calculateAge(prospectForm.dob) : calculateAge(user.dob);
+    const nameVal = isProspect ? prospectForm.name : user.name;
+
+    formData.append('patientSlayId', nameVal);
+    formData.append('sex', sexVal);
+    formData.append('age', ageVal);
+
+    try {
+      const response = await fetch(`${API_URL}/api/radiology/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Radiology extraction failed');
+      }
+
+      const data = await response.json();
+      if (data.reportId) {
+        setReport(data);
+      } else {
+        throw new Error(data.error || 'Failed to extract data');
+      }
+    } catch (err) {
+      setError(err.message || 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Radiology Mock Trigger
+  const triggerMockRadiology = async (isProspect) => {
+    if (isProspect) {
+      if (!prospectForm.name || !prospectForm.gender || !prospectForm.dob) {
+        alert("Please enter the prospect's Name, Gender, and DOB first.");
+        return;
+      }
+    }
+
+    const setIsUploading = isProspect ? setIsProspectRadUploading : setIsUserRadUploading;
+    const setError = isProspect ? setProspectRadError : setUserRadError;
+    const setReport = isProspect ? setProspectRadiology : setUserRadiology;
+
+    setIsUploading(true);
+    setError(null);
+
+    const sexVal = isProspect 
+      ? (prospectForm.gender === 'Male' ? 'Male' : 'Female') 
+      : (user.gender.toLowerCase() === 'male' ? 'Male' : 'Female');
+    const ageVal = isProspect ? calculateAge(prospectForm.dob) : calculateAge(user.dob);
+    const nameVal = isProspect ? prospectForm.name : user.name;
+
+    try {
+      const mockScrotum = sexVal === 'Male' ? {
+        right_testis: { length_mm: 42, width_mm: 24, height_mm: 31, volume_cc: 16, echopattern_normal: true, focal_lesion: false, vascularity_normal: true },
+        left_testis: { length_mm: 41, width_mm: 23, height_mm: 30, volume_cc: 15, echopattern_normal: true, focal_lesion: false, vascularity_normal: true },
+        right_epididymis: { normal: true, thickened: false, cyst_present: false },
+        left_epididymis: { normal: true, thickened: false, cyst_present: false },
+        varicocele: { present: true, side: 'right', grade: 2 },
+        hydrocele: { present: false, side: 'none', significant: false },
+        spermatic_cord_normal: true,
+        inguinal_hernia: false,
+        impression_normal: false,
+        impression_text: 'Right varicocele Grade II'
+      } : null;
+
+      const mockTvs = sexVal === 'Female' ? {
+        uterus: { length_mm: 75, width_mm: 40, height_mm: 30, volume_cc: null, endometrial_thickness_mm: 7.2, fibroids_present: false },
+        ovaries: {
+          right: { length_mm: 35, width_mm: 22, height_mm: 20, volume_cc: 8.1, follicles_count: 14, dominant_follicle_present: false },
+          left: { length_mm: 34, width_mm: 21, height_mm: 19, volume_cc: 7.8, follicles_count: 15, dominant_follicle_present: false },
+          pcos_morphology_bilateral: true,
+          pcos_morphology_unilateral: false
+        }
+      } : null;
+
+      const mockFindings = {
+        USG_ABDOMEN: {
+          liver: { fatty_grade: sexVal === 'Male' ? 2 : 0, hepatomegaly: sexVal === 'Male', ihbr_dilated: false, focal_lesions: [] },
+          gallbladder: { present: true, calculi_present: false, polyp_present: false, wall_thickness_normal: true },
+          pancreas: { size_normal: true, echotexture_normal: true, focal_lesion: false, calcifications: false },
+          spleen: { size_normal: true, size_category: 'normal', focal_lesion: false },
+          kidneys: {
+            right: { calculi_present: sexVal === 'Male', size_normal: true, cysts: [], hydronephrosis: false, hydronephrosis_grade: null, corticomedullary_differentiation: 'normal' },
+            left: { calculi_present: false, size_normal: true, cysts: [], hydronephrosis: false, hydronephrosis_grade: null, corticomedullary_differentiation: 'normal' }
+          },
+          urinary_bladder: { wall_thickness_normal: true, calculi_present: false, post_void_residual_cc: 0, mass_present: false },
+          ...(sexVal === 'Male' ? {
+            prostate: { _applicable: true, size_normal: false, grade: 'Grade_I', volume_cc: 24, weight_grams: null }
+          } : {
+            uterus: mockTvs.uterus,
+            ovaries: mockTvs.ovaries
+          })
+        },
+        ...(sexVal === 'Male' ? { USG_SCROTUM_DOPPLER: mockScrotum } : { USG_TVS: mockTvs }),
+        ECHO: {
+          lvef_percent: sexVal === 'Male' ? 48 : 62,
+          valves: {
+            mitral: { mr_grade: sexVal === 'Male' ? 'mild' : 'none' }
+          },
+          diastolic_dysfunction_grade: sexVal === 'Male' ? 2 : null,
+          pah: { present: false, pasp_mmhg: sexVal === 'Male' ? 28 : 20 },
+          pericardial_effusion: false,
+          rwma: false,
+          thrombus: false,
+          vegetation: false
+        },
+        DEXA: {
+          lowest_t_score_value: sexVal === 'Male' ? -2.2 : -0.5,
+          lowest_t_score_site: sexVal === 'Male' ? 'left femoral neck' : 'lumbar spine',
+          overall_who_classification: sexVal === 'Male' ? 'osteopenia' : 'normal'
+        }
+      };
+
+      const mockScores = {
+        organ_scores: {
+          USG_ABDOMEN: sexVal === 'Male' ? 82.5 : 95.0,
+          ...(sexVal === 'Male' ? { USG_SCROTUM_DOPPLER: 75.0 } : { USG_TVS: 95.0 }),
+          ECHO: sexVal === 'Male' ? 65.0 : 95.0,
+          DEXA: sexVal === 'Male' ? 55.0 : 90.0
+        },
+        radiology_nuptia_contribution: sexVal === 'Male' ? 18.71 : 27.5,
+        max_possible: 30,
+        modalities_scored: ['USG_ABDOMEN', sexVal === 'Male' ? 'USG_SCROTUM_DOPPLER' : 'USG_TVS', 'ECHO', 'DEXA']
+      };
+
+      const mockRiskFlags = sexVal === 'Male' ? [
+        { flag_id: 'FATTY_LIVER_2', flag_label: 'Grade II Fatty Liver', severity: 'moderate', fertility_relevance: 'Metabolic markers affect spermatogenesis' },
+        { flag_id: 'RENAL_CALCULUS', flag_label: 'Right Kidney Stone (4mm)', severity: 'mild', fertility_relevance: 'No direct impact on fertility, watch hydration' },
+        { flag_id: 'VARICOCELE_GR2', flag_label: 'Right Varicocele Grade II', severity: 'severe', fertility_relevance: 'Impaired spermatogenesis and semen quality' },
+        { flag_id: 'ECHO_DIASTOLIC_DYSFUNCTION_G2', flag_label: 'Grade II Diastolic Dysfunction', severity: 'moderate', fertility_relevance: 'Cardiovascular assessment advised' },
+        { flag_id: 'DEXA_OSTEOPENIA', flag_label: 'Osteopenia (T-score -2.2)', severity: 'mild', fertility_relevance: 'Assess vitamin D and calcium balance' }
+      ] : [
+        { flag_id: 'PCOS_MORPHOLOGY', flag_label: 'Bilateral PCOS Ovarian Morphology', severity: 'moderate', fertility_relevance: 'Ovulatory subfertility risk, lifestyle reset advised' }
+      ];
+
+      const response = await fetch(`${API_URL}/api/radiology/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient_slay_id: nameVal,
+          sex: sexVal,
+          age: ageVal,
+          modalities_detected: ['USG_ABDOMEN', sexVal === 'Male' ? 'USG_SCROTUM_DOPPLER' : 'USG_TVS', 'ECHO', 'DEXA'],
+          findings: mockFindings,
+          scores: mockScores,
+          risk_flags: mockRiskFlags,
+          raw_ocr_text: `MOCK PREMARITAL PORTAL UPLOAD FOR ${nameVal.toUpperCase()}`
+        })
+      });
+
+      const data = await response.json();
+      if (data.reportId) {
+        setReport(data);
+      } else {
+        throw new Error(data.error || 'Failed to trigger mock report');
+      }
+    } catch (err) {
+      setError(err.message || 'Mock failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Auth check & Redirect
   useEffect(() => {
@@ -879,6 +1081,68 @@ export default function AddProspectPage() {
 
           <input type="file" ref={userFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleFileUpload(e.target.files[0], false)} />
           <input type="file" ref={prospectFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleFileUpload(e.target.files[0], true)} />
+        </div>
+
+        {/* Radiology Uploader */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6 space-y-4 text-left">
+          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
+            <ShieldCheck className="w-5 h-5 text-teal-600" />
+            <h2 className="text-lg font-bold text-slate-900">Upload Radiology Reports (Optional)</h2>
+          </div>
+          
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Upload radiology reports (PDFs) containing scans such as Abdomen USG, TVS, Scrotal Doppler, Echocardiography (Echo), or DEXA.
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
+              <span className="text-xs font-bold text-slate-700 block">Your Radiology PDF</span>
+              <button
+                type="button"
+                onClick={() => userRadFileInputRef.current.click()}
+                className={cn(
+                  "w-full py-2 px-3 rounded-lg border font-semibold text-xs transition-all",
+                  userRadiology ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                )}
+              >
+                {isUserRadUploading ? 'Parsing PDF...' : userRadiology ? 'My Radiology ✓' : 'Upload My PDF'}
+              </button>
+              <button
+                type="button"
+                onClick={() => triggerMockRadiology(false)}
+                className="text-[10px] text-slate-500 underline block mx-auto hover:text-teal-600 cursor-pointer"
+              >
+                Trigger My Mock Report
+              </button>
+              {userRadError && <span className="text-[10px] text-rose-500 block">{userRadError}</span>}
+            </div>
+
+            <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
+              <span className="text-xs font-bold text-slate-700 block">Prospect's Radiology PDF</span>
+              <button
+                type="button"
+                disabled={!prospectForm.name || !prospectForm.gender || !prospectForm.dob}
+                onClick={() => prospectRadFileInputRef.current.click()}
+                className={cn(
+                  "w-full py-2 px-3 rounded-lg border font-semibold text-xs transition-all",
+                  prospectRadiology ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                )}
+              >
+                {isProspectRadUploading ? 'Parsing PDF...' : prospectRadiology ? 'Prospect Radiology ✓' : 'Upload Prospect PDF'}
+              </button>
+              <button
+                type="button"
+                onClick={() => triggerMockRadiology(true)}
+                className="text-[10px] text-slate-500 underline block mx-auto hover:text-teal-600 cursor-pointer"
+              >
+                Trigger Prospect Mock Report
+              </button>
+              {prospectRadError && <span className="text-[10px] text-rose-500 block">{prospectRadError}</span>}
+            </div>
+          </div>
+
+          <input type="file" ref={userRadFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleRadiologyUpload(e.target.files[0], false)} />
+          <input type="file" ref={prospectRadFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleRadiologyUpload(e.target.files[0], true)} />
         </div>
 
         {matchError && (

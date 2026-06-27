@@ -72,6 +72,20 @@ async function initDB() {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS radiology_reports (
+          id TEXT PRIMARY KEY,
+          patient_slay_id VARCHAR(255),
+          sex VARCHAR(10),
+          age INTEGER,
+          modalities_detected TEXT[],
+          findings_json JSONB NOT NULL,
+          scores_json JSONB,
+          risk_flags_json JSONB,
+          raw_ocr_text TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS chat_sessions (
           id TEXT PRIMARY KEY,
           report_id TEXT,
@@ -110,13 +124,39 @@ async function initDB() {
           chats_used INTEGER DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS otp_requests (
+          id TEXT PRIMARY KEY,
+          phone TEXT NOT NULL,
+          otp_hash TEXT NOT NULL,
+          purpose TEXT DEFAULT 'login',
+          expires_at TIMESTAMP NOT NULL,
+          attempts INTEGER DEFAULT 0,
+          used_at TIMESTAMP DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS user_sessions (
+          id TEXT PRIMARY KEY,
+          user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+          refresh_token_hash TEXT NOT NULL,
+          device_info TEXT,
+          ip_address TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          revoked_at TIMESTAMP DEFAULT NULL
+      );
     `);
 
     // Create indexes if they don't exist
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_usg_reports_patient_slay_id ON usg_reports(patient_slay_id);
+      CREATE INDEX IF NOT EXISTS idx_radiology_patient_slay_id ON radiology_reports(patient_slay_id);
+      CREATE INDEX IF NOT EXISTS idx_radiology_created_at ON radiology_reports(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
       CREATE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
+      CREATE INDEX IF NOT EXISTS idx_otp_requests_phone ON otp_requests(phone);
+      CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     `);
 
     // Schema migrations

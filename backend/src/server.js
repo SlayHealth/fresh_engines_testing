@@ -1,14 +1,16 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const pathologyRoutes = require('./routes/pathology.routes');
 const dbRoutes = require('./routes/db.routes');
 const compatibilityRoutes = require('./routes/compatibility.routes');
 const chronicRoutes = require('./routes/chronic.routes');
 const mfrRoutes = require('./routes/mfr.routes');
-const usgRoutes = require('./routes/usg.routes');
+const radiologyRoutes = require('./routes/radiology.routes');
 const chatRoutes = require('./routes/chat.routes');
 const authRoutes = require('./routes/auth.routes');
+const mentalRoutes = require('./routes/mental.routes');
 const { healthCheck } = require('./controllers/pathology.controller');
 const { initDB, cleanupOldReports } = require('./services/storage/postgres.service');
 const logger = require('./utils/logger');
@@ -17,9 +19,40 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const rateLimit = require('express-rate-limit');
+
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://fresh-engines-testing.vercel.app'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
+
+// Global Rate Limiter
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // Limit each IP to 60 requests per `window` (here, per minute)
+  message: 'Too many requests from this IP, please try again after a minute',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Apply rate limiting to all API routes
+app.use('/api/', apiLimiter);
 
 // Routes
 app.get('/health', healthCheck);
@@ -28,9 +61,11 @@ app.use('/api/db', dbRoutes);
 app.use('/api/compatibility', compatibilityRoutes);
 app.use('/api/chronic', chronicRoutes);
 app.use('/api/mfr', mfrRoutes);
-app.use('/api/usg', usgRoutes);
+app.use('/api/radiology', radiologyRoutes);
+app.use('/api/usg', radiologyRoutes); // Backwards compatibility redirect
 app.use('/api/chat', chatRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/mental', mentalRoutes);
 
 // Global Error Handler (must be after routes)
 app.use(errorHandler);
