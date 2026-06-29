@@ -1392,7 +1392,7 @@ export default function AddProspectPage() {
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* Pathology Uploader */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6 space-y-4 text-left">
@@ -1405,7 +1405,7 @@ export default function AddProspectPage() {
             Upload blood & pathology files containing parameters like HbA1c, Lipids, AMH or Semen readings.
           </p>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className={cn("grid gap-4", !fillByProspect ? "grid-cols-2" : "grid-cols-1")}>
             <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
               <span className="text-xs font-bold text-slate-700 block">Your Pathology PDF</span>
               <button
@@ -1427,8 +1427,9 @@ export default function AddProspectPage() {
               </button>
             </div>
 
-            <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
-              <span className="text-xs font-bold text-slate-700 block">Prospect's Pathology PDF</span>
+            {!fillByProspect && (
+              <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
+                <span className="text-xs font-bold text-slate-700 block">Prospect's Pathology PDF</span>
               <button
                 type="button"
                 onClick={() => prospectFileInputRef.current.click()}
@@ -1447,6 +1448,7 @@ export default function AddProspectPage() {
                 Trigger Prospect Mock Report
               </button>
             </div>
+            )}
           </div>
 
           <input type="file" ref={userFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleFileUpload(e.target.files[0], false)} />
@@ -1464,7 +1466,7 @@ export default function AddProspectPage() {
             Upload radiology reports (PDFs) containing scans such as Abdomen USG, TVS, Scrotal Doppler, Echocardiography (Echo), or DEXA.
           </p>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className={cn("grid gap-4", !fillByProspect ? "grid-cols-2" : "grid-cols-1")}>
             <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
               <span className="text-xs font-bold text-slate-700 block">Your Radiology PDF</span>
               <button
@@ -1487,8 +1489,9 @@ export default function AddProspectPage() {
               {userRadError && <span className="text-[10px] text-rose-500 block">{userRadError}</span>}
             </div>
 
-            <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
-              <span className="text-xs font-bold text-slate-700 block">Prospect's Radiology PDF</span>
+            {!fillByProspect && (
+              <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center space-y-3 bg-slate-50/50">
+                <span className="text-xs font-bold text-slate-700 block">Prospect's Radiology PDF</span>
               <button
                 type="button"
                 disabled={!prospectForm.name || !prospectForm.gender || !prospectForm.dob}
@@ -1509,6 +1512,7 @@ export default function AddProspectPage() {
               </button>
               {prospectRadError && <span className="text-[10px] text-rose-500 block">{prospectRadError}</span>}
             </div>
+            )}
           </div>
 
           <input type="file" ref={userRadFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleRadiologyUpload(e.target.files[0], false)} />
@@ -1521,8 +1525,6 @@ export default function AddProspectPage() {
             <p className="text-sm font-medium">{matchError}</p>
           </div>
         )}
-      </>
-    )}
 
         {/* Form navigation buttons */}
         <div className="mt-8 flex justify-between items-center pb-12">
