@@ -402,6 +402,52 @@ export default function AddProspectPage() {
     };
   }, [activeInvite?.id, router]);
 
+  // Polling fallback/complement for invite status updates
+  useEffect(() => {
+    const inviteId = activeInvite?.id;
+    if (!inviteId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await apiFetch(`${API_URL}/api/invite/status`);
+        if (res.ok) {
+          const invites = await res.json();
+          const current = invites.find(i => i.id === inviteId);
+          if (current) {
+            if (current.status !== activeInvite.status) {
+              console.log(`Polling: status changed from ${activeInvite.status} to ${current.status}`);
+              setActiveInvite(prev => {
+                if (!prev) return current;
+                return {
+                  ...prev,
+                  status: current.status,
+                  ...current
+                };
+              });
+              
+              if (current.status === 'completed') {
+                setTimeout(() => {
+                  router.push('/core-engine/chronic');
+                }, 2500);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Polling invite status failed:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [activeInvite?.id, activeInvite?.status, router]);
+
+  // Sync running match spinner state with active invite status
+  useEffect(() => {
+    if (activeInvite?.status && activeInvite.status !== 'processing') {
+      setIsRunningMatch(false);
+    }
+  }, [activeInvite?.status]);
+
   const handleSendInvite = async () => {
     if (!prospectForm.name || !prospectPhoneInput) {
       alert("Please enter the prospect's name and WhatsApp number first.");
