@@ -1113,9 +1113,7 @@ export default function AddProspectPage() {
           )}
         </div>
 
-        {!fillByProspect && (
-          <>
-            {/* Prospect Lifestyle & Metrics Form */}
+        {!fillByProspect && 
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6 space-y-6 text-left">
           <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
             <Activity className="w-5 h-5 text-green-500" />
@@ -1442,7 +1440,8 @@ export default function AddProspectPage() {
               </div>
             )}
           </div>
-        )}
+        </div>
+      }
 
         {/* Pathology Uploader */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6 space-y-4 text-left">
