@@ -120,6 +120,9 @@ export default function RootPage() {
         if (data.success) {
           setAccessToken(data.accessToken); // Store access token in memory
           localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
+          if (data.refreshToken) {
+            localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
+          }
           setUser(data.user);
           setRunsUsed(data.user.runs_used || 0);
           setChatsUsed(data.user.chats_used || 0);

@@ -533,9 +533,7 @@ export default function AddProspectPage() {
       { key: 'opened', label: 'Opened', desc: 'Prospect opened the invite link', activeStates: ['opened', 'consent_pending', 'consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
       { key: 'consent', label: 'Consent Decision', desc: status === 'consent_rejected' ? 'Consent Rejected ✗' : 'Consent Accepted ✓', activeStates: ['consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'], isError: status === 'consent_rejected' },
       { key: 'started', label: 'Filling Form', desc: 'Prospect is answering questions', activeStates: ['questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
-      { key: 'submitted', label: 'Form Submitted', desc: 'Details and reports received', activeStates: ['questionnaire_submitted', 'processing', 'completed'] },
-      { key: 'processing', label: 'AI Compatibility Matching', desc: status === 'failed' ? 'Analysis Failed ✗' : 'Running health scan', activeStates: ['processing', 'completed', 'failed'], isError: status === 'failed', isSpinning: status === 'processing' },
-      { key: 'completed', label: 'Completed', desc: 'Results ready', activeStates: ['completed'] }
+      { key: 'submitted', label: 'Form Submitted', desc: 'Details and reports received', activeStates: ['questionnaire_submitted', 'processing', 'completed'] }
     ];
 
     return (
@@ -543,14 +541,16 @@ export default function AddProspectPage() {
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
           <h3 className="font-bold text-slate-800 text-sm">Live Onboarding Status</h3>
           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-pink-50 text-[#DE457D] capitalize animate-pulse">
-            {status.replace('_', ' ')}
+            {status === 'processing' || status === 'completed' ? 'Form Submitted' : status.replace('_', ' ')}
           </span>
         </div>
 
         <div className="relative border-l-2 border-slate-200 ml-3.5 space-y-6">
           {steps.map((step) => {
             const isDone = step.activeStates.includes(status);
-            const isCurrent = status === step.key || (step.key === 'consent' && ['consent_accepted', 'consent_rejected'].includes(status)) || (step.key === 'processing' && ['processing', 'failed'].includes(status));
+            const isCurrent = status === step.key || 
+              (step.key === 'consent' && ['consent_accepted', 'consent_rejected'].includes(status)) ||
+              (step.key === 'submitted' && ['questionnaire_submitted', 'processing', 'completed', 'failed'].includes(status));
             
             return (
               <div key={step.key} className="relative pl-6">
@@ -596,49 +596,6 @@ export default function AddProspectPage() {
         {status === 'consent_rejected' && (
           <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-medium text-left">
             <strong>Invitation Declined:</strong> The prospect has rejected consent to share their health data. You can revoke this link and send a new invite if desired.
-          </div>
-        )}
-
-        {status === 'completed' && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-xs font-medium text-left flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-600 animate-bounce" />
-            <span><strong>Scan Complete!</strong> Redirecting to the match results...</span>
-          </div>
-        )}
-
-        {(status === 'questionnaire_submitted' || status === 'failed') && (
-          <div className="p-3.5 bg-[#DE457D]/5 border border-[#DE457D]/20 rounded-xl text-left space-y-2.5">
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              <strong>Questionnaire Received!</strong> The prospect has uploaded their medical parameters. Run the compatibility match scan now.
-            </p>
-            {matchRunError && (
-              <span className="text-[10px] text-rose-500 block font-semibold">{matchRunError}</span>
-            )}
-
-            {!userReport && matchesList.length === 0 && (
-              <p className="text-[10px] text-amber-600 font-semibold leading-normal">
-                ⚠️ Please upload your own Pathology PDF under "Your Information" on the left first to run the scan.
-              </p>
-            )}
-
-            <button
-              type="button"
-              onClick={handleRunMatch}
-              disabled={isRunningMatch || (!userReport && matchesList.length === 0)}
-              className="w-full py-2 bg-[#DE457D] hover:bg-[#c93d6f] disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all"
-            >
-              {isRunningMatch ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Starting Health Scan...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Run Compatibility Match Scan</span>
-                </>
-              )}
-            </button>
           </div>
         )}
 
@@ -1071,6 +1028,50 @@ export default function AddProspectPage() {
             )}
           </div>
         </div>
+
+        {fillByProspect && activeInvite && (activeInvite.status === 'questionnaire_submitted' || activeInvite.status === 'processing' || activeInvite.status === 'failed' || activeInvite.status === 'completed') && (
+          <div className="max-w-xl mx-auto mt-6 bg-[#DE457D]/5 border border-[#DE457D]/20 rounded-2xl p-6 text-center space-y-4 shadow-sm">
+            <h3 className="font-bold text-slate-900 text-base">Questionnaire Received!</h3>
+            <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+              The prospect has uploaded their medical parameters. Run the compatibility match scan now.
+            </p>
+            {matchRunError && (
+              <span className="text-xs text-rose-500 block font-semibold">{matchRunError}</span>
+            )}
+
+            {!userReport && matchesList.length === 0 && (
+              <p className="text-xs text-amber-600 font-semibold leading-normal">
+                ⚠️ Please upload your own Pathology PDF under "Your Information" first to run the scan.
+              </p>
+            )}
+
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleRunMatch}
+                disabled={isRunningMatch || activeInvite.status === 'processing' || activeInvite.status === 'completed' || (!userReport && matchesList.length === 0)}
+                className="w-full max-w-sm py-3 px-6 bg-[#DE457D] hover:bg-[#c93d6f] disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {isRunningMatch || activeInvite.status === 'processing' ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Starting Health Scan...</span>
+                  </>
+                ) : activeInvite.status === 'completed' ? (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Redirecting to Results...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Run Compatibility Match Scan</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* How Did You Meet & Relationship Context */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6 space-y-4 text-left">

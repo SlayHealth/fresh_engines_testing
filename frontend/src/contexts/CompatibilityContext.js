@@ -242,15 +242,20 @@ export function CompatibilityProvider({ children }) {
   useEffect(() => {
     const silentRefresh = async () => {
       try {
+        const savedRefreshToken = localStorage.getItem('slayhealth_refresh_token');
         const res = await fetch(`${API_URL}/api/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: savedRefreshToken })
         });
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.accessToken) {
             setAccessToken(data.accessToken);
+            if (data.refreshToken) {
+              localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
+            }
             if (data.user) {
               localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
               setUser(data.user);
@@ -360,12 +365,17 @@ export function CompatibilityProvider({ children }) {
 
   const handleLogout = async () => {
     try {
-      await apiFetch(`${API_URL}/api/auth/logout`, { method: 'POST' });
+      const savedRefreshToken = localStorage.getItem('slayhealth_refresh_token');
+      await apiFetch(`${API_URL}/api/auth/logout`, { 
+        method: 'POST',
+        body: JSON.stringify({ refreshToken: savedRefreshToken })
+      });
     } catch (err) {
       console.error('Failed to logout cleanly from server:', err);
     }
     setAccessToken(null);
     localStorage.removeItem('slayhealth_user');
+    localStorage.removeItem('slayhealth_refresh_token');
     setUser(null);
     setAuthPhone('');
     setAuthOtp('');

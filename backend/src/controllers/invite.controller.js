@@ -386,18 +386,88 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
       stress: 'Moderate'
     };
 
-    // Calculate a mock score or call compatibility analyzer logic
-    const compatibility_score = 0.88;
+    // Run actual matching analyses using the Express controller handlers directly via mock req/res
+    const mockReqChronic = {
+      body: {
+        male_report_id: maleReportId,
+        female_report_id: femaleReportId,
+        male_manual_data: maleManual,
+        female_manual_data: femaleManual,
+        shared_lifestyle_data: sharedLifestyle,
+        match_id: matchId
+      }
+    };
+
+    let chronicResultData = null;
+    const mockResChronic = {
+      json: (data) => { chronicResultData = data; },
+      status: (code) => ({
+        json: (d) => {
+          logger.error(`[Background Match] Chronic analyze failed with code ${code}: ${JSON.stringify(d)}`);
+        }
+      })
+    };
+
+    await chronicController.analyzeChronic(mockReqChronic, mockResChronic, (err) => { throw err; });
+
+    const mockReqMfr = {
+      body: {
+        male_report_id: maleReportId,
+        female_report_id: femaleReportId,
+        male_manual_data: {
+          name: maleManual.name,
+          age: maleManual.age,
+          semenQuality: 'Normal',
+          scrotalFinding: 'Normal'
+        },
+        female_manual_data: {
+          name: femaleManual.name,
+          age: femaleManual.age,
+          ovarianReserve: 'Normal'
+        },
+        shared_lifestyle: {
+          smoke: sharedLifestyle.smoking === 'Never' ? 0 : 0.5,
+          bmi: isInviterMale ? (maleBmi > 25 ? 0.5 : 0) : (femaleBmi > 25 ? 0.5 : 0),
+          act: sharedLifestyle.activity === 'Sedentary' ? 0.5 : 0,
+          alc: sharedLifestyle.drinking === 'Never' ? 0 : 0.5,
+          stress: 0.2,
+          freq: 0.92,
+          lifestyle_index: 85
+        },
+        barriers: {
+          b_tubal: false,
+          b_azoo: false,
+          b_uterus: false
+        },
+        match_id: matchId
+      }
+    };
+
+    let mfrResultData = null;
+    const mockResMfr = {
+      json: (data) => { mfrResultData = data; },
+      status: (code) => ({
+        json: (d) => {
+          logger.error(`[Background Match] MFR analyze failed with code ${code}: ${JSON.stringify(d)}`);
+        }
+      })
+    };
+
+    await mfrController.analyzeMfr(mockReqMfr, mockResMfr, (err) => { throw err; });
+
+    if (!chronicResultData || !mfrResultData) {
+      throw new Error('Clinical matching engines returned empty results during background matching');
+    }
+
+    const compatibility_score = chronicResultData.calculations?.coupleIndex 
+      ? (chronicResultData.calculations.coupleIndex / 100) 
+      : 0.88;
 
     const analysisResult = {
       score: compatibility_score,
-      chronicResult: {
-        compatibility_score: 0.88,
-        details: {
-          male_report_id: maleReportId,
-          female_report_id: femaleReportId
-        }
-      },
+      chronicResult: chronicResultData,
+      mfrResult: mfrResultData,
+      mentalResult: null,
       details: {
         male_manual_data: maleManual,
         female_manual_data: femaleManual,

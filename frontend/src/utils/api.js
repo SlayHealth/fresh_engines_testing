@@ -63,10 +63,12 @@ export async function apiFetch(url, options = {}) {
 
       try {
         console.log('[API Client] Access token expired, attempting silent token refresh...');
+        const savedRefreshToken = localStorage.getItem('slayhealth_refresh_token');
         const refreshResponse = await fetch(`${API_URL}/api/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: savedRefreshToken })
         });
 
         if (!refreshResponse.ok) {
@@ -77,6 +79,9 @@ export async function apiFetch(url, options = {}) {
         if (data.success && data.accessToken) {
           console.log('[API Client] Refresh successful, retrying request.');
           setAccessToken(data.accessToken);
+          if (data.refreshToken) {
+            localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
+          }
           onRefreshed(data.accessToken);
           
           // Retry original request with new token
@@ -90,6 +95,7 @@ export async function apiFetch(url, options = {}) {
         setAccessToken(null);
         // Clear local cache of user to trigger redirect to login page
         localStorage.removeItem('slayhealth_user');
+        localStorage.removeItem('slayhealth_refresh_token');
         
         // Dispatch custom event so context/app knows to redirect
         window.dispatchEvent(new Event('auth_session_expired'));

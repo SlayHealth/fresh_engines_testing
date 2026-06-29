@@ -124,6 +124,7 @@ async function verifyOtp(req, res, next) {
     res.json({
       success: true,
       accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user,
       message: 'Verification successful'
     });
@@ -142,9 +143,16 @@ async function refreshSession(req, res, next) {
   res.setHeader('x-correlation-id', correlationId);
 
   try {
-    const refreshToken = req.cookies.refreshToken;
+    let refreshToken = req.cookies.refreshToken;
+    if (!refreshToken && req.body && req.body.refreshToken) {
+      refreshToken = req.body.refreshToken;
+    }
+    if (!refreshToken && req.headers['x-refresh-token']) {
+      refreshToken = req.headers['x-refresh-token'];
+    }
+
     if (!refreshToken) {
-      logger.warn(`[Auth][CID: ${correlationId}] Refresh token cookie missing`);
+      logger.warn(`[Auth][CID: ${correlationId}] Refresh token missing from cookies and body`);
       return res.status(401).json({ success: false, error: 'Unauthorized: Session expired.' });
     }
 
@@ -189,6 +197,7 @@ async function refreshSession(req, res, next) {
     res.json({
       success: true,
       accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user
     });
   } catch (error) {
@@ -206,7 +215,14 @@ async function logoutUser(req, res, next) {
   res.setHeader('x-correlation-id', correlationId);
 
   try {
-    const refreshToken = req.cookies.refreshToken;
+    let refreshToken = req.cookies.refreshToken;
+    if (!refreshToken && req.body && req.body.refreshToken) {
+      refreshToken = req.body.refreshToken;
+    }
+    if (!refreshToken && req.headers['x-refresh-token']) {
+      refreshToken = req.headers['x-refresh-token'];
+    }
+
     if (refreshToken) {
       const decoded = jwtService.verifyRefreshToken(refreshToken);
       if (decoded) {
