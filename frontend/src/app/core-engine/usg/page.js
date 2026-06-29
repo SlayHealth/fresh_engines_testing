@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ShieldCheck, Sparkles, AlertCircle } from 'lucide-react';
 import { useCompatibility } from '../../../contexts/CompatibilityContext';
 import { API_URL } from '../../../config/api';
+import { apiFetch } from '../../../utils/api';
 
 import ModalityBadgeRow from '../../../components/usg/ModalityBadgeRow';
 import ScrotalHealthPanel from '../../../components/usg/ScrotalHealthPanel';
@@ -52,7 +53,7 @@ export default function UsgPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/compatibility/matches/${activeMatchId}/radiology`);
+      const res = await apiFetch(`${API_URL}/api/compatibility/matches/${activeMatchId}/radiology`);
       if (!res.ok) throw new Error('Failed to load radiology data');
       const json = await res.json();
       setData(json);
@@ -94,7 +95,7 @@ export default function UsgPage() {
     formData.append('age', ageVal);
 
     try {
-      const response = await fetch(`${API_URL}/api/radiology/upload`, {
+      const response = await apiFetch(`${API_URL}/api/radiology/upload`, {
         method: 'POST',
         body: formData
       });
@@ -214,9 +215,8 @@ export default function UsgPage() {
         { flag_id: 'PCOS_MORPHOLOGY', flag_label: 'Bilateral PCOS Ovarian Morphology', severity: 'moderate', fertility_relevance: 'Ovulatory subfertility risk, lifestyle reset advised' }
       ];
 
-      const response = await fetch(`${API_URL}/api/radiology/report`, {
+      const response = await apiFetch(`${API_URL}/api/radiology/report`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patient_slay_id: nameVal,
           sex: sexVal,

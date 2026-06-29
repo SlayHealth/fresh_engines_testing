@@ -15,6 +15,7 @@ import SharedRiskIntelligence from '@/components/usg/SharedRiskIntelligence';
 import PDFUploader from '@/components/usg/PDFUploader';
 import ReportChatDrawer from '@/components/ReportChatDrawer';
 import { API_URL } from '@/config/api';
+import { apiFetch } from '@/utils/api';
 import ModalityBadgeRow from '@/components/usg/ModalityBadgeRow';
 import ScrotalHealthPanel from '@/components/usg/ScrotalHealthPanel';
 import EchoPanel from '@/components/usg/EchoPanel';
@@ -39,16 +40,15 @@ export default function USGAbdomenEngine() {
     try {
       let finalData = {};
       if (overrideA && !overrideB) {
-        const res = await fetch(`${API_URL}/api/usg/report/${overrideA}`);
+        const res = await apiFetch(`${API_URL}/api/usg/report/${overrideA}`);
         if (!res.ok) throw new Error('Report A not found');
         const json = await res.json();
         finalData.partner_A = json.analyzed_results;
         finalData.partner_B = null;
         finalData.shared_insights = [];
       } else {
-        const res = await fetch(`${API_URL}/api/usg/couple`, {
+        const res = await apiFetch(`${API_URL}/api/usg/couple`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reportId_A: overrideA, reportId_B: overrideB })
         });
         if (!res.ok) throw new Error('Couple reports not found');
@@ -56,9 +56,8 @@ export default function USGAbdomenEngine() {
 
         // Fetch AI Summary
         try {
-          const sumRes = await fetch(`${API_URL}/api/usg/couple-summary`, {
+          const sumRes = await apiFetch(`${API_URL}/api/usg/couple-summary`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reportId_A: overrideA, reportId_B: overrideB })
           });
           if (sumRes.ok) {

@@ -8,6 +8,15 @@ import { API_URL } from '../config/api';
 import { setAccessToken } from '../utils/api';
 import styles from './page.module.css';
 
+const COUNTRIES = [
+  { code: '+91', flag: '🇮🇳', name: 'India' },
+  { code: '+1', flag: '🇺🇸', name: 'USA/Canada' },
+  { code: '+44', flag: '🇬🇧', name: 'UK' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE' },
+  { code: '+65', flag: '🇸🇬', name: 'Singapore' },
+  { code: '+61', flag: '🇦🇺', name: 'Australia' }
+];
+
 export default function RootPage() {
   const router = useRouter();
   const { 
@@ -32,6 +41,8 @@ export default function RootPage() {
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [cooldown, setCooldown] = useState(0);
+  const [selectedCountry, setSelectedCountry] = useState('+91');
+  const [phoneNumberInput, setPhoneNumberInput] = useState('');
 
   // Authentication status checker & guard redirect
   useEffect(() => {
@@ -66,18 +77,22 @@ export default function RootPage() {
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     if (authStep === 'phone') {
-      if (!authPhone.trim()) return;
+      if (!phoneNumberInput.trim()) return;
       if (cooldown > 0) {
         setAuthError(`Please wait ${cooldown}s before requesting a new OTP.`);
         return;
       }
       setIsAuthLoading(true);
       setAuthError(null);
+      
+      const fullPhone = `${selectedCountry}${phoneNumberInput.trim()}`;
+      setAuthPhone(fullPhone);
+
       try {
         const res = await fetch(`${API_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone_number: authPhone.trim() })
+          body: JSON.stringify({ phone_number: fullPhone })
         });
         const data = await res.json();
         if (data.success) {
@@ -161,14 +176,38 @@ export default function RootPage() {
           {authStep === 'phone' ? (
             <div className={styles.inputGroup}>
               <label className={styles.inputLabel}>Mobile Phone Number</label>
-              <input
-                type="tel"
-                placeholder="+91 98765 43210"
-                className={styles.authInput}
-                value={authPhone}
-                onChange={(e) => setAuthPhone(e.target.value)}
-                required
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => setSelectedCountry(e.target.value)}
+                  style={{
+                    padding: '12px 16px',
+                    fontSize: '15px',
+                    borderRadius: '12px',
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: '#ffffff',
+                    color: '#2b2b3f',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    minWidth: '95px'
+                  }}
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  placeholder="98765 43210"
+                  className={styles.authInput}
+                  value={phoneNumberInput}
+                  onChange={(e) => setPhoneNumberInput(e.target.value)}
+                  style={{ flex: 1 }}
+                  required
+                />
+              </div>
             </div>
           ) : (
             <div className={styles.inputGroup}>

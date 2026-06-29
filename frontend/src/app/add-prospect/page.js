@@ -6,10 +6,12 @@ import {
   Sparkles, LogOut, Activity, MessageSquare, User, Lock, 
   MapPin, Heart, ChevronDown, Check, ArrowLeft, ArrowRight,
   FlaskConical, AlertCircle, RefreshCw, Trophy, Zap, Footprints,
-  Briefcase, Beer, Moon, Flame, Coffee, Calendar, Users, ShieldCheck
+  Briefcase, Beer, Moon, Flame, Coffee, Calendar, Users, ShieldCheck,
+  Share2, Send, CheckCircle, XCircle
 } from 'lucide-react';
 import { useCompatibility, calculateAge, classifyWaist } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
 import styles from '../page.module.css';
 
 const LIFESTYLE_ACTIVITIES = [
@@ -68,8 +70,26 @@ const LIFESTYLE_MENSTRUAL = [
   { val: 'Other', label: 'Other', desc: 'Other patterns', icon: Calendar }
 ];
 
+const COUNTRIES = [
+  { code: '+91', flag: '🇮🇳', name: 'India' },
+  { code: '+1', flag: '🇺🇸', name: 'USA/Canada' },
+  { code: '+44', flag: '🇬🇧', name: 'UK' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE' },
+  { code: '+65', flag: '🇸🇬', name: 'Singapore' },
+  { code: '+61', flag: '🇦🇺', name: 'Australia' }
+];
+
 export default function AddProspectPage() {
   const router = useRouter();
+  const [fillByProspect, setFillByProspect] = useState(false);
+  const [prospectCountry, setProspectCountry] = useState('+91');
+  const [prospectPhoneInput, setProspectPhoneInput] = useState('');
+  const [activeInvite, setActiveInvite] = useState(null);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [inviteError, setInviteError] = useState(null);
+  const [isRunningMatch, setIsRunningMatch] = useState(false);
+  const [matchRunError, setMatchRunError] = useState(null);
+
   const { 
     user, 
     runsUsed, 
@@ -157,7 +177,7 @@ export default function AddProspectPage() {
     formData.append('age', ageVal);
 
     try {
-      const response = await fetch(`${API_URL}/api/radiology/upload`, {
+      const response = await apiFetch(`${API_URL}/api/radiology/upload`, {
         method: 'POST',
         body: formData
       });
@@ -285,9 +305,8 @@ export default function AddProspectPage() {
         { flag_id: 'PCOS_MORPHOLOGY', flag_label: 'Bilateral PCOS Ovarian Morphology', severity: 'moderate', fertility_relevance: 'Ovulatory subfertility risk, lifestyle reset advised' }
       ];
 
-      const response = await fetch(`${API_URL}/api/radiology/report`, {
+      const response = await apiFetch(`${API_URL}/api/radiology/report`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patient_slay_id: nameVal,
           sex: sexVal,
@@ -320,6 +339,261 @@ export default function AddProspectPage() {
       router.push('/');
     }
   }, [router]);
+
+  // Load active invites on mount
+  useEffect(() => {
+    const fetchInviteStatus = async () => {
+      try {
+        const res = await apiFetch(`${API_URL}/api/invite/status`);
+        if (res.ok) {
+          const invites = await res.json();
+          const active = invites.find(i => !['completed', 'revoked', 'expired'].includes(i.status));
+          if (active) {
+            setActiveInvite(active);
+            setFillByProspect(true);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch invite status:", err);
+      }
+    };
+    fetchInviteStatus();
+  }, []);
+
+  // SSE Stream for real-time invite updates
+  useEffect(() => {
+    const inviteId = activeInvite?.id;
+    if (!inviteId) return;
+
+    const eventSource = new EventSource(`${API_URL}/api/invite/stream`, {
+      withCredentials: true
+    });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'invite_update' && data.inviteId === inviteId) {
+          console.log(`SSE Update received: ${data.status}`);
+          setActiveInvite(prev => {
+            if (prev && prev.status === data.status && prev.matchId === data.matchId) {
+              return prev;
+            }
+            return {
+              ...prev,
+              status: data.status,
+              ...data
+            };
+          });
+
+          if (data.status === 'completed') {
+            setTimeout(() => {
+              router.push('/core-engine/chronic');
+            }, 2500);
+          }
+        }
+      } catch (e) {
+        console.error("SSE parsing failed:", e);
+      }
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [activeInvite?.id, router]);
+
+  const handleSendInvite = async () => {
+    if (!prospectForm.name || !prospectPhoneInput) {
+      alert("Please enter the prospect's name and WhatsApp number first.");
+      return;
+    }
+
+    setIsSendingInvite(true);
+    setInviteError(null);
+
+    const fullPhone = `${prospectCountry}${prospectPhoneInput.replace(/\D/g, '')}`;
+
+    try {
+      const res = await apiFetch(`${API_URL}/api/invite/send`, {
+        method: 'POST',
+        body: JSON.stringify({
+          prospectName: prospectForm.name,
+          prospectPhone: fullPhone
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to send invite');
+      }
+
+      const data = await res.json();
+      setActiveInvite(data.invite);
+    } catch (err) {
+      setInviteError(err.message || 'Failed to send invite');
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
+  const handleRevokeInvite = async () => {
+    if (!activeInvite) return;
+    if (!confirm("Are you sure you want to revoke this invitation? The link will become immediately invalid.")) return;
+
+    try {
+      const res = await apiFetch(`${API_URL}/api/invite/revoke/${activeInvite.id}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setActiveInvite(null);
+        setProspectPhoneInput('');
+      } else {
+        alert("Failed to revoke invite");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRunMatch = async () => {
+    if (!activeInvite) return;
+    setIsRunningMatch(true);
+    setMatchRunError(null);
+    try {
+      const res = await apiFetch(`${API_URL}/api/invite/run-match/${activeInvite.id}`, {
+        method: 'POST'
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to start compatibility matching');
+      }
+    } catch (err) {
+      setMatchRunError(err.message || 'Error starting match');
+      setIsRunningMatch(false);
+    }
+  };
+
+  const renderTimeline = () => {
+    if (!activeInvite) return null;
+    const status = activeInvite.status;
+
+    const steps = [
+      { key: 'sent', label: 'Invite Sent', desc: 'Message sent via WhatsApp', activeStates: ['sent', 'delivered', 'opened', 'consent_pending', 'consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
+      { key: 'delivered', label: 'Delivered', desc: 'Received on prospect\'s phone', activeStates: ['delivered', 'opened', 'consent_pending', 'consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
+      { key: 'opened', label: 'Opened', desc: 'Prospect opened the invite link', activeStates: ['opened', 'consent_pending', 'consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
+      { key: 'consent', label: 'Consent Decision', desc: status === 'consent_rejected' ? 'Consent Rejected ✗' : 'Consent Accepted ✓', activeStates: ['consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'], isError: status === 'consent_rejected' },
+      { key: 'started', label: 'Filling Form', desc: 'Prospect is answering questions', activeStates: ['questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
+      { key: 'submitted', label: 'Form Submitted', desc: 'Details and reports received', activeStates: ['questionnaire_submitted', 'processing', 'completed'] },
+      { key: 'processing', label: 'AI Compatibility Matching', desc: status === 'failed' ? 'Analysis Failed ✗' : 'Running health scan', activeStates: ['processing', 'completed', 'failed'], isError: status === 'failed', isSpinning: status === 'processing' },
+      { key: 'completed', label: 'Completed', desc: 'Results ready', activeStates: ['completed'] }
+    ];
+
+    return (
+      <div className="space-y-6 mt-4">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800 text-sm">Live Onboarding Status</h3>
+          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-pink-50 text-[#DE457D] capitalize animate-pulse">
+            {status.replace('_', ' ')}
+          </span>
+        </div>
+
+        <div className="relative border-l-2 border-slate-200 ml-3.5 space-y-6">
+          {steps.map((step) => {
+            const isDone = step.activeStates.includes(status);
+            const isCurrent = status === step.key || (step.key === 'consent' && ['consent_accepted', 'consent_rejected'].includes(status)) || (step.key === 'processing' && ['processing', 'failed'].includes(status));
+            
+            return (
+              <div key={step.key} className="relative pl-6">
+                <div className={cn(
+                  "absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all",
+                  step.isError 
+                    ? "bg-rose-500 border-rose-500 text-white"
+                    : isDone
+                      ? "bg-[#DE457D] border-[#DE457D] text-white"
+                      : "bg-white border-slate-300"
+                )}>
+                  {step.isSpinning && (
+                    <RefreshCw className="w-2.5 h-2.5 animate-spin text-[#DE457D]" />
+                  )}
+                </div>
+
+                <div className="text-left">
+                  <span className={cn(
+                    "block text-xs font-bold",
+                    step.isError
+                      ? "text-rose-600"
+                      : isDone
+                        ? "text-slate-800"
+                        : "text-slate-400"
+                  )}>
+                    {step.label}
+                  </span>
+                  <span className="block text-[11px] text-slate-500 mt-0.5">
+                    {step.desc}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {status === 'failed' && (
+          <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-medium text-left">
+            <strong>Delivery or Analysis Failed:</strong> We encountered an error dispatching the invite or processing reports. Please revoke this link and try again.
+          </div>
+        )}
+
+        {status === 'consent_rejected' && (
+          <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-medium text-left">
+            <strong>Invitation Declined:</strong> The prospect has rejected consent to share their health data. You can revoke this link and send a new invite if desired.
+          </div>
+        )}
+
+        {status === 'completed' && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-xs font-medium text-left flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 animate-bounce" />
+            <span><strong>Scan Complete!</strong> Redirecting to the match results...</span>
+          </div>
+        )}
+
+        {(status === 'questionnaire_submitted' || status === 'failed') && (
+          <div className="p-3.5 bg-[#DE457D]/5 border border-[#DE457D]/20 rounded-xl text-left space-y-2.5">
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              <strong>Questionnaire Received!</strong> The prospect has uploaded their medical parameters. Run the compatibility match scan now.
+            </p>
+            {matchRunError && (
+              <span className="text-[10px] text-rose-500 block font-semibold">{matchRunError}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleRunMatch}
+              disabled={isRunningMatch}
+              className="w-full py-2 bg-[#DE457D] hover:bg-[#c93d6f] disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all"
+            >
+              {isRunningMatch ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Starting Health Scan...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Run Compatibility Match Scan</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleRevokeInvite}
+          className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+        >
+          Revoke Invitation Link
+        </button>
+      </div>
+    );
+  };
 
   // Click outside dropdowns handler
   useEffect(() => {
@@ -363,7 +637,7 @@ export default function AddProspectPage() {
     formData.append('pdf', file);
 
     try {
-      const response = await fetch(`${API_URL}/api/pathology/extract`, {
+      const response = await apiFetch(`${API_URL}/api/pathology/extract`, {
         method: 'POST',
         body: formData
       });
@@ -395,7 +669,7 @@ export default function AddProspectPage() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/pathology/mock-extract`);
+      const response = await apiFetch(`${API_URL}/api/pathology/mock-extract`);
       const data = await response.json();
       if (data.success) {
         setReport(data);
@@ -529,82 +803,164 @@ export default function AddProspectPage() {
           </div>
 
           {/* Right Column: Prospect Information Form */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-5 text-left">
-            <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100">
-              <Users className="w-5 h-5 text-pink-500" />
-              <h2 className="text-lg font-bold text-slate-900">Prospect Information</h2>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-5 text-left h-fit">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-pink-500" />
+                <h2 className="text-lg font-bold text-slate-900">Prospect Information</h2>
+              </div>
+              
+              {!activeInvite && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={fillByProspect}
+                    onChange={(e) => setFillByProspect(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#DE457D] relative"></div>
+                  <span className="text-xs font-semibold text-slate-600">Invite via WhatsApp</span>
+                </label>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
-              <input
-                type="text"
-                placeholder="Enter prospect's name"
-                value={prospectForm.name || ''}
-                onChange={(e) => setProspectForm({ ...prospectForm, name: e.target.value })}
-                className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] text-slate-900"
-                required
-              />
-            </div>
+            {fillByProspect ? (
+              activeInvite ? (
+                renderTimeline()
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Enter the prospect's name and WhatsApp number. We will send them a secure temporary link to fill their profile details and upload their own reports.
+                  </p>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Gender</label>
-              <div className="relative" ref={prospectGenderDropdownRef}>
-                <button
-                  type="button"
-                  className="w-full p-3 text-left border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#DE457D] outline-none bg-white flex justify-between items-center text-slate-900"
-                  onClick={() => setIsProspectGenderDropdownOpen(!isProspectGenderDropdownOpen)}
-                >
-                  <span className={cn(!prospectForm.gender && "text-slate-400")}>
-                    {prospectForm.gender || "Select Gender"}
-                  </span>
-                  <ChevronDown className="w-5 h-5 text-slate-400" />
-                </button>
-
-                {isProspectGenderDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden">
-                    {["Male", "Female", "Other"].map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        className="w-full px-4 py-3 text-left hover:bg-slate-50 flex items-center justify-between"
-                        onClick={() => {
-                          setProspectForm({ ...prospectForm, gender: g });
-                          setIsProspectGenderDropdownOpen(false);
-                        }}
-                      >
-                        <span className={cn("font-medium", prospectForm.gender === g ? "text-[#DE457D]" : "text-slate-700")}>{g}</span>
-                        {prospectForm.gender === g && <Check className="w-4 h-4 text-[#DE457D]" />}
-                      </button>
-                    ))}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1.5 uppercase">Prospect's Name</label>
+                    <input
+                      type="text"
+                      placeholder="Enter prospect's name"
+                      value={prospectForm.name || ''}
+                      onChange={(e) => setProspectForm({ ...prospectForm, name: e.target.value })}
+                      className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] text-slate-900"
+                      required
+                    />
                   </div>
-                )}
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">DOB</label>
-                <input
-                  type="date"
-                  value={prospectForm.dob || ''}
-                  onChange={(e) => setProspectForm({ ...prospectForm, dob: e.target.value })}
-                  className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] bg-white text-slate-900"
-                  required
-                />
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1.5 uppercase">WhatsApp Phone Number</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <select
+                        value={prospectCountry}
+                        onChange={(e) => setProspectCountry(e.target.value)}
+                        className="p-3 border border-slate-300 rounded-lg outline-none bg-white text-slate-900 cursor-pointer min-w-[95px] text-sm"
+                      >
+                        {COUNTRIES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.flag} {c.code}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="tel"
+                        placeholder="98765 43210"
+                        value={prospectPhoneInput}
+                        onChange={(e) => setProspectPhoneInput(e.target.value)}
+                        className="flex-1 p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] text-slate-900"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {inviteError && (
+                    <div className="p-3 bg-rose-50 text-rose-600 rounded-lg border border-rose-100 text-xs font-medium">
+                      {inviteError}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleSendInvite}
+                    disabled={isSendingInvite || !prospectForm.name || !prospectPhoneInput}
+                    className="w-full mt-2 py-3 bg-[#DE457D] hover:bg-[#c93d6f] disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg shadow-pink-500/25 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isSendingInvite ? 'Sending...' : 'Send WhatsApp Invite'}
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter prospect's name"
+                    value={prospectForm.name || ''}
+                    onChange={(e) => setProspectForm({ ...prospectForm, name: e.target.value })}
+                    className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] text-slate-900"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Gender</label>
+                  <div className="relative" ref={prospectGenderDropdownRef}>
+                    <button
+                      type="button"
+                      className="w-full p-3 text-left border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#DE457D] outline-none bg-white flex justify-between items-center text-slate-900"
+                      onClick={() => setIsProspectGenderDropdownOpen(!isProspectGenderDropdownOpen)}
+                    >
+                      <span className={cn(!prospectForm.gender && "text-slate-400")}>
+                        {prospectForm.gender || "Select Gender"}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-slate-400" />
+                    </button>
+
+                    {isProspectGenderDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden">
+                        {["Male", "Female", "Other"].map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            className="w-full px-4 py-3 text-left hover:bg-slate-50 flex items-center justify-between"
+                            onClick={() => {
+                              setProspectForm({ ...prospectForm, gender: g });
+                              setIsProspectGenderDropdownOpen(false);
+                            }}
+                          >
+                            <span className={cn("font-medium", prospectForm.gender === g ? "text-[#DE457D]" : "text-slate-700")}>{g}</span>
+                            {prospectForm.gender === g && <Check className="w-4 h-4 text-[#DE457D]" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">DOB</label>
+                    <input
+                      type="date"
+                      value={prospectForm.dob || ''}
+                      onChange={(e) => setProspectForm({ ...prospectForm, dob: e.target.value })}
+                      className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] bg-white text-slate-900"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">City</label>
+                    <input
+                      type="text"
+                      placeholder="Enter city"
+                      value={prospectForm.city || ''}
+                      onChange={(e) => setProspectForm({ ...prospectForm, city: e.target.value })}
+                      className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] text-slate-900"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">City</label>
-                <input
-                  type="text"
-                  placeholder="Enter city"
-                  value={prospectForm.city || ''}
-                  onChange={(e) => setProspectForm({ ...prospectForm, city: e.target.value })}
-                  className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#DE457D] text-slate-900"
-                  required
-                />
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -695,8 +1051,10 @@ export default function AddProspectPage() {
           )}
         </div>
 
-        {/* Prospect Lifestyle & Metrics Form */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6 space-y-6 text-left">
+        {!fillByProspect && (
+          <>
+            {/* Prospect Lifestyle & Metrics Form */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6 space-y-6 text-left">
           <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
             <Activity className="w-5 h-5 text-green-500" />
             <h2 className="text-lg font-bold text-slate-900">Prospect Lifestyle & Habits</h2>
@@ -1151,6 +1509,8 @@ export default function AddProspectPage() {
             <p className="text-sm font-medium">{matchError}</p>
           </div>
         )}
+      </>
+    )}
 
         {/* Form navigation buttons */}
         <div className="mt-8 flex justify-between items-center pb-12">
@@ -1162,14 +1522,16 @@ export default function AddProspectPage() {
             Back to Dashboard
           </button>
           
-          <button
-            onClick={handleMatch}
-            disabled={!userReport || !prospectReport || isMatching || runsUsed >= 1}
-            className="bg-[#DE457D] hover:bg-[#c93d6f] text-white px-8 py-3 rounded-full font-semibold shadow-lg shadow-pink-500/25 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 text-sm"
-          >
-            {isMatching ? 'Generating...' : 'Generate Insights'}
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {!fillByProspect && (
+            <button
+              onClick={handleMatch}
+              disabled={!userReport || !prospectReport || isMatching || runsUsed >= 1}
+              className="bg-[#DE457D] hover:bg-[#c93d6f] text-white px-8 py-3 rounded-full font-semibold shadow-lg shadow-pink-500/25 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 text-sm"
+            >
+              {isMatching ? 'Generating...' : 'Generate Insights'}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </main>

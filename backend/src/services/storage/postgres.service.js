@@ -146,6 +146,31 @@ async function initDB() {
           last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           revoked_at TIMESTAMP DEFAULT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS prospect_invites (
+          id TEXT PRIMARY KEY,
+          user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+          prospect_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          prospect_name TEXT NOT NULL,
+          prospect_phone TEXT NOT NULL,
+          token TEXT UNIQUE NOT NULL,
+          whatsapp_message_id TEXT,
+          status TEXT DEFAULT 'created',
+          consent_timestamp TIMESTAMP DEFAULT NULL,
+          consent_ip TEXT DEFAULT NULL,
+          consent_user_agent TEXT DEFAULT NULL,
+          pathology_report_id TEXT DEFAULT NULL,
+          radiology_report_id TEXT DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL
+      );
+    `);
+
+    // Migration to add pathology and radiology report columns if table already exists
+    await pool.query(`
+      ALTER TABLE prospect_invites 
+      ADD COLUMN IF NOT EXISTS pathology_report_id TEXT DEFAULT NULL,
+      ADD COLUMN IF NOT EXISTS radiology_report_id TEXT DEFAULT NULL;
     `);
 
     // Create indexes if they don't exist
@@ -157,6 +182,9 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
       CREATE INDEX IF NOT EXISTS idx_otp_requests_phone ON otp_requests(phone);
       CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_prospect_invites_user_id ON prospect_invites(user_id);
+      CREATE INDEX IF NOT EXISTS idx_prospect_invites_token ON prospect_invites(token);
+      CREATE INDEX IF NOT EXISTS idx_prospect_invites_msg_id ON prospect_invites(whatsapp_message_id);
     `);
 
     // Schema migrations

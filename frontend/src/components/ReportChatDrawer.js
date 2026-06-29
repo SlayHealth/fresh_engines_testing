@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Heart, Sparkles, MessageSquare, Loader2 } from 'lucide-react';
 import styles from './ReportChatDrawer.module.css';
 import { API_URL } from '../config/api';
+import { apiFetch } from '../utils/api';
 
 const DEFAULT_SUGGESTIONS = {
   chronic: [
@@ -81,11 +82,8 @@ export default function ReportChatDrawer({
     setIsInitializing(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/chat/session`, {
+      const response = await apiFetch(`${API_URL}/api/chat/session`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           report_id: reportId || null,
           partner_report_id: partnerReportId || null,
@@ -123,7 +121,7 @@ export default function ReportChatDrawer({
     setIsInitializing(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/chat/session/${sessId}/history`);
+      const response = await apiFetch(`${API_URL}/api/chat/session/${sessId}/history`);
       const data = await response.json();
       if (!data.success) {
         throw new Error(data.error || 'Failed to load chat history');
@@ -175,11 +173,8 @@ export default function ReportChatDrawer({
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/chat/message`, {
+      const response = await apiFetch(`${API_URL}/api/chat/message`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           sessionId: activeSessionId,
           message: text.trim()

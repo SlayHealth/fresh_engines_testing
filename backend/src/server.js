@@ -11,6 +11,7 @@ const radiologyRoutes = require('./routes/radiology.routes');
 const chatRoutes = require('./routes/chat.routes');
 const authRoutes = require('./routes/auth.routes');
 const mentalRoutes = require('./routes/mental.routes');
+const inviteRoutes = require('./routes/invite.routes');
 const { healthCheck } = require('./controllers/pathology.controller');
 const { initDB, cleanupOldReports } = require('./services/storage/postgres.service');
 const logger = require('./utils/logger');
@@ -30,11 +31,18 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) {
+      callback(null, true);
+    } else if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      // Dynamically allow local network IP origins (e.g. http://192.168.x.x:3000)
+      const isLocalIp = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin);
+      if (isLocalIp) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
     }
   },
   credentials: true
@@ -66,6 +74,7 @@ app.use('/api/usg', radiologyRoutes); // Backwards compatibility redirect
 app.use('/api/chat', chatRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/mental', mentalRoutes);
+app.use('/api/invite', inviteRoutes);
 
 // Global Error Handler (must be after routes)
 app.use(errorHandler);

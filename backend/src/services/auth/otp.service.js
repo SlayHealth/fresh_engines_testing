@@ -49,6 +49,9 @@ function generateOTP() {
  * @returns {Promise<Object>} { allowed: boolean, reason?: string }
  */
 async function checkRateLimit(phone) {
+  if (process.env.DISABLE_RATE_LIMIT === 'true') {
+    return { allowed: true };
+  }
   if (!redis) {
     // If Redis is down/unavailable, fail open or closed depending on requirements.
     // For local resilience, we log a warning and allow.
@@ -139,7 +142,7 @@ async function createOTPRequest(phone, purpose = 'login', correlationId = 'N/A')
  * @returns {Promise<Object>} { verified: boolean, reason?: string }
  */
 async function verifyOTPRequest(phone, otp, purpose = 'login', correlationId = 'N/A') {
-  if (redis) {
+  if (redis && process.env.DISABLE_RATE_LIMIT !== 'true') {
     const lockoutKey = `otp:lockout:${phone}`;
     const isLocked = await redis.get(lockoutKey);
     if (isLocked) {

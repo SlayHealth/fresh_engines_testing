@@ -257,12 +257,14 @@ export function CompatibilityProvider({ children }) {
               setRunsUsed(data.user.runs_used || 0);
               setChatsUsed(data.user.chats_used || 0);
               fetchRecentMatches(data.user.id);
+              return true;
             }
           }
         }
       } catch (err) {
         console.error('Silent refresh failed on mount:', err);
       }
+      return false;
     };
 
     const handleSessionExpired = () => {
@@ -273,16 +275,20 @@ export function CompatibilityProvider({ children }) {
     };
     window.addEventListener('auth_session_expired', handleSessionExpired);
 
-    silentRefresh().finally(() => {
+    silentRefresh().then((success) => {
+      if (!success) {
+        setUser(null);
+        setAccessToken(null);
+        localStorage.removeItem('slayhealth_user');
+        if (window.location.pathname !== '/' && window.location.pathname !== '') {
+          window.location.href = '/';
+        }
+        return;
+      }
       const savedUser = localStorage.getItem('slayhealth_user');
       if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser);
-          setUser(parsed);
-          setRunsUsed(parsed.runs_used || 0);
-          setChatsUsed(parsed.chats_used || 0);
-          fetchRecentMatches(parsed.id);
-          
           if (!parsed.name || !parsed.gender || !parsed.activity_level) {
             setOnboardingStep(1);
           }

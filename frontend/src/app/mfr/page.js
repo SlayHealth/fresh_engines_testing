@@ -7,6 +7,7 @@ import styles from './page.module.css';
 import ManualInputs from '../../components/ManualInputs';
 import ReportChatDrawer from '../../components/ReportChatDrawer';
 import { API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
 import { parsePatientMeta, findExtractedParam, classifyOvarianReserve, parseMaleRadiology, parseFemaleRadiology, parseMaleGenomics, parseFemaleGenomics } from '../../utils/reportParser';
 
 export default function FertilityPage() {
@@ -172,7 +173,7 @@ export default function FertilityPage() {
     setIsUploading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/pathology/mock-extract`);
+      const response = await apiFetch(`${API_URL}/api/pathology/mock-extract`);
       const data = await response.json();
       if (data.success) {
         setReport(data);
@@ -295,7 +296,7 @@ export default function FertilityPage() {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetch(`${API_URL}/api/pathology/extract`, {
+      const response = await apiFetch(`${API_URL}/api/pathology/extract`, {
         method: 'POST',
         body: formData,
         signal: controller.signal
@@ -549,11 +550,8 @@ export default function FertilityPage() {
     setMatchError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/mfr/analyze`, {
+      const response = await apiFetch(`${API_URL}/api/mfr/analyze`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           male_report_id: maleReport.report_metadata.report_id,
           female_report_id: femaleReport.report_metadata.report_id,

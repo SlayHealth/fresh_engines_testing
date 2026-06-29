@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Database, Table as TableIcon, LayoutGrid, Loader2, AlertCircle, Eye, X } from 'lucide-react';
 import styles from './page.module.css';
 import { API_URL } from '../../config/api';
+import { apiFetch } from '../../utils/api';
 
 export default function DatabaseViewer() {
   const [tables, setTables] = useState([]);
@@ -31,7 +32,7 @@ export default function DatabaseViewer() {
 
   const fetchTables = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/db/tables`);
+      const response = await apiFetch(`${API_URL}/api/db/tables`);
       const data = await response.json();
       
       if (data.success) {
@@ -53,7 +54,7 @@ export default function DatabaseViewer() {
     setIsDataLoading(true);
     setEditingCell(null);
     try {
-      const response = await fetch(`${API_URL}/api/db/tables/${tableName}`);
+      const response = await apiFetch(`${API_URL}/api/db/tables/${tableName}`);
       const data = await response.json();
       
       if (data.success) {
@@ -81,9 +82,8 @@ export default function DatabaseViewer() {
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`${API_URL}/api/db/tables/${activeTable}/${row.id}`, {
+      const response = await apiFetch(`${API_URL}/api/db/tables/${activeTable}/${row.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [colName]: newValue })
       });
       const data = await response.json();
@@ -107,7 +107,7 @@ export default function DatabaseViewer() {
     
     setIsUpdating(true);
     try {
-      const response = await fetch(`${API_URL}/api/db/tables/${activeTable}/${id}`, {
+      const response = await apiFetch(`${API_URL}/api/db/tables/${activeTable}/${id}`, {
         method: 'DELETE'
       });
       const data = await response.json();

@@ -415,3 +415,4 @@ exports.getCoupleSummary = async (req, res, next) => {
 exports.mapRadiologyToLegacyFormat = mapRadiologyToLegacyFormat;
 exports.generateCoupleInsights = generateCoupleInsights;
 exports.generateCoupleSummary = generateCoupleSummary;
+exports.runRadiologyAnalysis = runRadiologyAnalysis;
