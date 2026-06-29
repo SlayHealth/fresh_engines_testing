@@ -69,9 +69,17 @@ async function createInvite(req, res, next) {
     }
 
     // Normalize phone number (E.164)
-    let cleanPhone = prospectPhone.replace(/\D/g, '');
-    if (!cleanPhone.startsWith('+')) {
-      cleanPhone = `+${cleanPhone}`;
+    let cleanPhone = prospectPhone.replace(/[\s\-\(\)]/g, '');
+    if (cleanPhone.startsWith('+')) {
+      cleanPhone = '+' + cleanPhone.replace(/\D/g, '');
+    } else {
+      if (/^\d{10}$/.test(cleanPhone)) {
+        cleanPhone = '+91' + cleanPhone;
+      } else if (cleanPhone.startsWith('91') && cleanPhone.length === 12) {
+        cleanPhone = '+' + cleanPhone;
+      } else {
+        cleanPhone = '+' + cleanPhone.replace(/\D/g, '');
+      }
     }
 
     // Generate secure random token (32 bytes)

@@ -238,6 +238,64 @@ export function CompatibilityProvider({ children }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showCalculations, setShowCalculations] = useState(false);
 
+  const clearAllSessionStates = () => {
+    setAccessToken(null);
+    localStorage.removeItem('slayhealth_user');
+    localStorage.removeItem('slayhealth_refresh_token');
+    setUser(null);
+    setRunsUsed(0);
+    setChatsUsed(0);
+    setMatchesList([]);
+    setChronicResult(null);
+    setMfrResult(null);
+    setMentalResult(null);
+    setActiveMatchId(null);
+    setChatSessionId(null);
+    setUserReport(null);
+    setProspectReport(null);
+    setOnboardingForm({
+      userName: '',
+      userRelation: '',
+      candidateName: '',
+      candidateGender: '',
+      candidateDob: '',
+      candidateCity: '',
+      relationshipStatus: '',
+      marriageTimeline: '',
+      activity_level: '',
+      daily_steps: '',
+      occupation_style: '',
+      drinking_habits: '',
+      smoking_habits: '',
+      tobacco_habits: '',
+      sleep_cycle: '',
+      height: '',
+      weight: '',
+      waist: '',
+      menstrualCycle: ''
+    });
+    setProspectForm({
+      name: '',
+      gender: '',
+      dob: '',
+      city: '',
+      meetingSource: '',
+      platformName: '',
+      meetingStory: '',
+      activity_level: '',
+      daily_steps: '',
+      occupation_style: '',
+      drinking_habits: '',
+      smoking_habits: '',
+      tobacco_habits: '',
+      sleep_cycle: '',
+      height: '',
+      weight: '',
+      waist: '',
+      menstrualCycle: ''
+    });
+  };
+
   // Load user session on mount
   useEffect(() => {
     const silentRefresh = async () => {
@@ -273,9 +331,7 @@ export function CompatibilityProvider({ children }) {
     };
 
     const handleSessionExpired = () => {
-      setUser(null);
-      setAccessToken(null);
-      localStorage.removeItem('slayhealth_user');
+      clearAllSessionStates();
       if (
         window.location.pathname !== '/' &&
         window.location.pathname !== '' &&
@@ -288,9 +344,7 @@ export function CompatibilityProvider({ children }) {
 
     silentRefresh().then((success) => {
       if (!success) {
-        setUser(null);
-        setAccessToken(null);
-        localStorage.removeItem('slayhealth_user');
+        clearAllSessionStates();
         if (
           window.location.pathname !== '/' &&
           window.location.pathname !== '' &&
@@ -357,6 +411,7 @@ export function CompatibilityProvider({ children }) {
         alert('Quota has been reset! (Free Match and Counselor messages restored)');
       }
     } catch (err) {
+      console.error('Quota reset failed:', err);
       alert('Quota reset failed');
     } finally {
       setIsUpgradingQuota(false);
@@ -373,19 +428,11 @@ export function CompatibilityProvider({ children }) {
     } catch (err) {
       console.error('Failed to logout cleanly from server:', err);
     }
-    setAccessToken(null);
-    localStorage.removeItem('slayhealth_user');
-    localStorage.removeItem('slayhealth_refresh_token');
-    setUser(null);
+    clearAllSessionStates();
     setAuthPhone('');
     setAuthOtp('');
     setAuthStep('phone');
     setOnboardingStep(0);
-    setChronicResult(null);
-    setMfrResult(null);
-    setMentalResult(null);
-    setActiveMatchId(null);
-    setChatSessionId(null);
     setIsChatOpen(false);
     setUserReport(null);
     setProspectReport(null);

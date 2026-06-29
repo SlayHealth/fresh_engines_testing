@@ -85,7 +85,14 @@ export default function RootPage() {
       setIsAuthLoading(true);
       setAuthError(null);
       
-      const fullPhone = `${selectedCountry}${phoneNumberInput.trim()}`;
+      let cleanDigits = phoneNumberInput.replace(/\D/g, '');
+      if (cleanDigits.startsWith('0')) {
+        cleanDigits = cleanDigits.slice(1);
+      }
+      const countryDigits = selectedCountry.replace(/\D/g, '');
+      const fullPhone = cleanDigits.startsWith(countryDigits)
+        ? `+${cleanDigits}`
+        : `${selectedCountry}${cleanDigits}`;
       setAuthPhone(fullPhone);
 
       try {

@@ -457,7 +457,14 @@ export default function AddProspectPage() {
     setIsSendingInvite(true);
     setInviteError(null);
 
-    const fullPhone = `${prospectCountry}${prospectPhoneInput.replace(/\D/g, '')}`;
+    let cleanDigits = prospectPhoneInput.replace(/\D/g, '');
+    if (cleanDigits.startsWith('0')) {
+      cleanDigits = cleanDigits.slice(1);
+    }
+    const countryDigits = prospectCountry.replace(/\D/g, '');
+    const fullPhone = cleanDigits.startsWith(countryDigits)
+      ? `+${cleanDigits}`
+      : `${prospectCountry}${cleanDigits}`;
 
     try {
       const res = await apiFetch(`${API_URL}/api/invite/send`, {
