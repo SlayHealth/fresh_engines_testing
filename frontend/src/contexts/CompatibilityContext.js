@@ -271,7 +271,13 @@ export function CompatibilityProvider({ children }) {
       setUser(null);
       setAccessToken(null);
       localStorage.removeItem('slayhealth_user');
-      window.location.href = '/';
+      if (
+        window.location.pathname !== '/' &&
+        window.location.pathname !== '' &&
+        !window.location.pathname.startsWith('/invite/')
+      ) {
+        window.location.href = '/';
+      }
     };
     window.addEventListener('auth_session_expired', handleSessionExpired);
 
@@ -280,7 +286,11 @@ export function CompatibilityProvider({ children }) {
         setUser(null);
         setAccessToken(null);
         localStorage.removeItem('slayhealth_user');
-        if (window.location.pathname !== '/' && window.location.pathname !== '') {
+        if (
+          window.location.pathname !== '/' &&
+          window.location.pathname !== '' &&
+          !window.location.pathname.startsWith('/invite/')
+        ) {
           window.location.href = '/';
         }
         return;
