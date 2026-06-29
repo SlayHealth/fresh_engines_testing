@@ -811,6 +811,56 @@ export default function AddProspectPage() {
                   </div>
                 </div>
               </div>
+
+              {/* PDF Upload Buttons Directly in the Profile Card */}
+              <div className="border-t border-slate-100 pt-4 mt-4 space-y-3">
+                <span className="block text-xs font-bold text-slate-500 uppercase">Your Medical Reports</span>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 border border-dashed border-slate-200 rounded-xl text-center space-y-2 bg-slate-50/50">
+                    <span className="text-[11px] font-bold text-slate-700 block">Pathology PDF</span>
+                    <button
+                      type="button"
+                      onClick={() => userFileInputRef.current.click()}
+                      className={cn(
+                        "w-full py-1.5 px-2 rounded-lg border font-semibold text-[10px] transition-all",
+                        userReport ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                      )}
+                    >
+                      {isUserUploading ? 'Parsing...' : userReport ? 'Report ✓' : 'Upload PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => triggerMockData(false)}
+                      className="text-[9px] text-slate-500 underline block mx-auto hover:text-[#DE457D] cursor-pointer"
+                    >
+                      Mock Report
+                    </button>
+                  </div>
+
+                  <div className="p-3 border border-dashed border-slate-200 rounded-xl text-center space-y-2 bg-slate-50/50">
+                    <span className="text-[11px] font-bold text-slate-700 block">Radiology PDF</span>
+                    <button
+                      type="button"
+                      onClick={() => userRadFileInputRef.current.click()}
+                      className={cn(
+                        "w-full py-1.5 px-2 rounded-lg border font-semibold text-[10px] transition-all",
+                        userRadiology ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                      )}
+                    >
+                      {isUserRadUploading ? 'Parsing...' : userRadiology ? 'Radiology ✓' : 'Upload PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => triggerMockRadiology(false)}
+                      className="text-[9px] text-slate-500 underline block mx-auto hover:text-teal-600 cursor-pointer"
+                    >
+                      Mock Report
+                    </button>
+                  </div>
+                </div>
+                {userRadError && <span className="text-[10px] text-rose-500 block text-center font-medium">{userRadError}</span>}
+              </div>
             </div>
           </div>
 
