@@ -460,7 +460,11 @@ export default function AddProspectPage() {
     setMatchRunError(null);
     try {
       const res = await apiFetch(`${API_URL}/api/invite/run-match/${activeInvite.id}`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inviterPathologyId: userReport?.report_metadata?.report_id || null
+        })
       });
       if (!res.ok) {
         const data = await res.json();
@@ -563,10 +567,17 @@ export default function AddProspectPage() {
             {matchRunError && (
               <span className="text-[10px] text-rose-500 block font-semibold">{matchRunError}</span>
             )}
+
+            {!userReport && matchesList.length === 0 && (
+              <p className="text-[10px] text-amber-600 font-semibold leading-normal">
+                ⚠️ Please upload your own Pathology PDF under "Your Information" on the left first to run the scan.
+              </p>
+            )}
+
             <button
               type="button"
               onClick={handleRunMatch}
-              disabled={isRunningMatch}
+              disabled={isRunningMatch || (!userReport && matchesList.length === 0)}
               className="w-full py-2 bg-[#DE457D] hover:bg-[#c93d6f] disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all"
             >
               {isRunningMatch ? (

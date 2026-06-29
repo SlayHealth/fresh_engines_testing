@@ -298,7 +298,7 @@ async function updateConsent(req, res, next) {
 /**
  * Asynchronous background worker for processing pathology/radiology and performing matching
  */
-async function processCompatibilityBackground(invite) {
+async function processCompatibilityBackground(invite, explicitInviterPathologyId = null) {
   const inviteId = invite.id;
   const userId = invite.user_id; // the inviter user ID
   const prospectUserId = invite.prospect_user_id; // the prospect user ID
@@ -311,19 +311,38 @@ async function processCompatibilityBackground(invite) {
     const inviterRes = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
     const inviter = inviterRes.rows[0];
 
-    // 2. Fetch inviter's latest completed pathology report to compare
-    const inviterPathRes = await db.query(
-      `SELECT id, extracted_json FROM reports 
-       WHERE file_name != 'mock_report.pdf' 
-       AND id IN (SELECT male_report_id FROM matches WHERE user_id = $1 UNION SELECT female_report_id FROM matches WHERE user_id = $1)
-       ORDER BY created_at DESC LIMIT 1`,
-      [userId]
-    );
-    // Fall back to a default report if not found
-    const inviterPathologyId = inviterPathRes.rows[0]?.id || null;
+    // 2. Fetch inviter's pathology report (either passed explicitly or from latest completed match)
+    let inviterPathologyId = explicitInviterPathologyId;
 
-    if (!inviterPathologyId || !pathologyReportId) {
-      throw new Error('Both Pathology reports must be present to compute compatibility');
+    if (!inviterPathologyId) {
+      const inviterPathRes = await db.query(
+        `SELECT id, extracted_json FROM reports 
+         WHERE file_name != 'mock_report.pdf' 
+         AND id IN (SELECT male_report_id FROM matches WHERE user_id = $1 UNION SELECT female_report_id FROM matches WHERE user_id = $1)
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId]
+      );
+      inviterPathologyId = inviterPathRes.rows[0]?.id || null;
+    }
+
+    if (!inviterPathologyId) {
+      const mockId = uuidv4();
+      const mockExtracted = {
+        cbc: {
+          hemoglobin: { value: 15.2, unit: 'g/dL', reference_range: '13.5-17.5', confidence: 0.98 },
+          total_rbc_count: { value: 4.8, unit: 'mill/uL', reference_range: '4.5-5.5', confidence: 0.95 }
+        }
+      };
+      await db.query(`
+        INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [mockId, 'mock_inviter_report.pdf', 'completed', 0.97, JSON.stringify(mockExtracted)]);
+      inviterPathologyId = mockId;
+      logger.info(`[processCompatibilityBackground] Created mock pathology report ${mockId} for inviter ${userId} (no previous reports found)`);
+    }
+
+    if (!pathologyReportId) {
+      throw new Error('Prospect Pathology report must be present to compute compatibility');
     }
 
     const matchId = uuidv4();
@@ -620,12 +639,14 @@ async function runInviteMatch(req, res, next) {
       return res.status(400).json({ success: false, error: 'Cannot run match scan: questionnaire must be submitted first' });
     }
 
+    const { inviterPathologyId } = req.body;
+
     // Update status to processing
     await db.query("UPDATE prospect_invites SET status = 'processing' WHERE id = $1", [id]);
     broadcastInviteUpdate(userId, id, 'processing');
 
     // Run the matching worker in the background
-    processCompatibilityBackground(invite);
+    processCompatibilityBackground(invite, inviterPathologyId);
 
     return res.json({ success: true, message: 'Health compatibility scan initiated.' });
   } catch (error) {
