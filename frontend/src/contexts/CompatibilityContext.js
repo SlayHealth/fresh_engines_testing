@@ -245,6 +245,13 @@ export function CompatibilityProvider({ children }) {
   const [userUploadError, setUserUploadError] = useState(null);
   const [prospectUploadError, setProspectUploadError] = useState(null);
 
+  // Mental wellbeing opt-in + answers, per person — shared across add-prospect's
+  // wizard and the dashboard's health-profile progress cards.
+  const [selfMentalOptIn, setSelfMentalOptIn] = useState(null);
+  const [selfMentalAnswers, setSelfMentalAnswers] = useState({});
+  const [prospectMentalOptIn, setProspectMentalOptIn] = useState(null);
+  const [prospectMentalAnswers, setProspectMentalAnswers] = useState({});
+
   // Results State
   const [isMatching, setIsMatching] = useState(false);
   const [matchError, setMatchError] = useState(null);
@@ -747,6 +754,10 @@ export function CompatibilityProvider({ children }) {
       prospectForm, setProspectForm,
       userReport, setUserReport,
       prospectReport, setProspectReport,
+      selfMentalOptIn, setSelfMentalOptIn,
+      selfMentalAnswers, setSelfMentalAnswers,
+      prospectMentalOptIn, setProspectMentalOptIn,
+      prospectMentalAnswers, setProspectMentalAnswers,
       isUserUploading, setIsUserUploading,
       isProspectUploading, setIsProspectUploading,
       userUploadError, setUserUploadError,

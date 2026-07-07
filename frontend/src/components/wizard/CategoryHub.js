@@ -94,7 +94,7 @@ function CategoryCard({ category, onEnter }) {
         </div>
       )}
 
-      {suggestedTests && suggestedTests.length > 0 && !comingSoon && (
+      {suggestedTests && suggestedTests.length > 0 && (
         <div className="px-4 pb-4">
           <button
             type="button"
@@ -129,34 +129,39 @@ export default function CategoryHub({
   primaryLabel,
   onPrimary,
   primaryDisabled,
-  primaryHint
+  primaryHint,
+  embedded = false
 }) {
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="mb-4 shrink-0">
-        <h2 className="font-serif text-xl leading-snug" style={{ color: 'var(--ink)' }}>{heading}</h2>
-        {subheading && <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{subheading}</p>}
-      </div>
+    <div className={embedded ? '' : 'flex-1 flex flex-col overflow-hidden'}>
+      {(heading || subheading) && (
+        <div className="mb-4 shrink-0">
+          {heading && <h2 className="font-serif text-xl leading-snug" style={{ color: 'var(--ink)' }}>{heading}</h2>}
+          {subheading && <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{subheading}</p>}
+        </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto space-y-3 pb-2">
+      <div className={embedded ? 'space-y-3' : 'flex-1 overflow-y-auto space-y-3 pb-2'}>
         {categories.map((cat) => (
           <CategoryCard key={cat.key} category={cat} onEnter={onEnter} />
         ))}
       </div>
 
-      <div className="mt-4 pt-2 shrink-0">
-        {primaryHint && <p className="text-xs text-center mb-2" style={{ color: 'var(--amber-d)' }}>{primaryHint}</p>}
-        <button
-          type="button"
-          onClick={onPrimary}
-          disabled={primaryDisabled}
-          className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-shadow duration-150 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          style={{ background: 'var(--pink)' }}
-        >
-          {primaryLabel}
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
+      {primaryLabel && (
+        <div className="mt-4 pt-2 shrink-0">
+          {primaryHint && <p className="text-xs text-center mb-2" style={{ color: 'var(--amber-d)' }}>{primaryHint}</p>}
+          <button
+            type="button"
+            onClick={onPrimary}
+            disabled={primaryDisabled}
+            className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-shadow duration-150 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{ background: 'var(--pink)' }}
+          >
+            {primaryLabel}
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

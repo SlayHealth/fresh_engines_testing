@@ -4,42 +4,14 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Sparkles, LogOut, Activity, MessageSquare, Plus, Clock,
-  Calendar, Heart, ChevronRight, Stethoscope, Globe,
-  ArrowRight, Pencil
+  Calendar, Heart, ChevronRight, Pencil,
+  UserRound, HeartPulse, Brain, FlaskConical, ScanLine, Dna
 } from 'lucide-react';
 import { useCompatibility, calculateAge, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
+import CategoryHub from '../../components/wizard/CategoryHub';
+import { aboutProgress, lifestyleProgress, mentalProgress } from '../../utils/healthProfileProgress';
+import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS, SUGGESTED_GENOMICS_TESTS } from '../../constants/suggestedTests';
 import styles from '../page.module.css';
-
-const SERVICES = [
-  {
-    id: 'diagnostics',
-    title: 'Controlled Diagnostic Reports',
-    description: 'Verified results from NABL-certified partner labs.',
-    price: '₹2,500',
-    icon: Stethoscope
-  },
-  {
-    id: 'counselling',
-    title: 'Pre-Marital Health Counselling',
-    description: 'Personalised guidance from certified specialists.',
-    price: 'Free Trial',
-    icon: MessageSquare
-  },
-  {
-    id: 'concierge-domestic',
-    title: 'Concierge (Domestic)',
-    description: 'At-home testing and a private health manager.',
-    price: '₹50,000',
-    icon: Sparkles
-  },
-  {
-    id: 'concierge-nri',
-    title: 'Concierge (NRIs)',
-    description: 'Cross-border pre-marital health concierge.',
-    price: '₹1,25,000',
-    icon: Globe
-  }
-];
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -57,7 +29,12 @@ export default function DashboardPage() {
     chronicResult,
     mfrResult,
     setOnboardingStep,
-    setOnboardingForm
+    onboardingForm,
+    setOnboardingForm,
+    prospectForm,
+    userReport,
+    selfMentalOptIn,
+    selfMentalAnswers
   } = useCompatibility();
 
   // Auth / Onboarding Redirect Guard
@@ -76,6 +53,14 @@ export default function DashboardPage() {
     }
   }, [router, setOnboardingStep]);
 
+  // Seed the health-profile form from the saved account once per session so
+  // the cards below reflect real saved progress, not just this tab's wizard state.
+  useEffect(() => {
+    if (user && !onboardingForm.candidateGender) {
+      setOnboardingForm((prev) => ({ ...prev, ...buildOnboardingFormFromUser(user) }));
+    }
+  }, [user]);
+
   if (!user) return null;
 
   const scansLeft = Math.max(0, 1 - runsUsed);
@@ -84,6 +69,43 @@ export default function DashboardPage() {
     setOnboardingForm(buildOnboardingFormFromUser(user));
     router.push('/add-prospect');
   };
+
+  const selfAdapter = {
+    form: onboardingForm,
+    nameField: 'candidateName', genderField: 'candidateGender', dobField: 'candidateDob', cityField: 'candidateCity',
+    isSelfPerson: true,
+    needsNameStep: !!(onboardingForm.userRelation && onboardingForm.userRelation !== 'Self')
+  };
+
+  const healthProfileCategories = [
+    {
+      key: 'about', label: 'About You', desc: 'Basics, body & relationship context', icon: UserRound,
+      progress: aboutProgress(selfAdapter, prospectForm)
+    },
+    {
+      key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,
+      progress: lifestyleProgress(onboardingForm)
+    },
+    {
+      key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
+      progress: mentalProgress(selfMentalOptIn, selfMentalAnswers)
+    },
+    {
+      key: 'pathology', label: 'Pathology Reports', desc: 'Blood work for you', icon: FlaskConical,
+      progress: userReport ? 100 : 0,
+      suggestedTests: SUGGESTED_PATHOLOGY_TESTS
+    },
+    {
+      key: 'radiology', label: 'Radiology Reports', desc: 'Scans for you', icon: ScanLine,
+      progress: 0, locked: true, price: '₹999', boostPct: 12,
+      suggestedTests: SUGGESTED_RADIOLOGY_TESTS
+    },
+    {
+      key: 'genomics', label: 'Genomics Report', desc: 'Carrier & hereditary risk screening', icon: Dna,
+      comingSoon: true, locked: true,
+      suggestedTests: SUGGESTED_GENOMICS_TESTS
+    }
+  ];
 
   return (
     <main className="min-h-screen" style={{ background: 'var(--paper)' }}>
@@ -267,39 +289,15 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Premium Services */}
-        <h3 className="font-serif text-base font-semibold mb-3" style={{ color: 'var(--ink)' }}>Premium Services</h3>
-        <div className="grid sm:grid-cols-2 gap-3 text-left mb-6">
-          {SERVICES.map((service) => {
-            const Icon = service.icon;
-            return (
-              <div
-                key={service.id}
-                className="rounded-2xl p-4 border transition-colors duration-150 hover:border-(--teal) cursor-pointer flex flex-col justify-between"
-                style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}
-              >
-                <div>
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center mb-2.5"
-                    style={{ background: 'var(--soft-teal)' }}
-                  >
-                    <Icon className="w-4 h-4" style={{ color: 'var(--teal-d)' }} />
-                  </div>
-                  <h4 className="text-[13px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>{service.title}</h4>
-                  <p className="text-[11px] leading-relaxed" style={{ color: 'var(--muted)' }}>{service.description}</p>
-                </div>
-                <div className="flex items-center justify-between mt-3 pt-2 border-t" style={{ borderColor: 'var(--line)' }}>
-                  <span className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }}>{service.price}</span>
-                  <span
-                    className="text-[11px] font-medium flex items-center gap-1 transition-opacity duration-150 hover:opacity-70"
-                    style={{ color: 'var(--teal-d)' }}
-                  >
-                    Learn more <ArrowRight className="w-3 h-3" />
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+        {/* Health Profile — fill in your own data ahead of time, resumable per card */}
+        <div className="mb-6">
+          <h3 className="font-serif text-base font-semibold mb-1" style={{ color: 'var(--ink)' }}>Your Health Profile</h3>
+          <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>Pick up right where you left off — each card saves as you go.</p>
+          <CategoryHub
+            embedded
+            categories={healthProfileCategories}
+            onEnter={(key) => router.push(`/add-prospect?enter=${key}`)}
+          />
         </div>
 
         {/* Support */}

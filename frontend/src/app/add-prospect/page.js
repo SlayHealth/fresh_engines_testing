@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, cloneElement, isValidElement } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect, cloneElement, isValidElement, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { RefreshCw, Check, Share2, UserRound, HeartPulse, Brain, FlaskConical, ScanLine, Dna } from 'lucide-react';
 import { useCompatibility, calculateAge, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
@@ -19,7 +19,8 @@ import {
   GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS, RELATIONSHIP_STATUSES
 } from '../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS } from '../../constants/mentalHealthQuestions';
-import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS } from '../../constants/suggestedTests';
+import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS, SUGGESTED_GENOMICS_TESTS } from '../../constants/suggestedTests';
+import { aboutProgress as aboutProgressShared, lifestyleProgress, mentalProgress } from '../../utils/healthProfileProgress';
 
 const PROSPECT_MODE_OPTIONS = [
   { val: 'self', label: "I'll enter their details myself", desc: 'Fill in your prospect’s information right now' },
@@ -29,10 +30,18 @@ const PROSPECT_MODE_OPTIONS = [
 const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
-const ABOUT_LIFESTYLE_FIELDS = ['activity_level', 'daily_steps', 'occupation_style', 'drinking_habits', 'smoking_habits', 'tobacco_habits', 'sleep_cycle'];
-
 export default function AddProspectPage() {
+  return (
+    <Suspense fallback={null}>
+      <AddProspectPageInner />
+    </Suspense>
+  );
+}
+
+function AddProspectPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const deepLinkCategory = searchParams.get('enter');
 
   // ---- Flow-level navigation state ----
   const [showSelector, setShowSelector] = useState(true);
@@ -50,10 +59,6 @@ export default function AddProspectPage() {
   const [matchRunError, setMatchRunError] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [stepIndex, setStepIndex] = useState(0); // index within the active category / routing sub-flow
-  const [selfMentalOptIn, setSelfMentalOptIn] = useState(null); // 'yes' | 'skip' | null
-  const [selfMentalAnswers, setSelfMentalAnswers] = useState({});
-  const [prospectMentalOptIn, setProspectMentalOptIn] = useState(null);
-  const [prospectMentalAnswers, setProspectMentalAnswers] = useState({});
 
   const fillByProspect = prospectMode === 'invite';
 
@@ -72,6 +77,10 @@ export default function AddProspectPage() {
     setUserReport,
     prospectReport,
     setProspectReport,
+    selfMentalOptIn, setSelfMentalOptIn,
+    selfMentalAnswers, setSelfMentalAnswers,
+    prospectMentalOptIn, setProspectMentalOptIn,
+    prospectMentalAnswers, setProspectMentalAnswers,
     isUserUploading,
     setIsUserUploading,
     isProspectUploading,
@@ -328,6 +337,17 @@ export default function AddProspectPage() {
       router.push('/');
     }
   }, [router]);
+
+  // Deep link from the dashboard's health-profile cards (?enter=lifestyle etc.) —
+  // jump straight into that category for "self", skipping the selector/routing screens.
+  useEffect(() => {
+    if (deepLinkCategory) {
+      setShowSelector(false);
+      setActivePerson('self');
+      enterCategory(deepLinkCategory);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkCategory]);
 
   // Load active invites on mount
   useEffect(() => {
@@ -982,27 +1002,8 @@ export default function AddProspectPage() {
     return finalizeSteps(arr, advance);
   };
 
-  // ---- Progress calculations for the hub ----
-  const aboutProgress = (adapter) => {
-    const { form, nameField, genderField, dobField, cityField, isSelfPerson, needsNameStep } = adapter;
-    const fields = [form[genderField], form[dobField], form[cityField], form.height, form.weight, form.waist];
-    if (needsNameStep) fields.push(form[nameField]);
-    if (isSelfPerson) fields.push(prospectForm.meetingSource, form.relationshipStatus);
-    const filled = fields.filter((f) => f !== undefined && f !== null && f !== '').length;
-    return Math.round((filled / fields.length) * 100);
-  };
-
-  const lifestyleProgress = (form) => {
-    const filled = ABOUT_LIFESTYLE_FIELDS.filter((f) => !!form[f]).length;
-    return Math.round((filled / ABOUT_LIFESTYLE_FIELDS.length) * 100);
-  };
-
-  const mentalProgress = (optIn, answers) => {
-    if (optIn === 'skip') return 100;
-    if (optIn !== 'yes') return 0;
-    const answered = Object.keys(answers).length;
-    return Math.round((answered / MENTAL_HEALTH_QUESTIONS.length) * 100);
-  };
+  // ---- Progress calculations for the hub (shared with the dashboard's cards) ----
+  const aboutProgress = (adapter) => aboutProgressShared(adapter, prospectForm);
 
   // ---- Build category set for whichever person is active ----
   const selfAdapter = {
@@ -1053,7 +1054,8 @@ export default function AddProspectPage() {
       },
       {
         key: 'genomics', label: 'Genomics Report', desc: 'Carrier & hereditary risk screening', icon: Dna,
-        comingSoon: true, locked: true
+        comingSoon: true, locked: true,
+        suggestedTests: SUGGESTED_GENOMICS_TESTS
       }
     ];
   };
