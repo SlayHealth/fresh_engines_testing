@@ -267,6 +267,7 @@ export default function LoginPage() {
             onChange={(e) => setPhoneNumberInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
             autoFocus
+            autoComplete="tel-national"
             className={`${fieldInputClass} flex-1 min-w-0`}
             style={fieldInputStyle}
           />
@@ -286,6 +287,7 @@ export default function LoginPage() {
         onChange={(e) => setOnboardingForm({ ...onboardingForm, userName: e.target.value })}
         onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
         autoFocus
+        autoComplete="name"
         className={fieldInputClass}
         style={fieldInputStyle}
       />
@@ -334,6 +336,7 @@ export default function LoginPage() {
           onChange={(e) => setAuthOtp(e.target.value.replace(/\D/g, ''))}
           onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
           autoFocus
+          autoComplete="one-time-code"
           className={`${fieldInputClass} text-center text-2xl tracking-[0.3em] font-bold`}
           style={fieldInputStyle}
         />

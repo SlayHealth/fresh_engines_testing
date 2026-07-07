@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
-import { Sparkles } from 'lucide-react';
 
 /**
  * Brief branded welcome shown once, right after a first-time signup completes.
+ * The background artwork already contains the full logo + "slay.health"
+ * wordmark + heart mark centered in the frame, with a clear stretch of empty
+ * space beneath the heart — that's where the personalized greeting sits, so
+ * it reads as a caption under the brand mark rather than competing with it.
  * Auto-advances after a short delay, or the user can tap through immediately.
  */
 export default function SplashScreen({ name, onDone }) {
@@ -17,7 +19,7 @@ export default function SplashScreen({ name, onDone }) {
 
   useEffect(() => {
     const showTimer = setTimeout(() => setVisible(true), 30);
-    const doneTimer = setTimeout(() => onDoneRef.current(), 2400);
+    const doneTimer = setTimeout(() => onDoneRef.current(), 2600);
     return () => {
       clearTimeout(showTimer);
       clearTimeout(doneTimer);
@@ -26,29 +28,23 @@ export default function SplashScreen({ name, onDone }) {
 
   return (
     <main
-      className="h-dvh overflow-hidden flex flex-col items-center justify-center px-6 text-center wizard-bg cursor-pointer"
+      className="h-dvh overflow-hidden flex flex-col items-center justify-end px-6 pb-[9%] text-center cursor-pointer"
+      style={{
+        backgroundImage: 'url(/splash_screen.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}
       onClick={onDone}
     >
       <div
-        className="transition-all duration-700 ease-out"
-        style={{ opacity: visible ? 1 : 0, transform: visible ? 'translateY(0) scale(1)' : 'translateY(12px) scale(0.97)' }}
+        className="transition-all duration-700 ease-out max-w-[280px]"
+        style={{ opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(10px)' }}
       >
-        <div className="flex justify-center mb-6">
-          <Image src="/logo.png" alt="SlayHealth" width={180} height={103} priority className="h-12 w-auto object-contain" />
-        </div>
-
-        <div
-          className="mx-auto mb-6 w-16 h-16 rounded-full flex items-center justify-center animate-pulse"
-          style={{ background: 'var(--soft-teal)' }}
-        >
-          <Sparkles className="w-8 h-8" style={{ color: 'var(--teal-d)' }} />
-        </div>
-
-        <h1 className="font-serif text-2xl sm:text-3xl mb-3" style={{ color: 'var(--ink)' }}>
+        <h1 className="font-serif text-xl sm:text-2xl leading-snug" style={{ color: 'var(--ink)' }}>
           Welcome{name ? `, ${name}` : ''}!
         </h1>
-        <p className="text-sm sm:text-base max-w-xs mx-auto" style={{ color: 'var(--muted)' }}>
-          Your account is ready. Let&apos;s bring clarity to your journey together.
+        <p className="text-xs sm:text-sm mt-1.5 leading-snug" style={{ color: 'var(--muted)' }}>
+          Your account is ready — let&apos;s bring clarity to your journey together.
         </p>
       </div>
     </main>
