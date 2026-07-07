@@ -219,8 +219,15 @@ async function analyzeChronic(req, res, next) {
     const idrsA = calculateIDRS(partnerA.age, partnerA.waist, partnerA.lifestyle.activity, partnerA.history, partnerA.sex);
     const idrsB = calculateIDRS(partnerB.age, partnerB.waist, partnerB.lifestyle.activity, partnerB.history, partnerB.sex);
     
-    const idrsLrA = idrsA >= 60 ? 1.82 : 0.46;
-    const idrsLrB = idrsB >= 60 ? 1.82 : 0.46;
+    let idrsLrA = 1.0;
+    if (idrsA >= 60) idrsLrA = 1.82;
+    else if (idrsA >= 30) idrsLrA = 1.1; // Moderate Risk
+    else idrsLrA = 0.46; // Low Risk
+
+    let idrsLrB = 1.0;
+    if (idrsB >= 60) idrsLrB = 1.82;
+    else if (idrsB >= 30) idrsLrB = 1.1; // Moderate Risk
+    else idrsLrB = 0.46; // Low Risk
 
     // Calculate Lifestyle Evidence (Disjoint from IDRS, with sharedness)
     const lifestyleResultA = getEffectiveLifestyleLR(partnerA.lifestyle, partnerB.lifestyle);

@@ -4,6 +4,10 @@ const { v4: uuidv4 } = require('uuid');
 const { db } = require('../storage/postgres.service');
 const logger = require('../../utils/logger');
 
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET)) {
+  throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be set in production — refusing to start with an insecure fallback secret.');
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_jwt_access_secret_key_12345';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_jwt_refresh_secret_key_12345';
 

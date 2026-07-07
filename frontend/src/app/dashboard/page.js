@@ -2,34 +2,63 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  Sparkles, LogOut, Activity, MessageSquare, Plus, Clock, 
-  Calendar, Heart, ChevronRight, Gift, Stethoscope, Globe, 
-  ArrowRight, User, CheckCircle, MapPin, Users 
+import {
+  Sparkles, LogOut, Activity, MessageSquare, Plus, Clock,
+  Calendar, Heart, ChevronRight, Stethoscope, Globe,
+  ArrowRight, Pencil
 } from 'lucide-react';
-import { useCompatibility, calculateAge } from '../../contexts/CompatibilityContext';
+import { useCompatibility, calculateAge, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
 import styles from '../page.module.css';
+
+const SERVICES = [
+  {
+    id: 'diagnostics',
+    title: 'Controlled Diagnostic Reports',
+    description: 'Verified results from NABL-certified partner labs.',
+    price: '₹2,500',
+    icon: Stethoscope
+  },
+  {
+    id: 'counselling',
+    title: 'Pre-Marital Health Counselling',
+    description: 'Personalised guidance from certified specialists.',
+    price: 'Free Trial',
+    icon: MessageSquare
+  },
+  {
+    id: 'concierge-domestic',
+    title: 'Concierge (Domestic)',
+    description: 'At-home testing and a private health manager.',
+    price: '₹50,000',
+    icon: Sparkles
+  },
+  {
+    id: 'concierge-nri',
+    title: 'Concierge (NRIs)',
+    description: 'Cross-border pre-marital health concierge.',
+    price: '₹1,25,000',
+    icon: Globe
+  }
+];
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { 
-    user, 
-    runsUsed, 
-    chatsUsed, 
-    isUpgradingQuota, 
-    matchesList, 
-    isMatchesLoading, 
-    fetchRecentMatches, 
+  const {
+    user,
+    runsUsed,
+    chatsUsed,
+    isUpgradingQuota,
+    matchesList,
+    isMatchesLoading,
+    fetchRecentMatches,
     restoreMatchSession,
-    handleResetQuota, 
+    handleResetQuota,
     handleLogout,
     chronicResult,
     mfrResult,
     setOnboardingStep,
     setOnboardingForm
   } = useCompatibility();
-
-  const cn = (...classes) => classes.filter(Boolean).join(' ');
 
   // Auth / Onboarding Redirect Guard
   useEffect(() => {
@@ -38,7 +67,7 @@ export default function DashboardPage() {
       router.push('/');
     } else {
       const parsed = JSON.parse(savedUser);
-      if (!parsed.name || !parsed.gender || !parsed.activity_level) {
+      if (!parsed.name) {
         setOnboardingStep(1);
         router.push('/onboarding');
       } else {
@@ -49,327 +78,239 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
+  const scansLeft = Math.max(0, 1 - runsUsed);
+  const chatsLeft = Math.max(0, 5 - chatsUsed);
+  const editProfile = () => {
+    setOnboardingForm(buildOnboardingFormFromUser(user));
+    router.push('/add-prospect');
+  };
+
   return (
-    <main className={styles.container} style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1.5rem' }}>
-      {/* Portal Header */}
-      <header className={styles.portalHeader}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Sparkles size={24} style={{ color: '#28c79a' }} />
-          <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#2b2b3f', margin: 0 }}>SlayHealth Premarital Portal</h1>
-        </div>
-        
-        <div className={styles.userInfoBadge}>
-          <div className={styles.userAvatar}>
-            {user.name ? user.name[0].toUpperCase() : 'U'}
+    <main className="min-h-screen" style={{ background: 'var(--paper)' }}>
+      <div className={`max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-7 ${styles.dashboard}`}>
+
+        {/* Identity bar */}
+        <header className="flex items-center justify-between gap-3 pb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white font-serif font-semibold text-sm shrink-0"
+              style={{ background: 'var(--pink)' }}
+            >
+              {user.name ? user.name[0].toUpperCase() : 'U'}
+            </div>
+            <div className="min-w-0">
+              <p className="font-serif text-[15px] leading-tight font-semibold truncate" style={{ color: 'var(--ink)' }}>
+                {user.name || 'User'}
+              </p>
+              <p className="text-[11px] leading-tight truncate" style={{ color: 'var(--muted)' }}>
+                {user.phone_number}
+              </p>
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: '#2b2b3f' }}>{user.name || 'User Profile'}</span>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>{user.phone_number}</span>
-          </div>
-          <button className={styles.logoutBtn} onClick={() => { handleLogout(); router.push('/'); }}>
-            <LogOut size={14} />
+          <button
+            onClick={() => { handleLogout(); router.push('/'); }}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-full transition-colors duration-150 hover:bg-black/5 shrink-0"
+            style={{ color: 'var(--muted)' }}
+          >
+            <LogOut className="w-3.5 h-3.5" />
             Logout
           </button>
-        </div>
-      </header>
+        </header>
 
-      {/* Free Tier Quota Panel */}
-      <section className={styles.quotaWidget}>
-        <div className={styles.quotaText}>
-          <h3 className={styles.quotaTitle}>Free Plan Active</h3>
-          <p className={styles.quotaSubtitle}>Enrolled by default. Experience our clinical match matrix and counselor chat.</p>
-        </div>
+        {/* Quota + profile strip */}
+        <div
+          className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-3 border-y"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full"
+            style={{ background: 'var(--soft-teal)', color: 'var(--teal-d)' }}
+          >
+            <Activity className="w-3 h-3" />
+            {scansLeft}/1 scan
+          </span>
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full"
+            style={{ background: 'var(--soft-amber)', color: 'var(--amber-d)' }}
+          >
+            <MessageSquare className="w-3 h-3" />
+            {chatsLeft}/5 chats
+          </span>
 
-        <div className={styles.quotaBadgesList}>
-          <span className={styles.quotaLimitBadge}>
-            <Activity size={14} style={{ color: '#28c79a' }} />
-            Match scan left: <strong>{Math.max(0, 1 - runsUsed)}/1</strong>
+          <span className="text-[11px]" style={{ color: 'var(--muted)' }}>
+            {calculateAge(user.dob)}y{user.gender ? ` · ${user.gender}` : ''}{user.city ? ` · ${user.city}` : ''}
           </span>
-          <span className={styles.quotaLimitBadge}>
-            <MessageSquare size={14} style={{ color: '#d94386' }} />
-            Counselor chat left: <strong>{Math.max(0, 5 - chatsUsed)}/5</strong>
-          </span>
-          
+
+          <button
+            onClick={editProfile}
+            className="inline-flex items-center gap-1 text-[11px] font-medium transition-colors duration-150 hover:opacity-70"
+            style={{ color: 'var(--muted)' }}
+          >
+            <Pencil className="w-3 h-3" />
+            Edit
+          </button>
+
           {(runsUsed > 0 || chatsUsed > 0) && (
-            <button 
-              className={styles.upgradeTextBtn} 
+            <button
               onClick={handleResetQuota}
               disabled={isUpgradingQuota}
+              className="text-[11px] font-semibold underline ml-auto transition-opacity duration-150 hover:opacity-70"
+              style={{ color: 'var(--teal-d)' }}
             >
-              {isUpgradingQuota ? 'Resetting...' : 'Reset Quota / Demo Premium'}
+              {isUpgradingQuota ? 'Resetting…' : 'Reset quota'}
             </button>
           )}
         </div>
-      </section>
 
-      {/* Main Grid */}
-      <div className="grid lg:grid-cols-3 gap-6 mt-6">
-        {/* Left Column - Main Content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Free Matches Banner */}
-          <div className="bg-gradient-to-br from-[#DE457D] to-teal-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-            <div className="absolute top-3 left-3 bg-white/20 text-white text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1">
-              <Gift className="w-3 h-3" />
-              Free Plan
-            </div>
-            <div className="pt-6">
-              <h2 className="text-4xl font-bold mb-1">
-                {Math.max(0, 1 - runsUsed)} Matches
+        {user.userRelation && user.userRelation !== 'Self' && (
+          <p className="text-[11px] pt-2" style={{ color: 'var(--muted)' }}>
+            Filled by {user.userName || user.name} ({user.userRelation})
+          </p>
+        )}
+
+        {/* Primary CTA */}
+        <div className="rounded-2xl p-5 sm:p-6 mt-4 mb-4 relative overflow-hidden" style={{ background: 'var(--pink)' }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-semibold mb-1.5 text-white/80">
+                Free Plan
+              </p>
+              <h2 className="font-serif text-2xl text-white mb-1 leading-tight">
+                {scansLeft} match{scansLeft === 1 ? '' : 'es'} available
               </h2>
-              <p className="text-white/80 mb-6">Available for free analysis</p>
-              <button
-                onClick={() => router.push('/add-prospect')}
-                className="bg-white text-[#DE457D] px-6 py-3 rounded-xl font-semibold hover:bg-white/90 transition-all flex items-center gap-2 shadow-md hover:scale-[1.02]"
-              >
-                <Plus className="w-5 h-5" />
-                New Compatibility Check
-              </button>
+              <p className="text-xs text-white/70">Begin a new compatibility analysis</p>
             </div>
+            <Sparkles className="w-7 h-7 shrink-0 text-white/85" />
           </div>
 
-          {/* Recent Activity */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#DE457D]" />
-                Recent Activity
-              </h3>
-            </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => router.push('/add-prospect')}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-shadow duration-150 hover:shadow-[0_4px_20px_rgba(0,0,0,0.2)]"
+              style={{ background: '#fff', color: 'var(--pink-d)' }}
+            >
+              <Plus className="w-4 h-4" />
+              New Compatibility Check
+            </button>
+            {chronicResult && mfrResult && (
+              <button
+                onClick={() => router.push('/core-engine/story')}
+                className="px-4 rounded-xl text-sm font-medium text-white border border-white/30 transition-colors duration-150 hover:bg-white/10"
+              >
+                View Reports
+              </button>
+            )}
+          </div>
+        </div>
 
+        {/* Recent Activity — height-capped so history never pushes the page down */}
+        <div className="rounded-2xl border overflow-hidden mb-5" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+          <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--line)' }}>
+            <Clock className="w-4 h-4" style={{ color: 'var(--teal)' }} />
+            <h3 className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Recent Activity</h3>
+          </div>
+
+          <div className="max-h-[228px] overflow-y-auto">
             {isMatchesLoading ? (
-              <div className="p-8 text-center text-slate-500">
-                Loading matches list...
+              <div className="p-6 text-center text-xs" style={{ color: 'var(--muted)' }}>
+                Loading matches…
               </div>
             ) : matchesList.length > 0 ? (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y" style={{ borderColor: 'var(--line)' }}>
                 {matchesList.map((match) => (
                   <div
                     key={match.id}
-                    className="p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="px-4 py-2.5 flex items-center gap-3 cursor-pointer transition-colors duration-150 hover:bg-black/2"
                     onClick={() => {
                       restoreMatchSession(match);
-                      router.push('/core-engine/chronic');
+                      router.push('/core-engine/story');
                     }}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-                        <span className="text-white font-bold text-sm">{match.score || 85}%</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-900 truncate">
-                          {match.user?.name || user.name} & {match.prospect?.name || 'Prospect'}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-slate-500 flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(match.createdAt).toLocaleDateString()}
-                          </span>
-                          {match.prospect?.meetingSource && (
-                            <span className="flex items-center gap-1 text-xs text-slate-600">
-                              <span className="text-slate-300">•</span>
-                              <Heart className="w-3 h-3 text-pink-500" />
-                              {match.prospect.meetingSource}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: 'var(--soft-teal)' }}
+                    >
+                      <span className="text-[11px] font-bold" style={{ color: 'var(--teal-d)' }}>{match.score || 85}%</span>
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>
+                        {match.user?.name || user.name} & {match.prospect?.name || 'Prospect'}
+                      </p>
+                      <div className="flex items-center gap-1.5 text-[10.5px]" style={{ color: 'var(--muted)' }}>
+                        <Calendar className="w-3 h-3" />
+                        {new Date(match.createdAt).toLocaleDateString()}
+                        {match.prospect?.meetingSource && (
+                          <>
+                            <span>·</span>
+                            <Heart className="w-3 h-3" style={{ color: 'var(--magenta)' }} />
+                            {match.prospect.meetingSource}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 shrink-0" style={{ color: 'var(--muted)' }} />
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Heart className="w-8 h-8 text-slate-400" />
-                </div>
-                <p className="text-slate-600 mb-4">No compatibility checks yet</p>
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm mb-1.5" style={{ color: 'var(--muted)' }}>No compatibility checks yet</p>
                 <button
                   onClick={() => router.push('/add-prospect')}
-                  className="text-[#DE457D] font-medium hover:underline"
+                  className="text-xs font-semibold transition-opacity duration-150 hover:opacity-70"
+                  style={{ color: 'var(--teal-d)' }}
                 >
                   Start your first check →
                 </button>
               </div>
             )}
           </div>
-
-          {/* Service Banners */}
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Premium Services</h3>
-            <div className="grid sm:grid-cols-2 gap-4 text-left">
-              {[
-                {
-                  id: 'diagnostics',
-                  title: 'Controlled Diagnostic Reports',
-                  description: "Don't rely on uncertain reports. Get verified results from NABL-certified partner labs.",
-                  subtext: 'Accurate, controlled testing that protects your decisions.',
-                  price: '₹2,500',
-                  icon: <Stethoscope className="w-5 h-5 text-blue-500" />,
-                  gradient: 'from-blue-50 to-cyan-50 border-blue-100'
-                },
-                {
-                  id: 'counselling',
-                  title: 'Pre-Marital Health Counselling',
-                  description: 'Talk to real doctors, not the internet. Get personalised pre-marital guidance from certified specialists.',
-                  subtext: 'Expert advice for your journey ahead.',
-                  price: 'Free Trial',
-                  icon: <MessageSquare className="w-5 h-5 text-purple-500" />,
-                  gradient: 'from-purple-50 to-pink-50 border-purple-100'
-                },
-                {
-                  id: 'concierge-domestic',
-                  title: 'Concierge (Domestic)',
-                  description: "Exclusive concierge care for India's high-intent couples.",
-                  subtext: 'At-home testing, curated doctors, and a private health manager for complete clarity.',
-                  price: '₹50,000',
-                  icon: <Sparkles className="w-5 h-5 text-amber-500" />,
-                  gradient: 'from-amber-50 to-orange-50 border-amber-100'
-                },
-                {
-                  id: 'concierge-nri',
-                  title: 'Concierge (NRIs)',
-                  description: 'Your cross-border pre-marital health concierge anywhere in the world.',
-                  subtext: 'International testing, global specialists, and seamless logistics.',
-                  price: '₹1,25,000',
-                  icon: <Globe className="w-5 h-5 text-emerald-500" />,
-                  gradient: 'from-emerald-50 to-teal-50 border-emerald-100'
-                }
-              ].map((service) => (
-                <div
-                  key={service.id}
-                  className={cn(
-                    "bg-white border rounded-2xl p-5 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between",
-                    service.gradient
-                  )}
-                >
-                  <div>
-                    <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition-transform">
-                      {service.icon}
-                    </div>
-                    <h4 className="font-bold text-slate-900 mb-1">{service.title}</h4>
-                    <p className="text-xs text-slate-600 mb-2 leading-relaxed">{service.description}</p>
-                    <p className="text-[10px] text-slate-500 mb-3">{service.subtext}</p>
-                  </div>
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100/50">
-                    <span className="text-xs font-semibold text-slate-900">
-                      {service.price}
-                    </span>
-                    <button className="text-[#DE457D] text-xs font-medium flex items-center gap-1 hover:underline">
-                      Learn more <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
-        {/* Right Column - Profile Summary & Quick Actions */}
-        <div className="space-y-6 text-left">
-          {/* User Profile Card */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 bg-gradient-to-br from-[#DE457D] to-teal-400 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-md">
-                {user.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">{user.name || 'User'}</h3>
-                <p className="text-xs text-slate-500 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3 text-green-500" />
-                  Profile Verified
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-3 text-xs">
-                <User className="w-4 h-4 text-slate-400" />
-                <span className="text-slate-500">Age:</span>
-                <span className="font-semibold text-slate-900 ml-auto">{calculateAge(user.dob)} years</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                <Heart className="w-4 h-4 text-slate-400" />
-                <span className="text-slate-500">Gender:</span>
-                <span className="font-semibold text-slate-900 ml-auto capitalize">{user.gender || '--'}</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                <MapPin className="w-4 h-4 text-slate-400" />
-                <span className="text-slate-500">City:</span>
-                <span className="font-semibold text-slate-900 ml-auto capitalize">{user.city || '--'}</span>
-              </div>
-              {user.userRelation !== 'Self' && (
-                <div className="flex items-center gap-3 text-xs pt-2 border-t border-slate-100">
-                  <Users className="w-4 h-4 text-slate-400" />
-                  <span className="text-slate-500">Filled by:</span>
-                  <span className="font-semibold text-slate-900 ml-auto">{user.userName || user.name} ({user.userRelation})</span>
-                </div>
-              )}
-            </div>
-            <button 
-              onClick={() => {
-                setOnboardingStep(1);
-                setOnboardingForm({
-                  userName: user.userName || user.name || '',
-                  userRelation: user.userRelation || 'Self',
-                  candidateName: user.candidateName || user.name || '',
-                  candidateGender: user.gender || '',
-                  candidateDob: user.dob || '',
-                  candidateCity: user.city || '',
-                  relationshipStatus: user.relationshipStatus || 'Single',
-                  marriageTimeline: user.marriageTimeline || 'Not sure yet',
-                  activity_level: user.activity_level || '',
-                  daily_steps: user.daily_steps || '',
-                  occupation_style: user.occupation_style || '',
-                  drinking_habits: user.drinking_habits || '',
-                  smoking_habits: user.smoking_habits || '',
-                  tobacco_habits: user.tobacco_habits || '',
-                  sleep_cycle: user.sleep_cycle || '',
-                  height: user.height || '',
-                  weight: user.weight || '',
-                  waist: user.waist || '',
-                  menstrualCycle: user.menstrualCycle || ''
-                });
-                router.push('/onboarding');
-              }}
-              className="w-full mt-4 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl font-medium transition-all text-xs"
-            >
-              Edit Profile
-            </button>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-            <h3 className="font-bold text-slate-900 mb-4 text-sm">Quick Actions</h3>
-            <div className="space-y-3">
-              <button
-                onClick={() => router.push('/add-prospect')}
-                className="w-full bg-[#DE457D] hover:bg-[#c93d6f] text-white py-3 rounded-xl font-semibold transition-all hover:scale-[1.02] flex items-center justify-center gap-2 text-sm shadow-sm"
+        {/* Premium Services */}
+        <h3 className="font-serif text-base font-semibold mb-3" style={{ color: 'var(--ink)' }}>Premium Services</h3>
+        <div className="grid sm:grid-cols-2 gap-3 text-left mb-6">
+          {SERVICES.map((service) => {
+            const Icon = service.icon;
+            return (
+              <div
+                key={service.id}
+                className="rounded-2xl p-4 border transition-colors duration-150 hover:border-(--teal) cursor-pointer flex flex-col justify-between"
+                style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}
               >
-                <Plus className="w-5 h-5" />
-                New Compatibility Check
-              </button>
-              {chronicResult && mfrResult && (
-                <button
-                  onClick={() => router.push('/core-engine/chronic')}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm"
-                >
-                  View Active Reports
-                </button>
-              )}
-            </div>
-          </div>
+                <div>
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center mb-2.5"
+                    style={{ background: 'var(--soft-teal)' }}
+                  >
+                    <Icon className="w-4 h-4" style={{ color: 'var(--teal-d)' }} />
+                  </div>
+                  <h4 className="text-[13px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>{service.title}</h4>
+                  <p className="text-[11px] leading-relaxed" style={{ color: 'var(--muted)' }}>{service.description}</p>
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-2 border-t" style={{ borderColor: 'var(--line)' }}>
+                  <span className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }}>{service.price}</span>
+                  <span
+                    className="text-[11px] font-medium flex items-center gap-1 transition-opacity duration-150 hover:opacity-70"
+                    style={{ color: 'var(--teal-d)' }}
+                  >
+                    Learn more <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-          {/* Support Card */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-md">
-            <h3 className="font-bold mb-2 text-sm">Need Help?</h3>
-            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-              Our medical team is here to assist you with any questions about your health compatibility journey.
-            </p>
-            <button className="bg-white/10 hover:bg-white/20 text-white py-2 px-4 rounded-lg text-xs font-medium transition-all">
-              Contact Support
-            </button>
-          </div>
+        {/* Support */}
+        <div className="rounded-2xl p-5" style={{ background: 'var(--ink)' }}>
+          <h3 className="font-serif text-sm font-semibold mb-1.5 text-white">Need Help?</h3>
+          <p className="text-xs text-white/55 mb-3 leading-relaxed">
+            Our medical team is here to assist you with any questions about your health compatibility journey.
+          </p>
+          <button className="bg-white/10 hover:bg-white/20 text-white py-2 px-4 rounded-lg text-xs font-medium transition-colors duration-150">
+            Contact Support
+          </button>
         </div>
       </div>
     </main>

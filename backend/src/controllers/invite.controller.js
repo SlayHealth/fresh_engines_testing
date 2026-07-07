@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { db } = require('../services/storage/postgres.service');
 const logger = require('../utils/logger');
-const whatsappInviteService = require('../services/notification/whatsappInvite.service');
+const reportGenerationService = require('../services/compatibility/reportGeneration.service');
 
 // Import parsing services for background processing
 const ocrProvider = require('../services/ocr/ocrProvider');
@@ -15,6 +15,9 @@ const radiologyController = require('./radiology.controller');
 // Import scoring & matching logic
 const chronicController = require('./chronic.controller');
 const mfrController = require('./mfr.controller');
+const { computeMentalResult } = require('./mental.controller');
+const ontologyMapper = require('../services/parser/ontologyMapper.service');
+
 function calculateAge(dobString) {
   if (!dobString) return 30;
   const birthDate = new Date(dobString);
@@ -36,6 +39,21 @@ function classifyWaist(waistVal, gender) {
     return 'Normal';
   }
 }
+
+/**
+ * Content-driven gender resolver.
+ */
+function resolveGenderRoleFromReport(extractedJson, rawText = '') {
+  const resolved = ontologyMapper.resolveGenderRole(extractedJson, rawText);
+  if (resolved) {
+    logger.info(`[resolveGenderRoleFromReport] Resolved ${resolved.toUpperCase()} from report content`);
+  } else {
+    logger.warn('[resolveGenderRoleFromReport] Could not determine gender from report contents');
+  }
+  return resolved;
+}
+
+
 
 // Map for active SSE connections: userId -> Array of response objects
 const activeConnections = new Map();
@@ -63,23 +81,9 @@ async function createInvite(req, res, next) {
   }
 
   try {
-    const { prospectName, prospectPhone } = req.body;
-    if (!prospectName || !prospectPhone) {
-      return res.status(400).json({ success: false, error: 'Prospect Name and WhatsApp Phone Number are required' });
-    }
-
-    // Normalize phone number (E.164)
-    let cleanPhone = prospectPhone.replace(/[\s\-\(\)]/g, '');
-    if (cleanPhone.startsWith('+')) {
-      cleanPhone = '+' + cleanPhone.replace(/\D/g, '');
-    } else {
-      if (/^\d{10}$/.test(cleanPhone)) {
-        cleanPhone = '+91' + cleanPhone;
-      } else if (cleanPhone.startsWith('91') && cleanPhone.length === 12) {
-        cleanPhone = '+' + cleanPhone;
-      } else {
-        cleanPhone = '+' + cleanPhone.replace(/\D/g, '');
-      }
+    const { prospectName, mentalAnswers } = req.body;
+    if (!prospectName) {
+      return res.status(400).json({ success: false, error: 'Prospect Name is required' });
     }
 
     // Generate secure random token (32 bytes)
@@ -87,51 +91,40 @@ async function createInvite(req, res, next) {
     const inviteId = uuidv4();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Find or create prospect user placeholder
+    // Create a placeholder prospect user row, keyed by a synthetic identifier
+    // (no phone number is collected anymore — the inviter shares the link manually).
     const prospectUserId = uuidv4();
+    const placeholderPhone = `invite-${inviteId}`;
     const userRes = await db.query(
       `INSERT INTO users (id, phone_number, name)
        VALUES ($1, $2, $3)
-       ON CONFLICT (phone_number) 
-       DO UPDATE SET name = EXCLUDED.name
        RETURNING id`,
-      [prospectUserId, cleanPhone, prospectName]
+      [prospectUserId, placeholderPhone, prospectName]
     );
     const finalProspectUserId = userRes.rows[0].id;
 
-    // Save invite record
+    const mentalAnswersJson = mentalAnswers && Object.keys(mentalAnswers).length > 0
+      ? JSON.stringify({ inviter: mentalAnswers })
+      : null;
+
+    // Save invite record — status starts at 'sent' since the link is ready to share immediately
     await db.query(
-      `INSERT INTO prospect_invites (id, user_id, prospect_user_id, prospect_name, prospect_phone, token, status, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [inviteId, inviterId, finalProspectUserId, prospectName, cleanPhone, token, 'created', expiresAt]
+      `INSERT INTO prospect_invites (id, user_id, prospect_user_id, prospect_name, prospect_phone, token, status, expires_at, mental_answers_json)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [inviteId, inviterId, finalProspectUserId, prospectName, null, token, 'sent', expiresAt, mentalAnswersJson]
     );
 
-    // Fetch inviter's name
-    const inviterRes = await db.query('SELECT name FROM users WHERE id = $1', [inviterId]);
-    const inviterName = inviterRes.rows[0]?.name || 'Your Partner';
-
-    // Dispatch WhatsApp template in background
-    whatsappInviteService.sendInvite(cleanPhone, prospectName, inviterName, token)
-      .then(async (msgId) => {
-        await db.query('UPDATE prospect_invites SET status = $1, whatsapp_message_id = $2 WHERE id = $3', ['sent', msgId, inviteId]);
-        broadcastInviteUpdate(inviterId, inviteId, 'sent', { msgId });
-      })
-      .catch(async (err) => {
-        logger.error(`Failed to send WhatsApp invite to ${cleanPhone}: ${err.message}`);
-        // Keep status as created or update to failed
-        await db.query('UPDATE prospect_invites SET status = $1 WHERE id = $2', ['failed', inviteId]);
-        broadcastInviteUpdate(inviterId, inviteId, 'failed', { error: err.message });
-      });
+    const link = `${process.env.APP_URL || 'http://localhost:3000'}/invite/${token}`;
 
     return res.status(201).json({
       success: true,
-      message: 'Invite created and dispatch queued',
+      message: 'Invite link generated',
       invite: {
         id: inviteId,
         prospectName,
-        prospectPhone: cleanPhone,
         token,
-        status: 'created',
+        link,
+        status: 'sent',
         expiresAt
       }
     });
@@ -354,7 +347,40 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
     }
 
     const matchId = uuidv4();
-    const isInviterMale = inviter.gender?.toLowerCase() === 'male';
+
+    // --- Content-Driven Gender Resolution ---
+    // Instead of trusting user profile gender (which can be stale or misconfigured),
+    // inspect the actual parsed report content to determine which report belongs to
+    // which biological sex. Falls back to profile gender if unresolvable.
+    let inviterParsedData = null;
+    let prospectParsedData = null;
+    try {
+      const inviterRepRes = await db.query("SELECT extracted_json::text FROM reports WHERE id = $1", [inviterPathologyId]);
+      const prospectRepRes = await db.query("SELECT extracted_json::text FROM reports WHERE id = $1", [pathologyReportId]);
+      inviterParsedData = inviterRepRes.rows[0]?.extracted_json ? JSON.parse(inviterRepRes.rows[0].extracted_json) : null;
+      prospectParsedData = prospectRepRes.rows[0]?.extracted_json ? JSON.parse(prospectRepRes.rows[0].extracted_json) : null;
+    } catch (parseErr) {
+      logger.warn(`[processCompatibilityBackground] Could not parse reports for gender resolution: ${parseErr.message}`);
+    }
+
+    const inviterReportGender = resolveGenderRoleFromReport(inviterParsedData);
+    const prospectReportGender = resolveGenderRoleFromReport(prospectParsedData);
+
+    // Determine the canonical gender assignment:
+    // If both resolve cleanly, use them directly. If one resolves, use that + its complement.
+    // Otherwise fall back to profile gender.
+    let isInviterMale;
+    if (inviterReportGender === 'male' || prospectReportGender === 'female') {
+      isInviterMale = true;
+      logger.info('[processCompatibilityBackground] Content-resolved: inviter=MALE, prospect=FEMALE');
+    } else if (inviterReportGender === 'female' || prospectReportGender === 'male') {
+      isInviterMale = false;
+      logger.info('[processCompatibilityBackground] Content-resolved: inviter=FEMALE, prospect=MALE');
+    } else {
+      // Fall back to profile gender
+      isInviterMale = inviter.gender?.toLowerCase() === 'male';
+      logger.warn(`[processCompatibilityBackground] Gender resolution fallback to profile: inviter.gender=${inviter.gender}`);
+    }
 
     const maleReportId = isInviterMale ? inviterPathologyId : pathologyReportId;
     const femaleReportId = isInviterMale ? pathologyReportId : inviterPathologyId;
@@ -393,6 +419,7 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
       sleep: inviter.sleep_cycle === 'irregular' || prospect.sleep_cycle === 'irregular' ? 'Irregular' : 'Normal',
       stress: 'Moderate'
     };
+
 
     // Run actual matching analyses using the Express controller handlers directly via mock req/res
     const mockReqChronic = {
@@ -467,27 +494,38 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
       throw new Error('Clinical matching engines returned empty results during background matching');
     }
 
-    const compatibility_score = chronicResultData.calculations?.coupleIndex 
-      ? (chronicResultData.calculations.coupleIndex / 100) 
-      : 0.88;
+    const inviterName = chronicResultData.partner_A?.name || maleManual.name || 'Partner A';
+    const prospectName = chronicResultData.partner_B?.name || femaleManual.name || 'Partner B';
 
-    const analysisResult = {
-      score: compatibility_score,
+    // If either side opted into the mental health questionnaire, score it now
+    let mentalResult = null;
+    if (invite.mental_answers_json) {
+      try {
+        const stored = JSON.parse(invite.mental_answers_json);
+        if (stored.inviter || stored.prospect) {
+          mentalResult = await computeMentalResult(stored.inviter || {}, stored.prospect || {}, {
+            cacheKey: `mental_insights_${matchId}`
+          });
+        }
+      } catch (mentalErr) {
+        logger.error(`[Background Match] Mental health scoring failed: ${mentalErr.message}`);
+      }
+    }
+
+    // Compile and save/update the match record in DB
+    await reportGenerationService.compileMatchReport(matchId, {
+      userId,
+      maleReportId,
+      femaleReportId,
       chronicResult: chronicResultData,
       mfrResult: mfrResultData,
-      mentalResult: null,
-      details: {
-        male_manual_data: maleManual,
-        female_manual_data: femaleManual,
-        shared_lifestyle: sharedLifestyle
-      }
-    };
-
-    // Save match in DB
-    await db.query(`
-      INSERT INTO matches (id, user_id, male_report_id, female_report_id, status, compatibility_score, analysis_json)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [matchId, userId, maleReportId, femaleReportId, 'completed', compatibility_score, JSON.stringify(analysisResult)]);
+      mentalResult,
+      maleManual,
+      femaleManual,
+      sharedLifestyle,
+      inviterName,
+      prospectName
+    });
 
     // Update invite to completed
     await db.query("UPDATE prospect_invites SET status = 'completed' WHERE id = $1", [inviteId]);
@@ -671,12 +709,26 @@ async function submitQuestionnaire(req, res, next) {
       );
     }
 
+    // Merge prospect's mental-health answers (if any) into whatever the inviter already stored
+    let mentalAnswersJson = invite.mental_answers_json;
+    if (req.body.mentalAnswers) {
+      try {
+        const prospectMentalAnswers = JSON.parse(req.body.mentalAnswers);
+        if (prospectMentalAnswers && Object.keys(prospectMentalAnswers).length > 0) {
+          const existing = invite.mental_answers_json ? JSON.parse(invite.mental_answers_json) : {};
+          mentalAnswersJson = JSON.stringify({ ...existing, prospect: prospectMentalAnswers });
+        }
+      } catch (e) {
+        logger.error(`Failed to parse prospect mentalAnswers: ${e.message}`);
+      }
+    }
+
     // Update invite status to submitted and store report IDs
     await db.query(
-      `UPDATE prospect_invites 
-       SET status = 'questionnaire_submitted', pathology_report_id = $1, radiology_report_id = $2 
-       WHERE id = $3`,
-      [pathologyReportId, radiologyReportId, invite.id]
+      `UPDATE prospect_invites
+       SET status = 'questionnaire_submitted', pathology_report_id = $1, radiology_report_id = $2, mental_answers_json = $3
+       WHERE id = $4`,
+      [pathologyReportId, radiologyReportId, mentalAnswersJson, invite.id]
     );
     broadcastInviteUpdate(invite.user_id, invite.id, 'questionnaire_submitted');
 

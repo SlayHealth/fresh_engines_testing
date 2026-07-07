@@ -152,7 +152,7 @@ async function initDB() {
           user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
           prospect_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
           prospect_name TEXT NOT NULL,
-          prospect_phone TEXT NOT NULL,
+          prospect_phone TEXT,
           token TEXT UNIQUE NOT NULL,
           whatsapp_message_id TEXT,
           status TEXT DEFAULT 'created',
@@ -168,9 +168,22 @@ async function initDB() {
 
     // Migration to add pathology and radiology report columns if table already exists
     await pool.query(`
-      ALTER TABLE prospect_invites 
+      ALTER TABLE prospect_invites
       ADD COLUMN IF NOT EXISTS pathology_report_id TEXT DEFAULT NULL,
       ADD COLUMN IF NOT EXISTS radiology_report_id TEXT DEFAULT NULL;
+    `);
+
+    // Invites are now shared as a manually-copied link rather than sent via WhatsApp,
+    // so a prospect phone number is no longer collected.
+    await pool.query(`
+      ALTER TABLE prospect_invites ALTER COLUMN prospect_phone DROP NOT NULL;
+    `);
+
+    // Optional mental-health questionnaire answers, collected independently by
+    // the inviter (at link-generation time) and the prospect (at submission time).
+    await pool.query(`
+      ALTER TABLE prospect_invites
+      ADD COLUMN IF NOT EXISTS mental_answers_json JSONB DEFAULT NULL;
     `);
 
     // Create indexes if they don't exist
@@ -190,6 +203,10 @@ async function initDB() {
     // Schema migrations
     await pool.query(`
       ALTER TABLE matches ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE;
+      ALTER TABLE matches ADD COLUMN IF NOT EXISTS presentation_json JSONB DEFAULT NULL;
+      ALTER TABLE matches ADD COLUMN IF NOT EXISTS ai_narrative JSONB DEFAULT NULL;
+      ALTER TABLE matches ADD COLUMN IF NOT EXISTS presentation_version TEXT DEFAULT NULL;
+      ALTER TABLE matches ADD COLUMN IF NOT EXISTS ai_prompt_version TEXT DEFAULT NULL;
       CREATE INDEX IF NOT EXISTS idx_matches_user_id ON matches(user_id);
     `);
 

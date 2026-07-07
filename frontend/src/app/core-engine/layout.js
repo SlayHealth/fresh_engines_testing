@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   Sparkles, LogOut, Activity, MessageSquare, HeartPulse, 
-  ShieldCheck, ArrowLeft, RotateCcw, Brain, Download
+  ShieldCheck, ArrowLeft, RotateCcw, Brain, Download, 
+  LayoutDashboard, Heart, Dna, HelpCircle, Menu, X
 } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
-import { getAccessToken } from '../../utils/api';
+import { getAccessToken, apiFetch } from '../../utils/api';
 import styles from '../page.module.css';
 import ReportChatDrawer from '../../components/ReportChatDrawer';
 
@@ -42,19 +43,21 @@ export default function CoreEngineLayout({ children }) {
     activeMatchId
   } = useCompatibility();
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // Auth & Data guards
   useEffect(() => {
     const savedUser = localStorage.getItem('slayhealth_user');
     if (!savedUser) {
       router.push('/');
     } else if (!chronicResult || !mfrResult) {
-      // If results are not computed/active, go back to dashboard
       router.push('/dashboard');
     }
   }, [router, chronicResult, mfrResult]);
 
   // Determine active tab from current route path
   const selectedTab = useMemo(() => {
+    if (pathname.includes('/story')) return 'story';
     if (pathname.includes('/mfr')) return 'mfr';
     if (pathname.includes('/usg')) return 'usg';
     if (pathname.includes('/genomics')) return 'genomics';
@@ -63,6 +66,7 @@ export default function CoreEngineLayout({ children }) {
   }, [pathname]);
 
   const handleTabClick = (tab) => {
+    setIsMobileMenuOpen(false);
     router.push(`/core-engine/${tab}`);
   };
 
@@ -80,170 +84,271 @@ export default function CoreEngineLayout({ children }) {
     };
   }, [chronicResult, mfrResult, mentalResult, user, prospectForm, userReport, prospectReport]);
 
+  const partnerAName = user?.name || 'Partner A';
+  const partnerBName = prospectForm?.name || 'Partner B';
+  const coupleHeader = partnerAName && partnerBName 
+    ? `${partnerAName} & ${partnerBName}` 
+    : 'Your health';
+
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, action: () => router.push('/dashboard') },
+    { id: 'story', label: 'Partner Sync', icon: HeartPulse, action: () => handleTabClick('story') },
+    { id: 'mfr', label: 'Fertility Timeline', icon: Heart, action: () => handleTabClick('mfr') },
+    { id: 'chronic', label: 'Chronic Risk', icon: Activity, action: () => handleTabClick('chronic') },
+    { id: 'mental', label: 'Stress Resilience', icon: Brain, action: () => handleTabClick('mental') },
+    { id: 'usg', label: 'Organ Wellness', icon: ShieldCheck, action: () => handleTabClick('usg') },
+    { id: 'genomics', label: 'Genetics Risk', icon: Dna, action: () => handleTabClick('genomics') },
+  ];
+
   if (!user || !chronicResult || !mfrResult) return null;
 
   return (
-    <main className={styles.container} style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1.5rem' }}>
-      {/* Portal Header */}
-      <header className={styles.portalHeader}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Sparkles size={24} style={{ color: '#28c79a' }} />
-          <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#2b2b3f', margin: 0 }}>SlayHealth Premarital Portal</h1>
+    <div className="min-h-screen flex flex-col lg:flex-row bg-(--paper) overflow-hidden">
+      
+      {/* Mobile Top Header (hidden on desktop) */}
+      <header className="lg:hidden bg-white border-b border-(--line) px-6 py-4 flex items-center justify-between z-20 sticky top-0 shadow-sm font-sans">
+        <div className="flex items-center gap-2">
+          <Sparkles size={20} className="text-(--teal)" />
+          <span className="font-serif font-bold text-lg text-slate-800 tracking-tight">SlayHealth</span>
         </div>
-        
-        <div className={styles.userInfoBadge}>
-          <div className={styles.userAvatar}>
-            {user.name ? user.name[0].toUpperCase() : 'U'}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: '#2b2b3f' }}>{user.name || 'User Profile'}</span>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>{user.phone_number}</span>
-          </div>
-          <button className={styles.logoutBtn} onClick={() => { handleLogout(); router.push('/'); }}>
-            <LogOut size={14} />
-            Logout
-          </button>
-        </div>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 focus:outline-none"
+        >
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </header>
 
-      {/* Free Tier Quota Panel */}
-      <section className={styles.quotaWidget}>
-        <div className={styles.quotaText}>
-          <h3 className={styles.quotaTitle}>Free Plan Active</h3>
-          <p className={styles.quotaSubtitle}>Enrolled by default. Experience our clinical match matrix and counselor chat.</p>
+      {/* Sidebar Navigation Panel (Desktop layout) */}
+      <aside className="hidden lg:flex flex-col justify-between w-64 h-screen bg-white border-r border-(--line) p-6 sticky top-0 flex-shrink-0 font-sans select-none">
+        
+        {/* Top block */}
+        <div>
+          {/* Logo */}
+          <div className="flex items-center gap-2 mb-6 px-1">
+            <Sparkles size={22} className="text-(--teal)" />
+            <span className="font-serif font-bold text-xl text-slate-800 tracking-tight">SlayHealth</span>
+          </div>
+
+          {/* Couple avatar card */}
+          <div className="border border-(--line) bg-slate-50/50 rounded-2xl p-3 flex items-center gap-3 mb-6">
+            <div className="w-11 h-11 rounded-xl bg-(--soft-teal) border border-(--teal)/25 flex items-center justify-center flex-shrink-0 text-xl">
+              👩‍❤️‍👨
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-xs font-bold text-slate-800 truncate font-sans">{coupleHeader}</h4>
+              <span className="text-[9px] font-semibold text-slate-400 block tracking-wider uppercase font-sans mt-0.5">
+                Premium Health Tier
+              </span>
+            </div>
+          </div>
+
+          {/* Nav List */}
+          <nav className="space-y-1.5">
+            {menuItems.map((item) => {
+              const isActive = selectedTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={item.action}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold text-xs transition-all duration-200 cursor-pointer ${
+                    isActive 
+                      ? 'bg-(--pink) text-white shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  <item.icon size={16} className={isActive ? 'text-white' : 'text-slate-400'} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        <div className={styles.quotaBadgesList}>
-          <span className={styles.quotaLimitBadge}>
-            <Activity size={14} style={{ color: '#28c79a' }} />
-            Match scan left: <strong>{Math.max(0, 1 - runsUsed)}/1</strong>
-          </span>
-          <span className={styles.quotaLimitBadge}>
-            <MessageSquare size={14} style={{ color: '#d94386' }} />
-            Counselor chat left: <strong>{Math.max(0, 5 - chatsUsed)}/5</strong>
-          </span>
-          
-          {(runsUsed > 0 || chatsUsed > 0) && (
-            <button 
-              className={styles.upgradeTextBtn} 
-              onClick={handleResetQuota}
-              disabled={isUpgradingQuota}
-            >
-              {isUpgradingQuota ? 'Resetting...' : 'Reset Quota / Demo Premium'}
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* Workspace Active Header */}
-      <div className="mt-4 pb-4">
-        <div className="p-4 bg-white border border-slate-200 rounded-xl mb-4 flex justify-between items-center">
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-semibold transition-colors text-sm cursor-pointer"
+        {/* Bottom block */}
+        <div className="border-t border-(--line) pt-4 space-y-4">
+          <button 
+            className="w-full bg-(--teal) hover:bg-(--teal-d) text-white py-2.5 px-4 rounded-xl font-bold text-xs transition-all duration-300 shadow-sm shadow-(--teal)/10 cursor-pointer flex items-center justify-center gap-1.5 font-sans"
+            onClick={handleResetQuota}
+            disabled={isUpgradingQuota}
           >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
+            {isUpgradingQuota ? 'Resetting...' : 'Upgrade Plan'}
           </button>
-          <div className="flex items-center gap-4">
-            {activeMatchId && (
-              <a
-                href={`${API_URL}/api/compatibility/matches/${activeMatchId}/pdf?token=${getAccessToken()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-white bg-teal-600 hover:bg-teal-700 px-3.5 py-1.5 rounded-lg font-bold transition-all text-xs cursor-pointer shadow-sm"
-              >
-                <Download size={14} />
-                Download PDF Report
-              </a>
-            )}
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Report Workspace Active</span>
+          
+          <div className="space-y-1">
+            <button className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 text-xs font-semibold cursor-pointer">
+              <HelpCircle size={14} className="text-slate-400" />
+              Support
+            </button>
+            <button 
+              onClick={() => { handleLogout(); router.push('/'); }}
+              className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+            >
+              <LogOut size={14} className="text-slate-400" />
+              Sign Out
+            </button>
           </div>
         </div>
-      </div>
+      </aside>
 
-      {/* Tabbed Workspace */}
-      <section className={styles.tabsContainer}>
-        {/* Tab Header Bar */}
-        <div className={styles.tabsNavList}>
-          <button 
-            className={`${styles.tabItemBtn} ${selectedTab === 'mfr' ? styles.tabItemBtnActive : ''}`}
-            onClick={() => handleTabClick('mfr')}
-          >
-            <HeartPulse size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            Fertility Timeline (MFR)
-          </button>
-          <button 
-            className={`${styles.tabItemBtn} ${selectedTab === 'chronic' ? styles.tabItemBtnActive : ''}`}
-            onClick={() => handleTabClick('chronic')}
-          >
-            <Activity size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            Chronic Risk & Trajectory
-          </button>
-          <button 
-            className={`${styles.tabItemBtn} ${selectedTab === 'mental' ? styles.tabItemBtnActive : ''}`}
-            onClick={() => handleTabClick('mental')}
-          >
-            <Brain size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            Mental Wellbeing Analysis
-          </button>
-          <button 
-            className={`${styles.tabItemBtn} ${selectedTab === 'usg' ? styles.tabItemBtnActive : ''}`}
-            onClick={() => handleTabClick('usg')}
-          >
-            <ShieldCheck size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            Radiology & Organ Wellness
-          </button>
-          <button 
-            className={`${styles.tabItemBtn} ${selectedTab === 'genomics' ? styles.tabItemBtnActive : ''}`}
-            onClick={() => handleTabClick('genomics')}
-          >
-            <Sparkles size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            Genetics & Carrier Risk
-          </button>
+      {/* Mobile Menu Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-30 flex font-sans">
+          {/* Backdrop click dismiss */}
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+          
+          <div className="relative flex flex-col justify-between w-64 max-w-xs bg-white h-full p-6 shadow-xl animate-fade-in-left">
+            <div>
+              {/* Couple Info */}
+              <div className="border border-(--line) bg-slate-50/50 rounded-2xl p-3 flex items-center gap-3 mb-6 mt-4">
+                <div className="w-10 h-10 rounded-xl bg-(--soft-teal) border border-(--teal)/25 flex items-center justify-center flex-shrink-0 text-lg">
+                  👩‍❤️‍👨
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xs font-bold text-slate-800 truncate">{coupleHeader}</h4>
+                  <span className="text-[9px] font-semibold text-slate-400 block tracking-wider uppercase">
+                    Premium Health Tier
+                  </span>
+                </div>
+              </div>
+
+              {/* Navigation list items */}
+              <nav className="space-y-1.5">
+                {menuItems.map((item) => {
+                  const isActive = selectedTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={item.action}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold text-xs transition-all duration-200 cursor-pointer ${
+                        isActive 
+                          ? 'bg-(--pink) text-white shadow-sm' 
+                          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      <item.icon size={16} className={isActive ? 'text-white' : 'text-slate-400'} />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="border-t border-(--line) pt-4 space-y-4">
+              <button 
+                className="w-full bg-(--teal) hover:bg-(--teal-d) text-white py-2.5 px-4 rounded-xl font-bold text-xs transition-all duration-300 cursor-pointer flex items-center justify-center gap-1.5"
+                onClick={handleResetQuota}
+                disabled={isUpgradingQuota}
+              >
+                {isUpgradingQuota ? 'Resetting...' : 'Upgrade Plan'}
+              </button>
+              
+              <div className="space-y-1">
+                <button className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 text-xs font-semibold cursor-pointer">
+                  <HelpCircle size={14} className="text-slate-400" />
+                  Support
+                </button>
+                <button 
+                  onClick={() => { handleLogout(); router.push('/'); }}
+                  className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                >
+                  <LogOut size={14} className="text-slate-400" />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Workspace Panel */}
+      <main className="flex-1 min-w-0 bg-(--paper) overflow-y-auto h-screen p-6 sm:p-10 pb-24 flex flex-col justify-between">
+        
+        {/* Right header block */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-(--line)">
+            <div>
+              <h2 className="text-2xl font-normal text-slate-800 font-serif tracking-tight">Premarital Sync</h2>
+              <p className="text-xs text-slate-500 mt-1 font-sans font-medium">
+                A comprehensive, projected view of your joint health trajectory based on combined medical profiles.
+              </p>
+            </div>
+            
+            {/* Quick Actions (Dashboard navigation and PDF) */}
+            <div className="flex items-center gap-3 select-none">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 px-3.5 py-1.5 rounded-lg font-bold transition-all text-xs cursor-pointer shadow-sm font-sans"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Dashboard
+              </button>
+              {activeMatchId && (
+                <a
+                  href={`${API_URL}/api/compatibility/matches/${activeMatchId}/pdf?token=${getAccessToken()}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-white bg-(--teal) hover:bg-(--teal-d) px-3.5 py-1.5 rounded-lg font-bold transition-all text-xs cursor-pointer shadow-sm font-sans"
+                >
+                  <Download size={14} />
+                  Download PDF Report
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Quota limit warnings */}
+          <div className="flex items-center gap-4 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl mt-4 text-[10px] text-slate-500 font-sans font-semibold">
+            <span>Free Plan Active</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+            <span>Match scan: {Math.max(0, 1 - runsUsed)}/1 left</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+            <span>Counselor chat: {Math.max(0, 5 - chatsUsed)}/5 left</span>
+          </div>
         </div>
 
-        <div className={styles.tabPaneContent}>
-          {/* Shared Timeline Slider for active tabs */}
+        {/* Tab main child page content panel */}
+        <div className="flex-1">
+          {/* Shared Timeline Slider for MFR and Chronic tabs */}
           {(selectedTab === 'chronic' || selectedTab === 'mfr') && (
-            <div style={{ backgroundColor: '#fafafa', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.5rem', marginBottom: '2.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '700', color: '#2b2b3f' }}>
-                  Premarital Timeline Projection:
+            <div className="bg-white border border-(--line) rounded-3xl p-6 mb-8 shadow-sm font-sans">
+              <div className="flex justify-between items-center mb-5">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                  Timeline Projection Scrubber:
                 </span>
-                <span style={{ fontSize: '14px', fontWeight: '800', color: '#d94386', background: '#fdf2f8', padding: '4px 12px', borderRadius: '12px', border: '1px solid #fbcfe8' }}>
+                <span className="text-[10px] font-extrabold text-(--teal) bg-(--soft-teal) border border-(--teal)/25 px-3 py-1 rounded-full uppercase tracking-wider">
                   {selectedProjYear === 0 ? 'Today (Baseline)' : `Year +${selectedProjYear} Projection`}
                 </span>
               </div>
-              <input
-                type="range"
-                min="0"
-                max="10"
-                value={selectedProjYear}
-                onChange={(e) => setSelectedProjYear(parseInt(e.target.value))}
-                style={{ width: '100%', height: '6px', accentColor: '#d94386', cursor: 'pointer' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+              <div className="relative pt-4 pb-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  value={selectedProjYear}
+                  onChange={(e) => setSelectedProjYear(parseInt(e.target.value))}
+                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none"
+                  style={{ 
+                    background: `linear-gradient(to right, var(--teal) 0%, var(--teal) ${(selectedProjYear / 10) * 100}%, #E2E8F0 ${(selectedProjYear / 10) * 100}%, #E2E8F0 100%)`
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-semibold select-none">
                 <span>0 (Today)</span>
-                <span>1 Yr</span>
-                <span>2 Yr</span>
-                <span>3 Yr</span>
-                <span>4 Yr</span>
-                <span>5 Yr</span>
-                <span>6 Yr</span>
-                <span>7 Yr</span>
-                <span>8 Yr</span>
-                <span>9 Yr</span>
-                <span>10 Years</span>
+                <span>Yr 1</span>
+                <span>Yr 3</span>
+                <span>Yr 5</span>
+                <span>Yr 7</span>
+                <span>Yr 10</span>
               </div>
             </div>
           )}
 
-          {/* Child pages content */}
           {children}
 
-          {/* Scan Another Prospect */}
-          <div style={{ textAlign: 'center', marginTop: '3.5rem', marginBottom: '2rem' }}>
+          {/* Bottom Back Button */}
+          <div className="text-center mt-12 mb-4 select-none">
             <button 
               onClick={() => {
                 setChronicResult(null);
@@ -254,55 +359,35 @@ export default function CoreEngineLayout({ children }) {
                 setIsChatOpen(false);
                 router.push('/dashboard');
               }} 
-              className={styles.secondaryBtn}
-              style={{ borderRadius: '12px', padding: '10px 24px' }}
+              className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl px-5 py-2.5 font-bold font-sans text-xs transition-all duration-300 cursor-pointer shadow-sm inline-flex items-center gap-1.5"
             >
-              <RotateCcw size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+              <RotateCcw size={14} />
               Scan Another Prospect
             </button>
           </div>
         </div>
-      </section>
 
-      {/* Floating AI counselor drawer */}
-      <button
-        onClick={() => setIsChatOpen(true)}
-        disabled={chatsUsed >= 5}
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          zIndex: 999,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '12px 20px',
-          borderRadius: '24px',
-          background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-          color: '#ffffff',
-          border: 'none',
-          fontWeight: '600',
-          fontSize: '14px',
-          boxShadow: '0 8px 20px rgba(37, 99, 235, 0.25)',
-          cursor: 'pointer',
-          transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-          opacity: chatsUsed >= 5 ? 0.6 : 1
-        }}
-      >
-        <MessageSquare size={16} />
-        Consult AI Counselor ({Math.max(0, 5 - chatsUsed)} Left)
-      </button>
-      
-      <ReportChatDrawer
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        sessionId={chatSessionId}
-        onSessionCreated={setChatSessionId}
-        reportId={user.id}
-        partnerReportId={prospectForm.name}
-        engineType={selectedTab === 'mfr' ? 'mfr' : 'chronic'}
-        contextMetadata={combinedContextMetadata}
-      />
-    </main>
+        {/* Floating counselor trigger */}
+        <button
+          onClick={() => setIsChatOpen(true)}
+          disabled={chatsUsed >= 5}
+          className="fixed bottom-6 right-6 z-10 flex items-center gap-2 py-3 px-5 rounded-full bg-(--teal) hover:bg-(--teal-d) text-[#fff] border-none font-bold text-xs font-sans shadow-lg cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <MessageSquare size={14} />
+          Consult AI Counselor ({Math.max(0, 5 - chatsUsed)} Left)
+        </button>
+        
+        <ReportChatDrawer
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          sessionId={chatSessionId}
+          onSessionCreated={setChatSessionId}
+          reportId={user.id}
+          partnerReportId={prospectForm.name}
+          engineType={selectedTab === 'mfr' ? 'mfr' : 'chronic'}
+          contextMetadata={combinedContextMetadata}
+        />
+      </main>
+    </div>
   );
 }

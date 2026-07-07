@@ -138,6 +138,28 @@ export const calculateAge = (dobString) => {
   return Math.abs(ageDate.getUTCFullYear() - 1970) || 30;
 };
 
+export const buildOnboardingFormFromUser = (user) => ({
+  userName: user?.userName || user?.name || '',
+  userRelation: user?.userRelation || 'Self',
+  candidateName: user?.candidateName || user?.name || '',
+  candidateGender: user?.gender || '',
+  candidateDob: user?.dob || '',
+  candidateCity: user?.city || '',
+  relationshipStatus: user?.relationshipStatus || 'Single',
+  marriageTimeline: user?.marriageTimeline || 'Not sure yet',
+  activity_level: user?.activity_level || '',
+  daily_steps: user?.daily_steps || '',
+  occupation_style: user?.occupation_style || '',
+  drinking_habits: user?.drinking_habits || '',
+  smoking_habits: user?.smoking_habits || '',
+  tobacco_habits: user?.tobacco_habits || '',
+  sleep_cycle: user?.sleep_cycle || '',
+  height: user?.height || '',
+  weight: user?.weight || '',
+  waist: user?.waist || '',
+  menstrualCycle: user?.menstrualCycle || ''
+});
+
 export const classifyWaist = (waistVal, gender) => {
   const val = parseFloat(waistVal);
   if (isNaN(val)) return 'Normal';
@@ -230,7 +252,8 @@ export function CompatibilityProvider({ children }) {
   const [mfrResult, setMfrResult] = useState(null);
   const [mentalResult, setMentalResult] = useState(null);
   const [activeMatchId, setActiveMatchId] = useState(null);
-  const [selectedTab, setSelectedTab] = useState('chronic');
+  const [activeMatchDetails, setActiveMatchDetails] = useState(null);
+  const [selectedTab, setSelectedTab] = useState('story');
   const [selectedProjYear, setSelectedProjYear] = useState(0);
 
   // AI Chat counselor
@@ -250,6 +273,7 @@ export function CompatibilityProvider({ children }) {
     setMfrResult(null);
     setMentalResult(null);
     setActiveMatchId(null);
+    setActiveMatchDetails(null);
     setChatSessionId(null);
     setUserReport(null);
     setProspectReport(null);
@@ -388,6 +412,21 @@ export function CompatibilityProvider({ children }) {
     }
   };
 
+  const fetchActiveMatchDetails = async (matchId) => {
+    if (!matchId) return;
+    try {
+      const res = await apiFetch(`${API_URL}/api/compatibility/matches/${matchId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.match) {
+          setActiveMatchDetails(data.match);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch active match details:', err);
+    }
+  };
+
   const handleResetQuota = async () => {
     if (!user) return;
     setIsUpgradingQuota(true);
@@ -443,7 +482,7 @@ export function CompatibilityProvider({ children }) {
   };
 
   // Run Compatibility Matching
-  const handleCompatibilityMatch = async () => {
+  const handleCompatibilityMatch = async (selfUser = user) => {
     if (!userReport || !prospectReport) {
       alert('Please upload pathology reports for both yourself and your prospect first.');
       return;
@@ -475,19 +514,19 @@ export function CompatibilityProvider({ children }) {
     setMatchError(null);
     setSelectedProjYear(0);
 
-    const userWeight = parseFloat(user.weight) || 70;
-    const userHeight = parseFloat(user.height) || 170;
+    const userWeight = parseFloat(selfUser.weight) || 70;
+    const userHeight = parseFloat(selfUser.height) || 170;
     const userBmi = parseFloat((userWeight / Math.pow(userHeight / 100, 2)).toFixed(1));
     const prospectWeight = parseFloat(prospectForm.weight) || 70;
     const prospectHeight = parseFloat(prospectForm.height) || 170;
     const prospectBmi = parseFloat((prospectWeight / Math.pow(prospectHeight / 100, 2)).toFixed(1));
 
-    const isUserMale = user.gender === 'male';
+    const isUserMale = selfUser.gender === 'male';
     const maleManual = isUserMale ? {
-      name: user.name,
-      age: calculateAge(user.dob),
+      name: selfUser.name,
+      age: calculateAge(selfUser.dob),
       bmi: userBmi,
-      waist: classifyWaist(user.waist, 'male'),
+      waist: classifyWaist(selfUser.waist, 'male'),
       bloodPressure: 'Normal',
       glucose: 'Normal',
       lipids: 'Normal',
@@ -513,10 +552,10 @@ export function CompatibilityProvider({ children }) {
       lipids: 'Normal',
       history: { parentDiabetes: false }
     } : {
-      name: user.name,
-      age: calculateAge(user.dob),
+      name: selfUser.name,
+      age: calculateAge(selfUser.dob),
       bmi: userBmi,
-      waist: classifyWaist(user.waist, 'female'),
+      waist: classifyWaist(selfUser.waist, 'female'),
       bloodPressure: 'Normal',
       glucose: 'Normal',
       lipids: 'Normal',
@@ -524,11 +563,11 @@ export function CompatibilityProvider({ children }) {
     };
 
     const sharedLifestyle = {
-      diet: user.drinking_habits === 'Never' && prospectForm.drinking_habits === 'Never' ? 'Healthy' : 'Mixed',
-      activity: user.activity_level === 'Sedentary' || prospectForm.activity_level === 'Sedentary' ? 'Sedentary' : 'Active',
-      smoking: user.smoking_habits === 'never' && prospectForm.smoking_habits === 'never' ? 'Never' : 'Occasional',
-      drinking: user.drinking_habits === 'Never' && prospectForm.drinking_habits === 'Never' ? 'Never' : 'Occasional',
-      sleep: user.sleep_cycle === 'irregular' || prospectForm.sleep_cycle === 'irregular' ? 'Irregular' : 'Normal',
+      diet: selfUser.drinking_habits === 'Never' && prospectForm.drinking_habits === 'Never' ? 'Healthy' : 'Mixed',
+      activity: selfUser.activity_level === 'Sedentary' || prospectForm.activity_level === 'Sedentary' ? 'Sedentary' : 'Active',
+      smoking: selfUser.smoking_habits === 'never' && prospectForm.smoking_habits === 'never' ? 'Never' : 'Occasional',
+      drinking: selfUser.drinking_habits === 'Never' && prospectForm.drinking_habits === 'Never' ? 'Never' : 'Occasional',
+      sleep: selfUser.sleep_cycle === 'irregular' || prospectForm.sleep_cycle === 'irregular' ? 'Irregular' : 'Normal',
       stress: 'Moderate'
     };
 
@@ -537,7 +576,7 @@ export function CompatibilityProvider({ children }) {
         apiFetch(`${API_URL}/api/chronic/analyze`, {
           method: 'POST',
           body: JSON.stringify({
-            userId: user.id,
+            userId: selfUser.id,
             male_report_id: isUserMale ? userReport.report_metadata.report_id : prospectReport.report_metadata.report_id,
             female_report_id: isUserMale ? prospectReport.report_metadata.report_id : userReport.report_metadata.report_id,
             male_manual_data: maleManual,
@@ -549,7 +588,7 @@ export function CompatibilityProvider({ children }) {
         apiFetch(`${API_URL}/api/mfr/analyze`, {
           method: 'POST',
           body: JSON.stringify({
-            userId: user.id,
+            userId: selfUser.id,
             male_report_id: isUserMale ? userReport.report_metadata.report_id : prospectReport.report_metadata.report_id,
             female_report_id: isUserMale ? prospectReport.report_metadata.report_id : userReport.report_metadata.report_id,
             male_manual_data: {
@@ -594,11 +633,12 @@ export function CompatibilityProvider({ children }) {
       const mData = await responseJson(mfrResponse);
 
       // Save match to backend
+      let savedMatchId = null;
       try {
         const saveRes = await apiFetch(`${API_URL}/api/compatibility/save-match`, {
           method: 'POST',
           body: JSON.stringify({
-            userId: user.id,
+            userId: selfUser.id,
             chronicResult: cData,
             mfrResult: mData,
             maleManual: maleManual,
@@ -609,7 +649,9 @@ export function CompatibilityProvider({ children }) {
         });
         const saveData = await saveRes.json();
         if (saveData.success && saveData.match_id) {
+          savedMatchId = saveData.match_id;
           setActiveMatchId(saveData.match_id);
+          fetchActiveMatchDetails(saveData.match_id);
         }
       } catch (saveErr) {
         console.error('Failed to save match to history', saveErr);
@@ -619,11 +661,11 @@ export function CompatibilityProvider({ children }) {
       setMfrResult(mData);
       setMentalResult(null); // Reset mental result for the new match scan
       setRunsUsed(prev => prev + 1);
-      fetchRecentMatches(user.id);
-      return true; // Match succeeded
+      fetchRecentMatches(selfUser.id);
+      return { success: true, matchId: savedMatchId }; // Match succeeded
     } catch (err) {
       setMatchError(err.message || 'Failed to match profiles.');
-      return false; // Match failed
+      return { success: false, matchId: null }; // Match failed
     } finally {
       setIsMatching(false);
     }
@@ -644,6 +686,7 @@ export function CompatibilityProvider({ children }) {
       setMentalResult(null);
     }
     setActiveMatchId(match.id);
+    fetchActiveMatchDetails(match.id);
 
     // Restore prospect details from stored manual data or matches list
     const details = match.analysis.details || {};
@@ -663,14 +706,14 @@ export function CompatibilityProvider({ children }) {
     setIsChatOpen(false);
   };
 
-  const handleMentalAnalysis = async (partnerAAnswers, partnerBAnswers) => {
+  const handleMentalAnalysis = async (partnerAAnswers, partnerBAnswers, matchIdOverride) => {
     try {
       const res = await apiFetch(`${API_URL}/api/mental/analyze`, {
         method: 'POST',
         body: JSON.stringify({
           partner_A_answers: partnerAAnswers,
           partner_B_answers: partnerBAnswers,
-          match_id: activeMatchId
+          match_id: matchIdOverride ?? activeMatchId
         })
       });
       if (!res.ok) {
@@ -718,9 +761,11 @@ export function CompatibilityProvider({ children }) {
       mfrResult, setMfrResult,
       mentalResult, setMentalResult,
       activeMatchId, setActiveMatchId,
+      activeMatchDetails, setActiveMatchDetails,
       selectedTab, setSelectedTab,
       selectedProjYear, setSelectedProjYear,
       chatSessionId, setChatSessionId,
+      fetchActiveMatchDetails,
       isChatOpen, setIsChatOpen,
       showCalculations, setShowCalculations,
       fetchRecentMatches,

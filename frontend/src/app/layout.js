@@ -17,6 +17,14 @@ export const metadata = {
   description: "Cardiometabolic timeline projections and premarital compatibility engines.",
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  interactiveWidget: 'resizes-content',
+};
+
 export default function RootLayout({ children }) {
   return (
     <html

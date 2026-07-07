@@ -2,18 +2,18 @@ const axios = require('axios');
 const logger = require('../../utils/logger');
 
 class OpenRouterService {
-  async extractJSON(prompt, systemInstruction) {
+  async extractJSON(prompt, systemInstruction, model = 'meta-llama/llama-3.3-70b-instruct') {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       throw new Error("OPENROUTER_API_KEY is missing from environment variables.");
     }
 
     try {
-      logger.info(`Sending request to OpenRouter (meta-llama/llama-3.3-70b-instruct)`);
+      logger.info(`Sending request to OpenRouter (model: ${model})`);
       const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         {
-          model: 'meta-llama/llama-3.3-70b-instruct',
+          model: model,
           messages: [
             { role: 'system', content: systemInstruction },
             { role: 'user', content: prompt }
@@ -23,7 +23,7 @@ class OpenRouterService {
         {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': 'http://localhost:3000', 
+            'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
             'X-Title': 'SlayHealth USG Engine',
             'Content-Type': 'application/json'
           },
@@ -66,7 +66,7 @@ class OpenRouterService {
         {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': 'http://localhost:3000', 
+            'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
             'X-Title': 'SlayHealth AI Counselor',
             'Content-Type': 'application/json'
           },

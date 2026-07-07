@@ -115,7 +115,7 @@ async function extractPathology(req, res, next) {
 
   } catch (error) {
     logger.error(`Extraction failed for report ${reportId}: ${error.message}`);
-    
+
     // Update DB status on error
     try {
       await db.query(`
@@ -126,6 +126,12 @@ async function extractPathology(req, res, next) {
     }
 
     next(error);
+  } finally {
+    // The extracted data is already persisted to Postgres above — the raw upload
+    // is single-use, so clean it up rather than letting it accumulate on disk.
+    if (req.file && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch (e) { /* best-effort cleanup */ }
+    }
   }
 }
 

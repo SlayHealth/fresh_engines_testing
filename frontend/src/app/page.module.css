@@ -971,6 +971,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  font-family: var(--font-sans);
 }
 
 .tabItemBtn:hover {
@@ -978,8 +979,8 @@
 }
 
 .tabItemBtnActive {
-  color: #d94386;
-  border-bottom-color: #d94386;
+  color: #007A8C;
+  border-bottom-color: #007A8C;
 }
 
 .tabPaneContent {

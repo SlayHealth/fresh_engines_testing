@@ -35,8 +35,7 @@ export default function RootPage() {
     setRunsUsed,
     setChatsUsed,
     fetchRecentMatches,
-    setOnboardingStep,
-    setOnboardingForm
+    setOnboardingStep
   } = useCompatibility();
 
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -50,7 +49,7 @@ export default function RootPage() {
     if (savedUser) {
       try {
         const parsed = JSON.parse(savedUser);
-        if (parsed.name && parsed.gender && parsed.activity_level) {
+        if (parsed.name) {
           router.push('/dashboard');
         } else {
           setOnboardingStep(1);
@@ -64,6 +63,15 @@ export default function RootPage() {
       setCheckingAuth(false);
     }
   }, [router, setOnboardingStep]);
+
+  // Listen for session expiry to clear loading state if silent refresh fails while on root page
+  useEffect(() => {
+    const handleExpired = () => {
+      setCheckingAuth(false);
+    };
+    window.addEventListener('auth_session_expired', handleExpired);
+    return () => window.removeEventListener('auth_session_expired', handleExpired);
+  }, []);
 
   // Cooldown timer effect
   useEffect(() => {
@@ -135,20 +143,8 @@ export default function RootPage() {
           setChatsUsed(data.user.chats_used || 0);
           fetchRecentMatches(data.user.id);
 
-          if (!data.user.name || !data.user.gender || !data.user.activity_level) {
+          if (!data.user.name) {
             setOnboardingStep(1);
-            setOnboardingForm(prev => ({
-              ...prev,
-              ...data.user,
-              userName: data.user.userName || data.user.name || '',
-              userRelation: data.user.userRelation || 'Self',
-              candidateName: data.user.candidateName || data.user.name || '',
-              candidateGender: data.user.gender || '',
-              candidateDob: data.user.dob || '',
-              candidateCity: data.user.city || '',
-              relationshipStatus: data.user.relationshipStatus || 'Single',
-              marriageTimeline: data.user.marriageTimeline || 'Not sure yet'
-            }));
             router.push('/onboarding');
           } else {
             router.push('/dashboard');
@@ -186,7 +182,7 @@ export default function RootPage() {
           {authStep === 'phone' ? (
             <div className={styles.inputGroup}>
               <label className={styles.inputLabel}>Mobile Phone Number</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                 <select
                   value={selectedCountry}
                   onChange={(e) => setSelectedCountry(e.target.value)}
@@ -199,7 +195,8 @@ export default function RootPage() {
                     color: '#2b2b3f',
                     outline: 'none',
                     cursor: 'pointer',
-                    minWidth: '95px'
+                    minWidth: '95px',
+                    flexShrink: 0
                   }}
                 >
                   {COUNTRIES.map((c) => (
@@ -214,7 +211,7 @@ export default function RootPage() {
                   className={styles.authInput}
                   value={phoneNumberInput}
                   onChange={(e) => setPhoneNumberInput(e.target.value)}
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minWidth: 0, width: '100%' }}
                   required
                 />
               </div>

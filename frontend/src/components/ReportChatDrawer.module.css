@@ -59,12 +59,12 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  background: var(--soft-teal);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
+  color: var(--teal-d);
+  border: 1px solid var(--teal);
 }
 
 .titleArea {
@@ -111,7 +111,14 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background-color: #fafafa;
+  background-color: #f7f8fa;
+  background-image:
+    linear-gradient(rgba(247, 248, 250, 0.88), rgba(247, 248, 250, 0.88)),
+    url("/questionare_backdrop.png");
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
+  background-size: cover, cover;
+  background-attachment: fixed, fixed;
 }
 
 .messageRow {
@@ -138,7 +145,7 @@
 }
 
 .bubbleUser {
-  background-color: #2563eb;
+  background-color: var(--pink);
   color: #ffffff;
   border-bottom-right-radius: 4px;
 }
@@ -218,9 +225,9 @@
 }
 
 .suggestionChip:hover {
-  background-color: #eff6ff;
-  border-color: #bfdbfe;
-  color: #2563eb;
+  background-color: var(--soft-teal);
+  border-color: var(--teal);
+  color: var(--teal-d);
 }
 
 .inputArea {
@@ -245,7 +252,7 @@
 }
 
 .input:focus {
-  border-color: #2563eb;
+  border-color: var(--teal);
 }
 
 .input:disabled {
@@ -255,7 +262,7 @@
 }
 
 .sendButton {
-  background-color: #2563eb;
+  background-color: var(--teal);
   color: #ffffff;
   border: none;
   border-radius: 50%;
@@ -269,7 +276,7 @@
 }
 
 .sendButton:hover:not(:disabled) {
-  background-color: #1d4ed8;
+  background-color: var(--teal-d);
 }
 
 .sendButton:active:not(:disabled) {
@@ -293,10 +300,10 @@
 
 .errorState {
   padding: 16px;
-  background-color: #fef2f2;
-  border: 1px solid #fee2e2;
+  background-color: var(--soft-danger);
+  border: 1px solid var(--danger);
   border-radius: 8px;
-  color: #991b1b;
+  color: var(--danger-d);
   font-size: 13px;
   margin: 12px;
   display: flex;
@@ -306,7 +313,7 @@
 
 .errorState button {
   align-self: flex-start;
-  background-color: #991b1b;
+  background-color: var(--danger);
   color: #ffffff;
   border: none;
   padding: 4px 8px;

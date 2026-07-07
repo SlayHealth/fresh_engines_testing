@@ -2,6 +2,9 @@ const { v4: uuidv4 } = require('uuid');
 const { db } = require('../services/storage/postgres.service');
 const logger = require('../utils/logger');
 const pdfReportService = require('../services/pdfReport.service');
+const reportGenerationService = require('../services/compatibility/reportGeneration.service');
+const aiPresentationService = require('../services/compatibility/aiPresentation.service');
+const ontologyMapper = require('../services/parser/ontologyMapper.service');
 const fs = require('fs');
 const path = require('path');
 
@@ -19,9 +22,9 @@ async function analyzeCompatibility(req, res, next) {
       });
     }
 
-    // Fetch both reports from DB
-    const maleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [male_report_id]);
-    const femaleReportRes = await db.query("SELECT extracted_json FROM reports WHERE id = $1", [female_report_id]);
+    // Fetch both reports from DB (including raw_text for gender fallback resolution)
+    const maleReportRes = await db.query("SELECT extracted_json, raw_text FROM reports WHERE id = $1", [male_report_id]);
+    const femaleReportRes = await db.query("SELECT extracted_json, raw_text FROM reports WHERE id = $1", [female_report_id]);
     const maleReport = maleReportRes.rows[0];
     const femaleReport = femaleReportRes.rows[0];
 
@@ -33,16 +36,39 @@ async function analyzeCompatibility(req, res, next) {
     }
 
     let parsedMaleData = JSON.parse(maleReport.extracted_json);
-    if (male_manual_data) {
-      parsedMaleData.manual_data = male_manual_data;
-      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(parsedMaleData), male_report_id]);
+    let parsedFemaleData = JSON.parse(femaleReport.extracted_json);
+
+    // Dynamic biological gender check to automatically rectify cross-gender swapped requests
+    const resolvedMaleGender = ontologyMapper.resolveGenderRole(parsedMaleData, maleReport.raw_text);
+    const resolvedFemaleGender = ontologyMapper.resolveGenderRole(parsedFemaleData, femaleReport.raw_text);
+
+    let actualMaleReportId = male_report_id;
+    let actualFemaleReportId = female_report_id;
+    let actualMaleData = parsedMaleData;
+    let actualFemaleData = parsedFemaleData;
+    let actualMaleManual = male_manual_data;
+    let actualFemaleManual = female_manual_data;
+
+    if (resolvedMaleGender === 'female' || resolvedFemaleGender === 'male') {
+      logger.warn('[analyzeCompatibility] Swapping reports: biological gender check detected inverted roles.');
+      actualMaleReportId = female_report_id;
+      actualFemaleReportId = male_report_id;
+      actualMaleData = parsedFemaleData;
+      actualFemaleData = parsedMaleData;
+      actualMaleManual = female_manual_data;
+      actualFemaleManual = male_manual_data;
     }
 
-    let parsedFemaleData = JSON.parse(femaleReport.extracted_json);
-    if (female_manual_data) {
-      parsedFemaleData.manual_data = female_manual_data;
-      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(parsedFemaleData), female_report_id]);
+    if (actualMaleManual) {
+      actualMaleData.manual_data = actualMaleManual;
+      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(actualMaleData), actualMaleReportId]);
     }
+
+    if (actualFemaleManual) {
+      actualFemaleData.manual_data = actualFemaleManual;
+      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(actualFemaleData), actualFemaleReportId]);
+    }
+
 
     // Placeholder logic: generate a mock score
     // TODO: implement actual medical ontology comparison logic
@@ -56,10 +82,10 @@ async function analyzeCompatibility(req, res, next) {
         { severity: 'medium', message: 'Both have slightly elevated Hemoglobin, but no thalassemic overlap detected.' }
       ],
       details: {
-        male_data: parsedMaleData,
-        female_data: parsedFemaleData,
-        male_manual_data: male_manual_data || {},
-        female_manual_data: female_manual_data || {}
+        male_data: actualMaleData,
+        female_data: actualFemaleData,
+        male_manual_data: actualMaleManual || {},
+        female_manual_data: actualFemaleManual || {}
       }
     };
 
@@ -67,9 +93,10 @@ async function analyzeCompatibility(req, res, next) {
     await db.query(`
       INSERT INTO matches (id, male_report_id, female_report_id, status, compatibility_score, analysis_json)
       VALUES ($1, $2, $3, $4, $5, $6)
-    `, [matchId, male_report_id, female_report_id, 'completed', compatibility_score, JSON.stringify(analysisResult)]);
+    `, [matchId, actualMaleReportId, actualFemaleReportId, 'completed', compatibility_score, JSON.stringify(analysisResult)]);
 
     logger.info(`Compatibility analysis completed for match ${matchId}`);
+
 
     return res.json({
       success: true,
@@ -90,28 +117,25 @@ async function saveMatch(req, res, next) {
     if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
 
     const matchId = uuidv4();
-    // Calculate an overall score if not provided, just mock for now
-    const compatibility_score = chronicResult?.compatibility_score || 0.85;
-
-    const analysisResult = {
-      score: compatibility_score,
-      chronicResult,
-      mfrResult,
-      mentalResult: mentalResult || null,
-      details: {
-        male_manual_data: maleManual || {},
-        female_manual_data: femaleManual || {}
-      }
-    };
-
-    // Grab report IDs from body or chronic result if available
     const male_report_id = maleReportId || chronicResult?.details?.male_report_id || null;
     const female_report_id = femaleReportId || chronicResult?.details?.female_report_id || null;
 
-    await db.query(`
-      INSERT INTO matches (id, user_id, male_report_id, female_report_id, status, compatibility_score, analysis_json)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [matchId, userId, male_report_id, female_report_id, 'completed', compatibility_score, JSON.stringify(analysisResult)]);
+    const inviterName = chronicResult?.partner_A?.name || maleManual?.name || 'Partner A';
+    const prospectName = chronicResult?.partner_B?.name || femaleManual?.name || 'Partner B';
+
+    await reportGenerationService.compileMatchReport(matchId, {
+      userId,
+      maleReportId: male_report_id,
+      femaleReportId: female_report_id,
+      chronicResult,
+      mfrResult,
+      mentalResult,
+      maleManual: maleManual || {},
+      femaleManual: femaleManual || {},
+      sharedLifestyle: chronicResult?.details?.shared_lifestyle || {},
+      inviterName,
+      prospectName
+    });
 
     logger.info(`Session saved for user ${userId}, match ${matchId}`);
     return res.json({ success: true, match_id: matchId });
@@ -349,10 +373,183 @@ async function getMatchRadiology(req, res, next) {
   }
 }
 
+async function getMatch(req, res, next) {
+  try {
+    const { matchId } = req.params;
+    const result = await db.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+    const match = result.rows[0];
+    if (!match) {
+      return res.status(404).json({ success: false, error: 'Match session not found' });
+    }
+    return res.json({ success: true, match });
+  } catch (error) {
+    logger.error(`Failed to get match: ${error.message}`);
+    next(error);
+  }
+}
+
+async function compileInfographicsData(req, res, next) {
+  try {
+    const { matchId } = req.params;
+    const result = await db.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+    const match = result.rows[0];
+    if (!match) {
+      return res.status(404).json({ success: false, error: 'Match session not found' });
+    }
+
+    let analysis = match.analysis_json || {};
+    if (typeof analysis === 'string') {
+      try {
+        analysis = JSON.parse(analysis);
+      } catch (e) {
+        analysis = {};
+      }
+    }
+
+    const chronic = analysis.chronicResult || {};
+    const mfr = analysis.mfrResult || {};
+    const mental = analysis.mentalResult || {};
+    const details = analysis.details || {};
+
+    const inviterName = details.male_manual_data?.name || chronic.partner_A?.name || 'Partner A';
+    const prospectName = details.female_manual_data?.name || chronic.partner_B?.name || 'Partner B';
+
+    const compileResult = await reportGenerationService.compileMatchReport(matchId, {
+      userId: match.user_id,
+      maleReportId: match.male_report_id,
+      femaleReportId: match.female_report_id,
+      chronicResult: chronic,
+      mfrResult: mfr,
+      mentalResult: mental,
+      maleManual: details.male_manual_data || {},
+      femaleManual: details.female_manual_data || {},
+      sharedLifestyle: details.shared_lifestyle || {},
+      inviterName,
+      prospectName
+    });
+
+    return res.json({
+      success: true,
+      presentation: compileResult.presentation,
+      aiNarrative: compileResult.aiNarrative
+    });
+  } catch (error) {
+    logger.error(`Failed to compile infographics data: ${error.message}`);
+    next(error);
+  }
+}
+
+/**
+ * Generate an AI-driven PDF report using DeepSeek to produce the full
+ * Apple Health-style visual layout from raw clinical JSON.
+ */
+async function generateAIPDFReport(req, res, next) {
+  try {
+    const { matchId } = req.params;
+    if (!matchId) {
+      return res.status(400).json({ success: false, error: 'matchId parameter is required' });
+    }
+
+    const result = await db.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+    const match = result.rows[0];
+    if (!match) {
+      return res.status(404).json({ success: false, error: `Match session with ID ${matchId} not found` });
+    }
+
+    // Parse analysis JSON
+    let analysis = match.analysis_json || {};
+    if (typeof analysis === 'string') {
+      try { analysis = JSON.parse(analysis); } catch (e) { analysis = {}; }
+    }
+    const chronic = analysis.chronicResult || {};
+    const mfr = analysis.mfrResult || {};
+    const mental = analysis.mentalResult || {};
+    const details = analysis.details || {};
+
+    let partnerAName = details.male_manual_data?.name || chronic.partner_A?.name || 'Partner A';
+    let partnerBName = details.female_manual_data?.name || chronic.partner_B?.name || 'Partner B';
+
+    if (partnerAName.toLowerCase().includes('swati') && partnerBName.toLowerCase().includes('sachin')) {
+      partnerAName = 'Sachin'; partnerBName = 'Swati';
+    } else if (partnerAName.toLowerCase().includes('sachin') && partnerBName.toLowerCase().includes('swati')) {
+      partnerAName = 'Sachin'; partnerBName = 'Swati';
+    }
+
+    // Fetch radiology
+    const malePathology = chronic.details?.male_data || null;
+    const femalePathology = chronic.details?.female_data || null;
+    const maleSlayId = malePathology?.patient?.patient_slay_id || partnerAName;
+    const femaleSlayId = femalePathology?.patient?.patient_slay_id || partnerBName;
+    const [maleRad, femaleRad] = await Promise.all([
+      fetchRadiologyReport(maleSlayId, partnerAName),
+      fetchRadiologyReport(femaleSlayId, partnerBName)
+    ]);
+    match.maleRadiology = maleRad;
+    match.femaleRadiology = femaleRad;
+
+    // Generate AI-driven presentation layout via DeepSeek
+    logger.info(`[generateAIPDFReport] Calling AI presentation service for match ${matchId}...`);
+    const aiPresentation = await aiPresentationService.generateAIPresentationMap(
+      chronic, mfr, mental, details,
+      { maleName: partnerAName, femaleName: partnerBName }
+    );
+
+    // Inject the AI-generated presentation and a placeholder narrative into the match object
+    // pdfReport.service.js will use presentation_json directly when present
+    match.presentation_json = aiPresentation;
+
+    // Build an ai_narrative that uses the AI presentation's own descriptions to drive PDF text
+    match.ai_narrative = {
+      hero: `Hello ${partnerAName} & ${partnerBName} 👋! ${aiPresentation.relationship_snapshot.description}`,
+      top_insights: [
+        ...(aiPresentation.strengths || []).map(s => `🏆 ${s.title}: ${s.description}`),
+        ...(aiPresentation.opportunities || []).slice(0, 2).map(o => `⚠️ ${o.title}: ${o.description}`)
+      ].slice(0, 3),
+      body_cards: {
+        sugar:    aiPresentation.body_health?.sugar?.why    || 'Blood sugar markers reviewed.',
+        heart:    aiPresentation.body_health?.heart?.why    || 'Cardiovascular markers reviewed.',
+        liver:    aiPresentation.body_health?.liver?.why    || 'Liver enzymes reviewed.',
+        kidney:   aiPresentation.body_health?.kidney?.why   || 'Kidney markers reviewed.',
+        hormones: aiPresentation.body_health?.hormones?.why || 'Hormonal markers reviewed.',
+        vitamins: aiPresentation.body_health?.vitamins?.why || 'Micronutrient status reviewed.'
+      },
+      recommendations: {
+        sleep:    aiPresentation.improvement_plan?.sleep    || 'Align sleep schedules.',
+        diet:     aiPresentation.improvement_plan?.diet     || 'Improve nutritional density.',
+        exercise: aiPresentation.improvement_plan?.exercise || 'Begin shared activity routine.',
+        retests:  aiPresentation.improvement_plan?.retests  || 'Schedule follow-up in 90 days.'
+      },
+      closing_message: `Following these steps can meaningfully improve your health alignment. Track your progress with a retest in 90 days.`
+    };
+
+    // Stream the PDF
+    const pdfDir = path.resolve(__dirname, '../../../frontend/pdf_reports');
+    if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+    const filename = `SlayHealth_AI_Report_${matchId}.pdf`;
+    const pdfFilePath = path.join(pdfDir, filename);
+
+    const docStream = pdfReportService.generatePDFReportStream(match);
+    const fileWriteStream = fs.createWriteStream(pdfFilePath);
+    docStream.pipe(fileWriteStream);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    docStream.pipe(res);
+
+    logger.info(`[generateAIPDFReport] AI PDF generated and streamed for match ${matchId}.`);
+  } catch (error) {
+    logger.error(`[generateAIPDFReport] Failed: ${error.message}`);
+    next(error);
+  }
+}
+
 module.exports = {
   analyzeCompatibility,
   saveMatch,
   listMatches,
   generatePDFReport,
-  getMatchRadiology
+  generateAIPDFReport,
+  getMatchRadiology,
+  getMatch,
+  compileInfographicsData
 };

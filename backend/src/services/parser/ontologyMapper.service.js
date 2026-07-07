@@ -869,8 +869,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "vdrl / rpr result (reactive / non-reactive)",
-      "reactive",
-      "non-reactive"
+      "vdrl / rpr result"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -880,8 +879,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "rpr titre (if reactive)",
-      "if",
-      "reactive"
+      "rpr titre"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -891,8 +889,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hbsag - qualitative result (reactive / non-reactive)",
-      "reactive",
-      "non-reactive"
+      "hbsag - qualitative result"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -911,8 +908,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "anti-hcv antibody - qualitative result (reactive / non-reactive)",
-      "reactive",
-      "non-reactive"
+      "anti-hcv antibody - qualitative result"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -931,8 +927,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hiv 1 & 2 antibody - result (reactive / non-reactive)",
-      "reactive",
-      "non-reactive"
+      "hiv 1 & 2 antibody - result"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -942,8 +937,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hiv ict (immunochromatographic test) result",
-      "immunochromatographic",
-      "test"
+      "hiv ict result"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -953,8 +947,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hiv p24 antigen - result (detected / not detected)",
-      "detected",
-      "not"
+      "hiv p24 antigen - result"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -964,8 +957,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hiv 1 & 2 antibody - result (reactive / non-reactive)",
-      "reactive",
-      "non-reactive"
+      "hiv 1 & 2 antibody - result"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -1002,8 +994,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "rubella igg antibody - quantitative (iu/ml)",
-      "iu",
-      "ml"
+      "rubella igg antibody"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -1013,8 +1004,7 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "rubella igg - interpretation (immune / non-immune)",
-      "immune",
-      "non-immune"
+      "rubella igg - interpretation"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -1459,6 +1449,52 @@ class OntologyMapperService {
       }
     }
     
+    return null;
+  }
+
+  /**
+   * Content-driven gender resolver.
+   * Determines the biological gender of a report by inspecting its parsed extracted_json.
+   *
+   * @param {Object} extractedJson
+   * @param {string} [rawText='']
+   * @returns {'male' | 'female' | null}
+   */
+  resolveGenderRole(extractedJson, rawText = '') {
+    if (!extractedJson || typeof extractedJson !== 'object') return null;
+
+    function hasParam(obj, paramName) {
+      if (!obj) return false;
+      for (const sectionKey of Object.keys(obj)) {
+        const section = obj[sectionKey];
+        if (section && typeof section === 'object' && section[paramName] !== undefined) return true;
+      }
+      return false;
+    }
+
+    const MALE_MARKERS = ['semen_volume', 'sperm_concentration', 'total_sperm_count', 'total_sperm_motility_', 'progressive_motility_pr_'];
+    for (const marker of MALE_MARKERS) {
+      if (hasParam(extractedJson, marker)) {
+        return 'male';
+      }
+    }
+
+    const FEMALE_MARKERS = ['rubella_igg_antibody_quantitative_iu_ml', 'rubella_igg_interpretation_immune_non_immune', 'amh', 'anti_mullerian_hormone', 'afc'];
+    for (const marker of FEMALE_MARKERS) {
+      if (hasParam(extractedJson, marker)) {
+        return 'female';
+      }
+    }
+
+    if (rawText) {
+      if (/\b(Mr\.|Age\/Sex:\s*\d+\s*Yrs?\s*\/\s*M\b)/i.test(rawText)) {
+        return 'male';
+      }
+      if (/\b(Ms\.|Mrs\.|Age\/Sex:\s*\d+\s*Yrs?\s*\/\s*F\b)/i.test(rawText)) {
+        return 'female';
+      }
+    }
+
     return null;
   }
 }

@@ -23,10 +23,13 @@ const PORT = process.env.PORT || 3001;
 const rateLimit = require('express-rate-limit');
 
 // Middleware
+const isProduction = process.env.NODE_ENV === 'production';
+const envOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'https://fresh-engines-testing.vercel.app'
+  'https://fresh-engines-testing.vercel.app',
+  ...envOrigins
 ];
 
 app.use(cors({
@@ -35,14 +38,11 @@ app.use(cors({
       callback(null, true);
     } else if (allowedOrigins.includes(origin)) {
       callback(null, true);
+    } else if (!isProduction && /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+      // Dynamically allow local network IP origins in dev (e.g. http://192.168.x.x:3000)
+      callback(null, true);
     } else {
-      // Dynamically allow local network IP origins (e.g. http://192.168.x.x:3000)
-      const isLocalIp = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin);
-      if (isLocalIp) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true

@@ -184,7 +184,10 @@ const sections = [
     "id": "thyroid_test",
     "name": "Thyroid Test",
     "aliases": [
-      "thyroid test"
+      "thyroid test",
+      "thyroid stimulating hormone",
+      "thyroid profile",
+      "thyroid stimulating hormone (tsh)"
     ]
   },
   {
@@ -295,6 +298,11 @@ const fuse = new Fuse(searchableSections, {
 class SectionDetectorService {
   detectSection(text) {
     if (!text || text.trim().length < 3) return null;
+    
+    // Guard: The TSH parameter name contains "uTSH" / "utsh", whereas the section header does not.
+    // This prevents the TSH parameter from being incorrectly detected as a section header.
+    if (text.toLowerCase().includes('utsh')) return null;
+
     const normalizedText = text.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
     const results = fuse.search(normalizedText);
     if (results.length > 0 && results[0].score <= 0.4) {

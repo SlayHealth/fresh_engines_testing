@@ -2,68 +2,27 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { 
-  ShieldAlert, ShieldCheck, Heart, Sparkles, Check, ChevronDown, 
-  Upload, AlertCircle, CheckCircle, RefreshCw,
-  Moon, Coffee, Footprints, Briefcase, Beer, Flame, Zap, Trophy, Calendar
+import {
+  ShieldAlert, ShieldCheck, Heart, Sparkles, AlertCircle, CheckCircle, RefreshCw
 } from 'lucide-react';
 import { API_URL } from '../../../config/api';
 import { apiFetch } from '../../../utils/api';
+import QuestionScreen from '../../../components/wizard/QuestionScreen';
+import ChoiceList from '../../../components/wizard/ChoiceList';
+import MeasurementSlider from '../../../components/wizard/MeasurementSlider';
+import CityInput from '../../../components/wizard/CityInput';
+import {
+  LIFESTYLE_ACTIVITIES, LIFESTYLE_STEPS, LIFESTYLE_OCCUPATIONS, LIFESTYLE_DRINKING,
+  LIFESTYLE_SMOKING, LIFESTYLE_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL, GENDERS
+} from '../../../constants/lifestyleOptions';
+import { MENTAL_HEALTH_QUESTIONS } from '../../../constants/mentalHealthQuestions';
 
-const LIFESTYLE_ACTIVITIES = [
-  { val: 'Sedentary', label: 'Sedentary', desc: 'Little to no regular exercise', icon: Coffee },
-  { val: 'Moderate', label: 'Moderate', desc: 'Light exercise 1-3 times/week', icon: Footprints },
-  { val: 'Active', label: 'Active', desc: 'Exercise 3-5 times/week', icon: Zap },
-  { val: 'Athletic', label: 'Athletic', desc: 'Daily intense exercise/sports', icon: Trophy }
-];
+const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
+const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
-const LIFESTYLE_STEPS = [
-  { val: '<3,000', label: 'Less than 3,000', desc: 'Mostly sitting', icon: Footprints },
-  { val: '3,000 - 5,000', label: '3,000 - 5,000', desc: 'Light walking', icon: Footprints },
-  { val: '5,000 - 10,000', label: '5,000 - 10,000', desc: 'Active day', icon: Footprints },
-  { val: '10,000+', label: '10,000+', desc: 'Very active', icon: Footprints }
-];
-
-const LIFESTYLE_OCCUPATIONS = [
-  { val: 'Sitting 8h+', label: 'Sitting 8h+', desc: 'Desk bound, high sedentary time', icon: Briefcase },
-  { val: 'Sitting 4h+', label: 'Sitting 4h+', desc: 'Moderate movement during work', icon: Briefcase },
-  { val: 'travelling', label: 'Travelling', desc: 'On the move frequently', icon: Briefcase },
-  { val: 'other', label: 'Other', desc: 'Varying work environment', icon: Briefcase }
-];
-
-const LIFESTYLE_DRINKING = [
-  { val: 'Never', label: 'Never', desc: 'No alcohol consumption', icon: Beer },
-  { val: 'socially', label: 'Socially', desc: 'Occasional drinks with company', icon: Beer },
-  { val: 'regularly', label: 'Regularly', desc: 'Regular weekly drinks', icon: Beer },
-  { val: 'heavily', label: 'Heavily', desc: 'High frequency/binge drinking', icon: Beer },
-  { val: 'other', label: 'Other', desc: 'Varying patterns', icon: Beer }
-];
-
-const LIFESTYLE_SMOKING = [
-  { val: 'never', label: 'Never', desc: 'No tobacco smoking', icon: Flame },
-  { val: 'occasion', label: 'Occasion', desc: 'Occasional social smoking', icon: Flame },
-  { val: 'regular', label: 'Regular', desc: 'Daily smoking', icon: Flame },
-  { val: 'chain', label: 'Chain', desc: 'High frequency smoking', icon: Flame }
-];
-
-const LIFESTYLE_TOBACCO = [
-  { val: 'never', label: 'Never', desc: 'No tobacco use', icon: Sparkles },
-  { val: 'occasional', label: 'Occasional', desc: 'Occasional usage', icon: Sparkles },
-  { val: 'regular', label: 'Regular', desc: 'Daily usage', icon: Sparkles }
-];
-
-const LIFESTYLE_SLEEP = [
-  { val: 'Early Bird', label: 'Early Bird', desc: 'Sleep early, wake early', icon: Moon },
-  { val: 'night owl', label: 'Night Owl', desc: 'Sleep late, wake late', icon: Moon },
-  { val: 'irregular', label: 'Irregular', desc: 'Shifting sleep schedule', icon: Moon },
-  { val: 'insomniac', label: 'Insomniac', desc: 'Difficulty sleeping', icon: Moon }
-];
-
-const LIFESTYLE_MENSTRUAL = [
-  { val: 'Regular', label: 'Regular', desc: 'Normal cycle monthly pattern', icon: Calendar },
-  { val: 'Irregular', label: 'Irregular', desc: 'Inconsistent start times', icon: Calendar },
-  { val: 'Menopause', label: 'Menopause', desc: 'Permanent cessation of cycle', icon: Calendar },
-  { val: 'Other', label: 'Other', desc: 'Other patterns', icon: Calendar }
+const MENTAL_OPT_IN_OPTIONS = [
+  { val: 'yes', label: 'Yes, add it', desc: 'Premium — 21 quick questions' },
+  { val: 'skip', label: 'Not now', desc: 'Skip — you can add this anytime later' }
 ];
 
 export default function ProspectOnboardingPage() {
@@ -80,6 +39,9 @@ export default function ProspectOnboardingPage() {
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [isConsentSubmitting, setIsConsentSubmitting] = useState(false);
 
+  // Wizard position
+  const [stepIndex, setStepIndex] = useState(0);
+
   // Questionnaire States
   const [dob, setDob] = useState('');
   const [city, setCity] = useState('');
@@ -87,7 +49,6 @@ export default function ProspectOnboardingPage() {
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
   const [waist, setWaist] = useState('');
-  const [genderDropdownOpen, setGenderDropdownOpen] = useState(false);
 
   // Lifestyle Habits States
   const [activityLevel, setActivityLevel] = useState('');
@@ -98,6 +59,10 @@ export default function ProspectOnboardingPage() {
   const [tobaccoHabits, setTobaccoHabits] = useState('');
   const [sleepCycle, setSleepCycle] = useState('');
   const [menstrualCycle, setMenstrualCycle] = useState('');
+
+  // Optional mental health questionnaire
+  const [mentalOptIn, setMentalOptIn] = useState(null);
+  const [mentalAnswers, setMentalAnswers] = useState({});
 
   // Upload Reports States
   const [pathologyFile, setPathologyFile] = useState(null);
@@ -111,11 +76,13 @@ export default function ProspectOnboardingPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
   // Refs
-  const genderDropdownRef = useRef(null);
   const pathFileInputRef = useRef(null);
   const radFileInputRef = useRef(null);
 
   const cn = (...classes) => classes.filter(Boolean).join(' ');
+
+  const goNext = () => setStepIndex((i) => i + 1);
+  const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
   // Validate Token on Load
   useEffect(() => {
@@ -144,17 +111,6 @@ export default function ProspectOnboardingPage() {
     validate();
   }, [token]);
 
-  // Click outside listener for Gender dropdown
-  useEffect(() => {
-    const clickOutside = (e) => {
-      if (genderDropdownRef.current && !genderDropdownRef.current.contains(e.target)) {
-        setGenderDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', clickOutside);
-    return () => document.removeEventListener('mousedown', clickOutside);
-  }, []);
-
   const handleConsent = async (accepted) => {
     setIsConsentSubmitting(true);
     try {
@@ -163,7 +119,7 @@ export default function ProspectOnboardingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, accepted })
       });
-      
+
       if (!res.ok) throw new Error('Failed to record consent');
 
       setConsentDecided(true);
@@ -175,9 +131,7 @@ export default function ProspectOnboardingPage() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const handleSubmit = async () => {
     if (!dob || !city || !gender || !height || !weight || !waist || !activityLevel || !dailySteps || !occupationStyle || !drinkingHabits || !smokingHabits || !tobaccoHabits || !sleepCycle) {
       setSubmitError('Please answer all required metrics and lifestyle questions.');
       return;
@@ -208,6 +162,9 @@ export default function ProspectOnboardingPage() {
     formData.append('sleep_cycle', sleepCycle);
     if (gender === 'Female' && menstrualCycle) {
       formData.append('menstrualCycle', menstrualCycle);
+    }
+    if (Object.keys(mentalAnswers).length > 0) {
+      formData.append('mentalAnswers', JSON.stringify(mentalAnswers));
     }
 
     if (pathologyFile) {
@@ -297,13 +254,13 @@ export default function ProspectOnboardingPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-xl w-full bg-white rounded-3xl p-8 border border-slate-100 shadow-xl space-y-6">
           <header style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sparkles size={24} style={{ color: '#28c79a' }} />
+            <Sparkles size={24} style={{ color: '#18CC96' }} />
             <h1 className="text-xl font-bold text-slate-800">SlayHealth Premarital Portal</h1>
           </header>
 
           <div className="space-y-4 text-left">
             <div className="p-4 bg-pink-50/30 rounded-2xl border border-pink-100/50 flex items-start gap-3">
-              <Heart className="text-[#DE457D] flex-shrink-0 mt-0.5" size={20} />
+              <Heart className="text-[#DE457D] shrink-0 mt-0.5" size={20} />
               <div>
                 <h3 className="font-bold text-slate-800 text-sm">Health Compatibility Request</h3>
                 <p className="text-xs text-slate-600 leading-relaxed mt-1">
@@ -313,7 +270,7 @@ export default function ProspectOnboardingPage() {
             </div>
 
             <h3 className="font-bold text-slate-800 text-sm mt-6">Consent & Data Handling Disclosure</h3>
-            
+
             <div className="space-y-3 text-xs text-slate-500 leading-relaxed">
               <p>
                 By accepting this invitation, you agree to submit your basic clinical details, lifestyle habits, and upload your pathology/radiology reports (PDF) to the SlayHealth portal.
@@ -371,453 +328,225 @@ export default function ProspectOnboardingPage() {
     );
   }
 
-  // 2. Questionnaire & File Upload Screen Flow
-  return (
-    <main className="min-h-screen bg-slate-50 py-10 px-4">
-      <div className="max-w-2xl mx-auto bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-xl space-y-8 text-left">
-        <header className="flex items-center gap-2 pb-4 border-b border-slate-100">
-          <Sparkles size={24} style={{ color: '#28c79a' }} />
-          <h1 className="text-xl font-bold text-slate-800">Premarital Onboarding Questionnaire</h1>
-        </header>
+  // ---- Wizard step builders ----
+  const choiceStep = (title, options, value, onChange, extra = {}) => ({
+    title,
+    subtitle: extra.subtitle,
+    content: <ChoiceList options={options} value={value} onChange={onChange} onAdvance={goNext} />,
+    canAdvance: !!value
+  });
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Section 1: Basic Profile Details */}
-          <div className="space-y-4">
-            <h3 className="font-bold text-slate-800 text-sm pb-1.5 border-b border-slate-100">1. Basic Profile</h3>
+  const fieldStep = (title, value, onChange, extra = {}) => ({
+    title,
+    subtitle: extra.subtitle,
+    content: (
+      <input
+        type={extra.type || 'text'}
+        inputMode={extra.inputMode}
+        placeholder={extra.placeholder}
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+        autoFocus
+        className={fieldInputClass}
+        style={fieldInputStyle}
+      />
+    ),
+    canAdvance: !!(value && value.toString().trim())
+  });
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Gender</label>
-                <div className="relative" ref={genderDropdownRef}>
-                  <button
-                    type="button"
-                    className="w-full p-3 text-left border border-slate-300 rounded-lg bg-white flex justify-between items-center text-slate-900 text-sm"
-                    onClick={() => setGenderDropdownOpen(!genderDropdownOpen)}
-                  >
-                    <span>{gender || "Select Gender"}</span>
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  </button>
+  const measurementStep = (title, measureType, value, onChange) => ({
+    title,
+    content: <MeasurementSlider type={measureType} value={value} onChange={onChange} />,
+    canAdvance: true
+  });
 
-                  {genderDropdownOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden">
-                      {["Male", "Female", "Other"].map((g) => (
-                        <button
-                          key={g}
-                          type="button"
-                          className="w-full px-4 py-2.5 text-left hover:bg-slate-50 flex items-center justify-between text-sm"
-                          onClick={() => {
-                            setGender(g);
-                            setGenderDropdownOpen(false);
-                          }}
-                        >
-                          <span className={cn("font-medium", gender === g ? "text-[#DE457D]" : "text-slate-700")}>{g}</span>
-                          {gender === g && <Check className="w-4 h-4 text-[#DE457D]" />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+  // 2. Questionnaire & File Upload wizard
+  const steps = [
+    choiceStep('Gender', GENDERS, gender, setGender),
+    fieldStep('Date of Birth', dob, setDob, { type: 'date' }),
+    {
+      title: 'City',
+      content: <CityInput value={city} onChange={setCity} />,
+      canAdvance: !!(city && city.trim())
+    },
+    measurementStep('Height', 'height', height, setHeight),
+    measurementStep('Weight', 'weight', weight, setWeight),
+    measurementStep('Waist', 'waist', waist, setWaist),
+    choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, activityLevel, setActivityLevel),
+    choiceStep('Daily Steps', LIFESTYLE_STEPS, dailySteps, setDailySteps),
+    choiceStep('Occupation & Work Style', LIFESTYLE_OCCUPATIONS, occupationStyle, setOccupationStyle),
+    choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, drinkingHabits, setDrinkingHabits),
+    choiceStep('Smoking Habits', LIFESTYLE_SMOKING, smokingHabits, setSmokingHabits),
+    choiceStep('Tobacco Consumption', LIFESTYLE_TOBACCO, tobaccoHabits, setTobaccoHabits),
+    choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, sleepCycle, setSleepCycle)
+  ];
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Date of Birth</label>
-                <input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-lg outline-none bg-white text-slate-900 text-sm"
-                  required
-                />
-              </div>
-            </div>
+  if (gender === 'Female') {
+    steps.push(choiceStep('Menstrual Cycle Status', LIFESTYLE_MENSTRUAL, menstrualCycle, setMenstrualCycle, { subtitle: 'Optional' }));
+  }
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Height (cm)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 165"
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-lg outline-none bg-white text-slate-900 text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Weight (kg)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 60"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-lg outline-none bg-white text-slate-900 text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Waist (inches)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 30"
-                  value={waist}
-                  onChange={(e) => setWaist(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-lg outline-none bg-white text-slate-900 text-sm"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">City</label>
-              <input
-                type="text"
-                placeholder="Enter city"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full p-3 border border-slate-300 rounded-lg outline-none bg-white text-slate-900 text-sm"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Section 2: Lifestyle Habits */}
-          <div className="space-y-6">
-            <h3 className="font-bold text-slate-800 text-sm pb-1.5 border-b border-slate-100">2. Lifestyle & Habits</h3>
-
-            {/* Activity Level */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600 uppercase">Physical Activity Level</label>
-              <div className="grid grid-cols-2 gap-3">
-                {LIFESTYLE_ACTIVITIES.map(opt => {
-                  const isSelected = activityLevel === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                        isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                      )}
-                      onClick={() => setActivityLevel(opt.val)}
-                    >
-                      <opt.icon size={16} className="text-slate-400" />
-                      <div>
-                        <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                        <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Daily Steps */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600 uppercase">Daily Steps</label>
-              <div className="grid grid-cols-2 gap-3">
-                {LIFESTYLE_STEPS.map(opt => {
-                  const isSelected = dailySteps === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                        isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                      )}
-                      onClick={() => setDailySteps(opt.val)}
-                    >
-                      <opt.icon size={16} className="text-slate-400" />
-                      <div>
-                        <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                        <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Work Style */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600 uppercase">Occupation & Work Style</label>
-              <div className="grid grid-cols-2 gap-3">
-                {LIFESTYLE_OCCUPATIONS.map(opt => {
-                  const isSelected = occupationStyle === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                        isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                      )}
-                      onClick={() => setOccupationStyle(opt.val)}
-                    >
-                      <opt.icon size={16} className="text-slate-400" />
-                      <div>
-                        <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                        <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Drinking Habits */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600 uppercase">Alcohol Consumption</label>
-              <div className="grid grid-cols-2 gap-3">
-                {LIFESTYLE_DRINKING.map(opt => {
-                  const isSelected = drinkingHabits === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                        isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                      )}
-                      onClick={() => setDrinkingHabits(opt.val)}
-                    >
-                      <opt.icon size={16} className="text-slate-400" />
-                      <div>
-                        <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                        <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Smoking Habits */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600 uppercase">Smoking Habits</label>
-              <div className="grid grid-cols-2 gap-3">
-                {LIFESTYLE_SMOKING.map(opt => {
-                  const isSelected = smokingHabits === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                        isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                      )}
-                      onClick={() => setSmokingHabits(opt.val)}
-                    >
-                      <opt.icon size={16} className="text-slate-400" />
-                      <div>
-                        <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                        <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Tobacco consumption */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600 uppercase">Tobacco Consumption</label>
-              <div className="grid grid-cols-2 gap-3">
-                {LIFESTYLE_TOBACCO.map(opt => {
-                  const isSelected = tobaccoHabits === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                        isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                      )}
-                      onClick={() => setTobaccoHabits(opt.val)}
-                    >
-                      <opt.icon size={16} className="text-slate-400" />
-                      <div>
-                        <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                        <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Sleep cycle */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600 uppercase">Sleep Cycle</label>
-              <div className="grid grid-cols-2 gap-3">
-                {LIFESTYLE_SLEEP.map(opt => {
-                  const isSelected = sleepCycle === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                        isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                      )}
-                      onClick={() => setSleepCycle(opt.val)}
-                    >
-                      <opt.icon size={16} className="text-slate-400" />
-                      <div>
-                        <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                        <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Menstrual cycle (conditional if female) */}
-            {gender === 'Female' && (
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-600 uppercase">Menstrual Cycle Status (Optional)</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {LIFESTYLE_MENSTRUAL.map(opt => {
-                    const isSelected = menstrualCycle === opt.val;
-                    return (
-                      <button
-                        key={opt.val}
-                        type="button"
-                        className={cn(
-                          "p-3 rounded-xl border text-left cursor-pointer transition-all w-full flex items-center gap-2",
-                          isSelected ? "border-[#DE457D] bg-pink-50/20 ring-1 ring-[#DE457D]" : "border-slate-200 bg-white hover:bg-slate-50/60"
-                        )}
-                        onClick={() => setMenstrualCycle(opt.val)}
-                      >
-                        <opt.icon size={16} className="text-slate-400" />
-                        <div>
-                          <span className="block font-bold text-slate-800 text-xs">{opt.label}</span>
-                          <span className="block text-[10px] text-slate-500 mt-0.5">{opt.desc}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Section 3: Upload Pathology Report */}
-          <div className="space-y-4">
-            <h3 className="font-bold text-slate-800 text-sm pb-1.5 border-b border-slate-100">3. Upload Reports</h3>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 border border-dashed border-slate-300 rounded-2xl text-center bg-slate-50/40 space-y-3">
-                <span className="text-xs font-bold text-slate-700 block">Pathology PDF (Required)</span>
-                
-                <button
-                  type="button"
-                  onClick={() => pathFileInputRef.current.click()}
-                  className={cn(
-                    "w-full py-2.5 px-3 rounded-xl border font-bold text-xs transition-all",
-                    pathologyFile ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
-                  )}
-                >
-                  {pathologyFile ? 'Report Added ✓' : 'Upload Pathology'}
-                </button>
-                
-                <div className="flex items-center justify-center gap-2 mt-1">
-                  <input
-                    type="checkbox"
-                    id="mockPath"
-                    checked={useMockPathology}
-                    onChange={(e) => {
-                      setUseMockPathology(e.target.checked);
-                      if (e.target.checked) setPathologyFile(null);
-                    }}
-                    className="rounded text-[#DE457D]"
-                  />
-                  <label htmlFor="mockPath" className="text-[10px] text-slate-500 cursor-pointer">Use Mock Report</label>
-                </div>
-              </div>
-
-              <div className="p-4 border border-dashed border-slate-300 rounded-2xl text-center bg-slate-50/40 space-y-3">
-                <span className="text-xs font-bold text-slate-700 block">Radiology PDF (Optional)</span>
-                
-                <button
-                  type="button"
-                  onClick={() => radFileInputRef.current.click()}
-                  className={cn(
-                    "w-full py-2.5 px-3 rounded-xl border font-bold text-xs transition-all",
-                    radiologyFile ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
-                  )}
-                >
-                  {radiologyFile ? 'Report Added ✓' : 'Upload Radiology'}
-                </button>
-                
-                <div className="flex items-center justify-center gap-2 mt-1">
-                  <input
-                    type="checkbox"
-                    id="mockRad"
-                    checked={useMockRadiology}
-                    onChange={(e) => {
-                      setUseMockRadiology(e.target.checked);
-                      if (e.target.checked) setRadiologyFile(null);
-                    }}
-                    className="rounded text-[#DE457D]"
-                  />
-                  <label htmlFor="mockRad" className="text-[10px] text-slate-500 cursor-pointer">Use Mock Report</label>
-                </div>
-              </div>
-            </div>
-
-            <input
-              type="file"
-              ref={pathFileInputRef}
-              style={{ display: 'none' }}
-              accept=".pdf"
-              onChange={(e) => {
-                if (e.target.files[0]) {
-                  setPathologyFile(e.target.files[0]);
-                  setUseMockPathology(false);
-                }
-              }}
-            />
-            <input
-              type="file"
-              ref={radFileInputRef}
-              style={{ display: 'none' }}
-              accept=".pdf"
-              onChange={(e) => {
-                if (e.target.files[0]) {
-                  setRadiologyFile(e.target.files[0]);
-                  setUseMockRadiology(false);
-                }
-              }}
-            />
-          </div>
-
-          {submitError && (
-            <div className="p-4 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 flex items-center gap-2 text-xs font-semibold">
-              <AlertCircle size={16} />
-              <span>{submitError}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3.5 bg-[#DE457D] hover:bg-[#c93d6f] disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg shadow-pink-500/20 transition-all flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <RefreshCw className="animate-spin" size={16} />
-                <span>Uploading & Submitting...</span>
-              </>
-            ) : (
-              <span>Submit Health Details</span>
-            )}
-          </button>
-        </form>
+  steps.push({
+    title: 'Upload your Pathology Report',
+    subtitle: 'Required — PDF with your blood/pathology parameters',
+    canAdvance: !!pathologyFile || useMockPathology,
+    content: (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => pathFileInputRef.current.click()}
+          className="w-full py-4 rounded-xl border font-semibold text-sm transition-colors duration-150"
+          style={{
+            borderColor: pathologyFile ? 'var(--teal)' : 'var(--line)',
+            background: pathologyFile ? 'var(--soft-teal)' : 'var(--surface)',
+            color: pathologyFile ? 'var(--teal-d)' : 'var(--ink)'
+          }}
+        >
+          {pathologyFile ? 'Report added ✓' : 'Upload PDF'}
+        </button>
+        <label className="flex items-center justify-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useMockPathology}
+            onChange={(e) => {
+              setUseMockPathology(e.target.checked);
+              if (e.target.checked) setPathologyFile(null);
+            }}
+            className="rounded"
+            style={{ accentColor: 'var(--teal)' }}
+          />
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Use a mock report instead</span>
+        </label>
       </div>
+    )
+  });
+
+  steps.push({
+    title: 'Upload your Radiology Report',
+    subtitle: 'Optional — USG, TVS, Echo, or DEXA scans',
+    canAdvance: true,
+    onSkip: goNext,
+    content: (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => radFileInputRef.current.click()}
+          className="w-full py-4 rounded-xl border font-semibold text-sm transition-colors duration-150"
+          style={{
+            borderColor: radiologyFile ? 'var(--teal)' : 'var(--line)',
+            background: radiologyFile ? 'var(--soft-teal)' : 'var(--surface)',
+            color: radiologyFile ? 'var(--teal-d)' : 'var(--ink)'
+          }}
+        >
+          {radiologyFile ? 'Report added ✓' : 'Upload PDF'}
+        </button>
+        <label className="flex items-center justify-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useMockRadiology}
+            onChange={(e) => {
+              setUseMockRadiology(e.target.checked);
+              if (e.target.checked) setRadiologyFile(null);
+            }}
+            className="rounded"
+            style={{ accentColor: 'var(--teal)' }}
+          />
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Use a mock report instead</span>
+        </label>
+      </div>
+    )
+  });
+
+  // Optional mental health block — its last step carries the final Submit trigger
+  const mentalSteps = [{
+    title: 'Add Mental Health Compatibility?',
+    subtitle: 'Up to 20% deeper insight into long-term emotional & personality compatibility.',
+    canAdvance: !!mentalOptIn,
+    content: (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--soft-amber)' }}>
+          <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--amber)', color: '#fff' }}>
+            Premium
+          </span>
+          <span className="text-xs font-medium" style={{ color: 'var(--amber-d)' }}>21 quick questions</span>
+        </div>
+        <ChoiceList options={MENTAL_OPT_IN_OPTIONS} value={mentalOptIn} onChange={setMentalOptIn} onAdvance={goNext} />
+      </div>
+    )
+  }];
+  if (mentalOptIn === 'yes') {
+    MENTAL_HEALTH_QUESTIONS.forEach((q) => {
+      mentalSteps.push(choiceStep(q.title, q.options, mentalAnswers[q.id], (v) => setMentalAnswers({ ...mentalAnswers, [q.id]: v }), { subtitle: q.desc }));
+    });
+  }
+  const lastMentalStep = mentalSteps[mentalSteps.length - 1];
+  lastMentalStep.nextLabel = isSubmitting ? 'Submitting…' : 'Submit Health Details';
+  lastMentalStep.nextVariant = 'pink';
+  lastMentalStep.onNext = handleSubmit;
+  lastMentalStep.canAdvance = lastMentalStep.canAdvance !== false && !isSubmitting;
+  if (submitError) {
+    lastMentalStep.content = (
+      <div className="space-y-3">
+        {lastMentalStep.content}
+        <div className="p-3 rounded-lg text-xs font-medium flex items-center gap-2" style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {submitError}
+        </div>
+      </div>
+    );
+  }
+  steps.push(...mentalSteps);
+
+  const clampedIndex = Math.max(0, Math.min(stepIndex, steps.length - 1));
+  const currentStep = steps[clampedIndex];
+
+  return (
+    <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
+      <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-5 overflow-hidden">
+        <div className="flex items-center justify-center gap-2 mb-4 shrink-0">
+          <Sparkles className="w-5 h-5" style={{ color: 'var(--pink)' }} />
+          <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Premarital Onboarding Questionnaire</span>
+        </div>
+
+        <QuestionScreen
+          key={clampedIndex}
+          stepIndex={clampedIndex}
+          totalSteps={steps.length}
+          title={currentStep.title}
+          subtitle={currentStep.subtitle}
+          onBack={clampedIndex > 0 ? goBack : undefined}
+          onNext={currentStep.onNext || goNext}
+          nextLabel={currentStep.nextLabel || 'Next'}
+          nextDisabled={currentStep.canAdvance === false}
+        >
+          {currentStep.content}
+        </QuestionScreen>
+      </div>
+
+      <input
+        type="file"
+        ref={pathFileInputRef}
+        style={{ display: 'none' }}
+        accept=".pdf"
+        onChange={(e) => {
+          if (e.target.files[0]) {
+            setPathologyFile(e.target.files[0]);
+            setUseMockPathology(false);
+          }
+        }}
+      />
+      <input
+        type="file"
+        ref={radFileInputRef}
+        style={{ display: 'none' }}
+        accept=".pdf"
+        onChange={(e) => {
+          if (e.target.files[0]) {
+            setRadiologyFile(e.target.files[0]);
+            setUseMockRadiology(false);
+          }
+        }}
+      />
     </main>
   );
 }
