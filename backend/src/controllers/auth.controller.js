@@ -43,10 +43,16 @@ async function loginUser(req, res, next) {
 
     logger.info(`[Auth][CID: ${correlationId}] OTP successfully sent to WhatsApp for phone: ${cleanPhone}`);
 
+    // Let the client know if this phone is brand-new (no account yet), so it can
+    // collect name/relation/marriage-timeline before OTP entry for first-time users only.
+    const existing = await db.query('SELECT id, name FROM users WHERE phone_number = $1', [cleanPhone]);
+    const isNewUser = existing.rows.length === 0 || !existing.rows[0].name;
+
     res.json({
       success: true,
       message: 'OTP code sent successfully',
-      phone_number: cleanPhone
+      phone_number: cleanPhone,
+      is_new_user: isNewUser
     });
   } catch (error) {
     logger.error(`[Auth][CID: ${correlationId}] Error in loginUser: ${error.message}`);

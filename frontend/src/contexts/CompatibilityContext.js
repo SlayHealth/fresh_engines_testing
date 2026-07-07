@@ -354,13 +354,13 @@ export function CompatibilityProvider({ children }) {
       return false;
     };
 
+    // Pages a logged-out visitor is meant to land on — never bounce away from these.
+    const isPublicPath = (pathname) =>
+      pathname === '/' || pathname === '' || pathname === '/login' || pathname.startsWith('/invite/');
+
     const handleSessionExpired = () => {
       clearAllSessionStates();
-      if (
-        window.location.pathname !== '/' &&
-        window.location.pathname !== '' &&
-        !window.location.pathname.startsWith('/invite/')
-      ) {
+      if (!isPublicPath(window.location.pathname)) {
         window.location.href = '/';
       }
     };
@@ -369,11 +369,7 @@ export function CompatibilityProvider({ children }) {
     silentRefresh().then((success) => {
       if (!success) {
         clearAllSessionStates();
-        if (
-          window.location.pathname !== '/' &&
-          window.location.pathname !== '' &&
-          !window.location.pathname.startsWith('/invite/')
-        ) {
+        if (!isPublicPath(window.location.pathname)) {
           window.location.href = '/';
         }
         return;

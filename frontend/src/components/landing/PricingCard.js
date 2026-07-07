@@ -1,7 +1,16 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { Check } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
+
+const COLLAPSED_COUNT = 3;
 
 export default function PricingCard({ plan }) {
+  const [expanded, setExpanded] = useState(false);
+  const hiddenCount = plan.features.length - COLLAPSED_COUNT;
+  const visibleFeatures = expanded ? plan.features : plan.features.slice(0, COLLAPSED_COUNT);
+
   return (
     <div
       className={`rounded-2xl p-8 transition-all duration-300 flex flex-col h-full relative ${plan.popular ? 'md:-translate-y-4' : ''}`}
@@ -36,13 +45,24 @@ export default function PricingCard({ plan }) {
 
       <div className="flex-1">
         <ul className="space-y-3.5 text-sm lg:text-base" style={{ color: 'var(--muted)' }}>
-          {plan.features.map((feature, i) => (
+          {visibleFeatures.map((feature, i) => (
             <li key={i} className="flex gap-2.5 items-start leading-snug">
-              <Check className="w-4 h-4 lg:w-5 lg:h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--teal-d)' }} />
+              <Check className="w-4 h-4 lg:w-5 lg:h-5 mt-0.5 shrink-0" style={{ color: 'var(--teal-d)' }} />
               <span>{feature}</span>
             </li>
           ))}
         </ul>
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1.5 mt-3.5 text-sm font-semibold cursor-pointer"
+            style={{ color: 'var(--teal-d)' }}
+          >
+            {expanded ? 'Show less' : `+${hiddenCount} more feature${hiddenCount > 1 ? 's' : ''}`}
+            <ChevronDown className="w-4 h-4 transition-transform duration-300" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
+          </button>
+        )}
       </div>
 
       <div className="mt-6 pt-6 border-t text-sm font-medium text-center" style={{ borderColor: 'var(--line)', color: 'var(--muted)' }}>

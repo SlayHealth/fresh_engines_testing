@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, cloneElement, isValidElement } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Check, Share2 } from 'lucide-react';
+import { RefreshCw, Check, Share2, UserRound, HeartPulse, Brain, FlaskConical, ScanLine, Dna } from 'lucide-react';
 import { useCompatibility, calculateAge, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
@@ -11,28 +11,36 @@ import ChoiceList from '../../components/wizard/ChoiceList';
 import MeasurementSlider from '../../components/wizard/MeasurementSlider';
 import CityInput from '../../components/wizard/CityInput';
 import AnalysisLoadingScreen from '../../components/wizard/AnalysisLoadingScreen';
+import CategoryHub from '../../components/wizard/CategoryHub';
+import ComparisonSelector from '../../components/wizard/ComparisonSelector';
 import {
   LIFESTYLE_ACTIVITIES, LIFESTYLE_STEPS, LIFESTYLE_OCCUPATIONS, LIFESTYLE_DRINKING,
   LIFESTYLE_SMOKING, LIFESTYLE_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL,
   GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS, RELATIONSHIP_STATUSES
 } from '../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS } from '../../constants/mentalHealthQuestions';
+import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS } from '../../constants/suggestedTests';
 
 const PROSPECT_MODE_OPTIONS = [
   { val: 'self', label: "I'll enter their details myself", desc: 'Fill in your prospect’s information right now' },
   { val: 'invite', label: 'Generate a link to send them', desc: "They fill in their own details — you copy and send the link yourself" }
 ];
 
-const MENTAL_OPT_IN_OPTIONS = [
-  { val: 'yes', label: 'Yes, add it', desc: 'Premium — 21 quick questions' },
-  { val: 'skip', label: 'Not now', desc: 'Skip — you can add this anytime from your report' }
-];
-
 const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
+const ABOUT_LIFESTYLE_FIELDS = ['activity_level', 'daily_steps', 'occupation_style', 'drinking_habits', 'smoking_habits', 'tobacco_habits', 'sleep_cycle'];
+
 export default function AddProspectPage() {
   const router = useRouter();
+
+  // ---- Flow-level navigation state ----
+  const [showSelector, setShowSelector] = useState(true);
+  const [comparisonSelection, setComparisonSelection] = useState({ lifestyle: true, pathology: true, mental: true, radiology: false, genomics: false });
+  const [activePerson, setActivePerson] = useState('self'); // 'self' | 'prospect'
+  const [activeCategory, setActiveCategory] = useState(null); // null = hub view
+  const [showRouting, setShowRouting] = useState(false); // the "how will your prospect share" transition screen
+
   const [prospectMode, setProspectMode] = useState(null); // 'self' | 'invite' | null
   const [activeInvite, setActiveInvite] = useState(null);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
@@ -41,7 +49,7 @@ export default function AddProspectPage() {
   const [isRunningMatch, setIsRunningMatch] = useState(false);
   const [matchRunError, setMatchRunError] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0); // index within the active category / routing sub-flow
   const [selfMentalOptIn, setSelfMentalOptIn] = useState(null); // 'yes' | 'skip' | null
   const [selfMentalAnswers, setSelfMentalAnswers] = useState({});
   const [prospectMentalOptIn, setProspectMentalOptIn] = useState(null);
@@ -103,6 +111,14 @@ export default function AddProspectPage() {
 
   const goNext = () => setStepIndex((i) => i + 1);
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
+  const enterCategory = (key) => {
+    setActiveCategory(key);
+    // Resume at the first unanswered step rather than always restarting at 0.
+    const steps = getCategorySteps(key, activePerson);
+    const firstIncomplete = steps.findIndex((s) => s.canAdvance === false);
+    setStepIndex(firstIncomplete === -1 ? 0 : firstIncomplete);
+  };
+  const exitToHub = () => { setActiveCategory(null); setStepIndex(0); };
 
   // Radiology Upload Handler
   const handleRadiologyUpload = async (file, isProspect) => {
@@ -324,6 +340,8 @@ export default function AddProspectPage() {
           if (active) {
             setActiveInvite(active);
             setProspectMode('invite');
+            setShowSelector(false);
+            setShowRouting(false);
           }
         }
       } catch (err) {
@@ -795,7 +813,7 @@ export default function AddProspectPage() {
   const choiceStep = (title, options, value, onChange, extra = {}) => ({
     title,
     subtitle: extra.subtitle,
-    content: <ChoiceList options={options} value={value} onChange={onChange} onAdvance={goNext} />,
+    content: <ChoiceList options={options} value={value} onChange={onChange} onAdvance={extra.advance || goNext} />,
     canAdvance: !!value
   });
 
@@ -830,88 +848,28 @@ export default function AddProspectPage() {
     canAdvance: !!(value && value.trim())
   });
 
-  const buildBodyAndLifestyleSteps = (form, setForm) => {
-    const set = (patch) => setForm({ ...form, ...patch });
-    const arr = [
-      measurementStep('Height', 'height', form.height, (v) => set({ height: v })),
-      measurementStep('Weight', 'weight', form.weight, (v) => set({ weight: v })),
-      measurementStep('Waist', 'waist', form.waist, (v) => set({ waist: v })),
-      choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, form.activity_level, (v) => set({ activity_level: v })),
-      choiceStep('Daily Steps', LIFESTYLE_STEPS, form.daily_steps, (v) => set({ daily_steps: v })),
-      choiceStep('Occupation & Work Style', LIFESTYLE_OCCUPATIONS, form.occupation_style, (v) => set({ occupation_style: v })),
-      choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, form.drinking_habits, (v) => set({ drinking_habits: v })),
-      choiceStep('Smoking Habits', LIFESTYLE_SMOKING, form.smoking_habits, (v) => set({ smoking_habits: v })),
-      choiceStep('Tobacco Consumption', LIFESTYLE_TOBACCO, form.tobacco_habits, (v) => set({ tobacco_habits: v })),
-      choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, form.sleep_cycle, (v) => set({ sleep_cycle: v }))
-    ];
-    if (form.gender === 'Female' || form.candidateGender === 'Female') {
-      arr.push(choiceStep('Menstrual Cycle Status', LIFESTYLE_MENSTRUAL, form.menstrualCycle, (v) => set({ menstrualCycle: v }), { subtitle: 'Optional' }));
+  // Rewires the last step of a category's array so both the Next button AND
+  // (for ChoiceList-backed steps) tap-to-auto-advance return to the hub
+  // instead of walking off the end of a now-category-scoped step list.
+  const finalizeSteps = (arr, advance) => {
+    if (arr.length === 0) return arr;
+    const lastIdx = arr.length - 1;
+    const last = { ...arr[lastIdx] };
+    last.onNext = advance;
+    if (isValidElement(last.content) && last.content.type === ChoiceList) {
+      last.content = cloneElement(last.content, { onAdvance: advance });
     }
-    return arr;
+    return [...arr.slice(0, lastIdx), last];
   };
 
-  // Mental health is independent per person: an opt-in choice, then (if accepted)
-  // the same 21 questions asked one at a time, just like the lifestyle block above.
-  const buildMentalHealthSteps = (optIn, setOptIn, answers, setAnswers, final = {}) => {
-    const arr = [{
-      title: 'Add Mental Health Compatibility?',
-      subtitle: 'Up to 20% deeper insight into long-term emotional & personality compatibility.',
-      canAdvance: !!optIn,
-      content: (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--soft-amber)' }}>
-            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--amber)', color: '#fff' }}>
-              Premium
-            </span>
-            <span className="text-xs font-medium" style={{ color: 'var(--amber-d)' }}>21 quick questions</span>
-          </div>
-          <ChoiceList options={MENTAL_OPT_IN_OPTIONS} value={optIn} onChange={setOptIn} onAdvance={goNext} />
-        </div>
-      )
-    }];
-
-    if (optIn === 'yes') {
-      MENTAL_HEALTH_QUESTIONS.forEach((q) => {
-        arr.push(choiceStep(q.title, q.options, answers[q.id], (v) => setAnswers({ ...answers, [q.id]: v }), { subtitle: q.desc }));
-      });
-    }
-
-    if (final.isFinal) {
-      const last = arr[arr.length - 1];
-      last.nextLabel = final.nextLabel;
-      last.nextVariant = 'pink';
-      last.onNext = final.onNext;
-      last.canAdvance = last.canAdvance !== false && final.canAdvance !== false;
-      if (final.extraContent) {
-        last.content = (
-          <div className="space-y-3">
-            {last.content}
-            {final.extraContent}
-          </div>
-        );
-      }
-    }
-
-    return arr;
-  };
-
-  const uploadStep = ({ title, subtitle, isUploading, error, hasReport, onUpload, onMock, required, boostPct }) => ({
+  const uploadStep = ({ title, subtitle, isUploading, error, hasReport, onUpload, onMock, required, advance }) => ({
     title,
     subtitle,
     canAdvance: required ? !!hasReport : true,
-    onSkip: required ? undefined : goNext,
+    onNext: advance,
+    onSkip: required ? undefined : advance,
     content: (
       <div className="space-y-3">
-        {!required && boostPct && (
-          <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--soft-amber)' }}>
-            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--amber)', color: '#fff' }}>
-              Premium
-            </span>
-            <span className="text-xs font-medium" style={{ color: 'var(--amber-d)' }}>
-              Boosts your match confidence by up to {boostPct}%
-            </span>
-          </div>
-        )}
         <button
           type="button"
           onClick={onUpload}
@@ -937,131 +895,353 @@ export default function AddProspectPage() {
     )
   });
 
-  // ---- Build the full ordered step list ----
-  const steps = [];
+  // ---- Category step builders (person-agnostic; take a form/setForm pair) ----
+  const buildAboutSteps = (adapter, advance) => {
+    const { form, setForm, nameField, genderField, dobField, cityField, isSelfPerson, needsNameStep } = adapter;
+    const set = (patch) => setForm({ ...form, ...patch });
+    const arr = [];
 
-  if (onboardingForm.userRelation && onboardingForm.userRelation !== 'Self') {
-    steps.push(fieldStep("What's the candidate's name?", onboardingForm.candidateName, (v) => setOnboardingForm({ ...onboardingForm, candidateName: v }), { placeholder: 'Enter their name' }));
-  }
+    // The prospect's name is always collected on the routing screen before this hub
+    // is reached; the "self" candidate only needs it here when someone else (a
+    // parent/sibling/etc.) is filling the form in on the candidate's behalf.
+    if (needsNameStep) {
+      arr.push(fieldStep("What's their name?", form[nameField], (v) => set({ [nameField]: v }), { placeholder: 'Enter their name' }));
+    }
+    arr.push(choiceStep('Gender', GENDERS, form[genderField], (v) => set({ [genderField]: v })));
+    arr.push(fieldStep('Date of Birth', form[dobField], (v) => set({ [dobField]: v }), { type: 'date' }));
+    arr.push(cityStep('City', form[cityField], (v) => set({ [cityField]: v })));
+    arr.push(measurementStep('Height', 'height', form.height, (v) => set({ height: v })));
+    arr.push(measurementStep('Weight', 'weight', form.weight, (v) => set({ weight: v })));
+    arr.push(measurementStep('Waist', 'waist', form.waist, (v) => set({ waist: v })));
 
-  steps.push(choiceStep('Gender', GENDERS, onboardingForm.candidateGender, (v) => setOnboardingForm({ ...onboardingForm, candidateGender: v }), {
-    subtitle: !isSelf ? `For ${onboardingForm.candidateName || 'them'}` : undefined
-  }));
-  steps.push(fieldStep('Date of Birth', onboardingForm.candidateDob, (v) => setOnboardingForm({ ...onboardingForm, candidateDob: v }), { type: 'date' }));
-  steps.push(cityStep('City', onboardingForm.candidateCity, (v) => setOnboardingForm({ ...onboardingForm, candidateCity: v })));
-  steps.push(...buildBodyAndLifestyleSteps(onboardingForm, setOnboardingForm));
+    if (isSelfPerson) {
+      arr.push(choiceStep('How did you meet?', MEETING_SOURCES, prospectForm.meetingSource, (v) => setProspectForm({
+        ...prospectForm,
+        meetingSource: v,
+        platformName: v !== 'Matrimonial Platform' ? '' : prospectForm.platformName
+      })));
+      if (prospectForm.meetingSource === 'Matrimonial Platform') {
+        arr.push(choiceStep('Which platform?', MATRIMONIAL_PLATFORMS, prospectForm.platformName, (v) => setProspectForm({ ...prospectForm, platformName: v })));
+      }
+      arr.push(choiceStep('Relationship Status', RELATIONSHIP_STATUSES, form.relationshipStatus, (v) => set({ relationshipStatus: v })));
+    }
 
-  // Relationship context
-  steps.push(choiceStep('How did you meet?', MEETING_SOURCES, prospectForm.meetingSource, (v) => setProspectForm({
-    ...prospectForm,
-    meetingSource: v,
-    platformName: v !== 'Matrimonial Platform' ? '' : prospectForm.platformName
-  })));
-  if (prospectForm.meetingSource === 'Matrimonial Platform') {
-    steps.push(choiceStep('Which platform?', MATRIMONIAL_PLATFORMS, prospectForm.platformName, (v) => setProspectForm({ ...prospectForm, platformName: v })));
-  }
-  steps.push(choiceStep('Relationship Status', RELATIONSHIP_STATUSES, onboardingForm.relationshipStatus, (v) => setOnboardingForm({ ...onboardingForm, relationshipStatus: v })));
+    return finalizeSteps(arr, advance);
+  };
 
-  // Your own report uploads always happen — regardless of how the prospect will share their details
-  steps.push(uploadStep({
-    title: 'Upload your Pathology Report',
-    subtitle: 'PDF with parameters like HbA1c, Lipids, AMH or Semen readings',
-    isUploading: isUserUploading,
-    error: userUploadError,
-    hasReport: !!userReport,
-    required: true,
-    onUpload: () => userFileInputRef.current.click(),
-    onMock: () => triggerMockData(false)
-  }));
-  steps.push(uploadStep({
-    title: 'Upload your Radiology Report',
-    subtitle: 'Optional — USG, TVS, Echo, or DEXA scans',
-    isUploading: isUserRadUploading,
-    error: userRadError,
-    hasReport: !!userRadiology,
-    required: false,
-    boostPct: 12,
-    onUpload: () => userRadFileInputRef.current.click(),
-    onMock: () => triggerMockRadiology(false)
-  }));
+  const buildLifestyleSteps = (form, setForm, advance) => {
+    const set = (patch) => setForm({ ...form, ...patch });
+    const arr = [
+      choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, form.activity_level, (v) => set({ activity_level: v })),
+      choiceStep('Daily Steps', LIFESTYLE_STEPS, form.daily_steps, (v) => set({ daily_steps: v })),
+      choiceStep('Occupation & Work Style', LIFESTYLE_OCCUPATIONS, form.occupation_style, (v) => set({ occupation_style: v })),
+      choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, form.drinking_habits, (v) => set({ drinking_habits: v })),
+      choiceStep('Smoking Habits', LIFESTYLE_SMOKING, form.smoking_habits, (v) => set({ smoking_habits: v })),
+      choiceStep('Tobacco Consumption', LIFESTYLE_TOBACCO, form.tobacco_habits, (v) => set({ tobacco_habits: v })),
+      choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, form.sleep_cycle, (v) => set({ sleep_cycle: v }))
+    ];
+    if (form.gender === 'Female' || form.candidateGender === 'Female') {
+      arr.push(choiceStep('Menstrual Cycle Status', LIFESTYLE_MENSTRUAL, form.menstrualCycle, (v) => set({ menstrualCycle: v }), { subtitle: 'Optional' }));
+    }
+    return finalizeSteps(arr, advance);
+  };
 
-  steps.push(...buildMentalHealthSteps(selfMentalOptIn, setSelfMentalOptIn, selfMentalAnswers, setSelfMentalAnswers));
-
-  // Prospect routing
-  steps.push(choiceStep('How will your prospect share their details?', PROSPECT_MODE_OPTIONS, prospectMode, (v) => setProspectMode(v)));
-
-  if (prospectMode) {
-    steps.push(fieldStep("What's your prospect's name?", prospectForm.name, (v) => setProspectForm({ ...prospectForm, name: v }), { placeholder: 'Enter their name' }));
-  }
-
-  if (prospectMode === 'invite') {
-    steps.push({
-      title: 'Ready to generate your invite link?',
-      subtitle: `We'll create a secure link for ${prospectForm.name || 'them'} to fill in their own details — you copy and send it yourself.`,
-      canAdvance: !isSendingInvite,
-      nextLabel: isSendingInvite ? 'Generating…' : 'Generate Link',
-      onNext: handleCreateInviteLink,
-      content: inviteError ? (
-        <div className="p-3 rounded-lg text-xs font-medium" style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}>{inviteError}</div>
-      ) : null
-    });
-  } else if (prospectMode === 'self') {
-    steps.push(choiceStep("Prospect's Gender", GENDERS, prospectForm.gender, (v) => setProspectForm({ ...prospectForm, gender: v })));
-    steps.push(fieldStep("Prospect's Date of Birth", prospectForm.dob, (v) => setProspectForm({ ...prospectForm, dob: v }), { type: 'date' }));
-    steps.push(cityStep("Prospect's City", prospectForm.city, (v) => setProspectForm({ ...prospectForm, city: v })));
-    steps.push(...buildBodyAndLifestyleSteps(prospectForm, setProspectForm));
-
-    steps.push(uploadStep({
-      title: "Upload prospect's Pathology Report",
-      subtitle: 'PDF with parameters like HbA1c, Lipids, AMH or Semen readings',
-      isUploading: isProspectUploading,
-      error: prospectUploadError,
-      hasReport: !!prospectReport,
-      required: true,
-      onUpload: () => prospectFileInputRef.current.click(),
-      onMock: () => triggerMockData(true)
-    }));
-    steps.push(uploadStep({
-      title: "Upload prospect's Radiology Report",
-      subtitle: 'Optional — USG, TVS, Echo, or DEXA scans',
-      isUploading: isProspectRadUploading,
-      error: prospectRadError,
-      hasReport: !!prospectRadiology,
-      required: false,
-      boostPct: 12,
-      onUpload: () => prospectRadFileInputRef.current.click(),
-      onMock: () => triggerMockRadiology(true)
-    }));
-
-    // Prospect's own mental health block — its last step carries the final Generate Insights trigger
-    const quotaExceeded = runsUsed >= 1;
-    const extraNotices = [];
-    if (quotaExceeded) {
-      extraNotices.push(
-        <div key="quota" className="p-3 rounded-lg text-xs font-medium" style={{ background: 'var(--soft-amber)', color: 'var(--amber-d)' }}>
-          You&apos;ve used your free match. Reset your quota from the dashboard to run another.
+  // Mental health: an opt-in choice, then (if accepted) the same 21 questions one at a time.
+  const buildMentalSteps = (optIn, setOptIn, answers, setAnswers, advance) => {
+    const arr = [{
+      title: 'Add Mental Health Compatibility?',
+      subtitle: 'Up to 20% deeper insight into long-term emotional & personality compatibility.',
+      canAdvance: !!optIn,
+      content: (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--soft-amber)' }}>
+            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--amber)', color: '#fff' }}>
+              Premium
+            </span>
+            <span className="text-xs font-medium" style={{ color: 'var(--amber-d)' }}>21 quick questions</span>
+          </div>
+          <ChoiceList
+            options={[
+              { val: 'yes', label: 'Yes, add it', desc: 'Premium — 21 quick questions' },
+              { val: 'skip', label: 'Not now', desc: 'Skip — you can add this anytime' }
+            ]}
+            value={optIn}
+            onChange={setOptIn}
+            onAdvance={optIn === 'yes' ? goNext : advance}
+          />
         </div>
-      );
-    }
-    if (matchError) {
-      extraNotices.push(
-        <div key="error" className="p-3 rounded-lg text-xs font-medium" style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}>{matchError}</div>
-      );
+      )
+    }];
+
+    if (optIn === 'yes') {
+      MENTAL_HEALTH_QUESTIONS.forEach((q) => {
+        arr.push(choiceStep(q.title, q.options, answers[q.id], (v) => setAnswers({ ...answers, [q.id]: v }), { subtitle: q.desc }));
+      });
     }
 
-    steps.push(...buildMentalHealthSteps(prospectMentalOptIn, setProspectMentalOptIn, prospectMentalAnswers, setProspectMentalAnswers, {
-      isFinal: true,
-      nextLabel: isSavingProfile ? 'Saving…' : isMatching ? 'Generating…' : 'Generate Insights',
-      onNext: handleMatch,
-      canAdvance: !isSavingProfile && !isMatching && !quotaExceeded,
-      extraContent: extraNotices.length > 0 ? extraNotices : null
-    }));
-  }
+    return finalizeSteps(arr, advance);
+  };
 
-  const clampedIndex = Math.max(0, Math.min(stepIndex, steps.length - 1));
-  const currentStep = steps[clampedIndex];
+  // ---- Progress calculations for the hub ----
+  const aboutProgress = (adapter) => {
+    const { form, nameField, genderField, dobField, cityField, isSelfPerson, needsNameStep } = adapter;
+    const fields = [form[genderField], form[dobField], form[cityField], form.height, form.weight, form.waist];
+    if (needsNameStep) fields.push(form[nameField]);
+    if (isSelfPerson) fields.push(prospectForm.meetingSource, form.relationshipStatus);
+    const filled = fields.filter((f) => f !== undefined && f !== null && f !== '').length;
+    return Math.round((filled / fields.length) * 100);
+  };
+
+  const lifestyleProgress = (form) => {
+    const filled = ABOUT_LIFESTYLE_FIELDS.filter((f) => !!form[f]).length;
+    return Math.round((filled / ABOUT_LIFESTYLE_FIELDS.length) * 100);
+  };
+
+  const mentalProgress = (optIn, answers) => {
+    if (optIn === 'skip') return 100;
+    if (optIn !== 'yes') return 0;
+    const answered = Object.keys(answers).length;
+    return Math.round((answered / MENTAL_HEALTH_QUESTIONS.length) * 100);
+  };
+
+  // ---- Build category set for whichever person is active ----
+  const selfAdapter = {
+    form: onboardingForm, setForm: setOnboardingForm,
+    nameField: 'candidateName', genderField: 'candidateGender', dobField: 'candidateDob', cityField: 'candidateCity',
+    isSelfPerson: true,
+    // If the account holder is filling this in on behalf of someone else
+    // (parent/sibling/etc.), that candidate's name still needs collecting here.
+    needsNameStep: !isSelf
+  };
+  const prospectAdapter = {
+    form: prospectForm, setForm: setProspectForm,
+    nameField: 'name', genderField: 'gender', dobField: 'dob', cityField: 'city',
+    isSelfPerson: false,
+    needsNameStep: false // always collected on the routing screen before this hub is reached
+  };
+
+  const buildCategories = (person) => {
+    const isSelfTurn = person === 'self';
+    const adapter = isSelfTurn ? selfAdapter : prospectAdapter;
+    const label = isSelfTurn ? 'you' : (prospectForm.name || 'your prospect');
+
+    return [
+      {
+        key: 'about', label: isSelfTurn ? 'About You' : `About ${prospectForm.name || 'Your Prospect'}`,
+        desc: 'Basics, body & relationship context', icon: UserRound,
+        progress: aboutProgress(adapter)
+      },
+      {
+        key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,
+        progress: lifestyleProgress(adapter.form)
+      },
+      {
+        key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
+        progress: isSelfTurn ? mentalProgress(selfMentalOptIn, selfMentalAnswers) : mentalProgress(prospectMentalOptIn, prospectMentalAnswers)
+      },
+      {
+        key: 'pathology', label: 'Pathology Reports', desc: `Blood work for ${label}`, icon: FlaskConical,
+        progress: isSelfTurn ? (userReport ? 100 : 0) : (prospectReport ? 100 : 0),
+        suggestedTests: SUGGESTED_PATHOLOGY_TESTS
+      },
+      {
+        key: 'radiology', label: 'Radiology Reports', desc: `Scans for ${label}`, icon: ScanLine,
+        progress: isSelfTurn ? (userRadiology ? 100 : 0) : (prospectRadiology ? 100 : 0),
+        locked: !comparisonSelection.radiology,
+        price: '₹999', boostPct: 12,
+        suggestedTests: SUGGESTED_RADIOLOGY_TESTS
+      },
+      {
+        key: 'genomics', label: 'Genomics Report', desc: 'Carrier & hereditary risk screening', icon: Dna,
+        comingSoon: true, locked: true
+      }
+    ];
+  };
+
+  const getCategorySteps = (categoryKey, person) => {
+    const isSelfTurn = person === 'self';
+    const adapter = isSelfTurn ? selfAdapter : prospectAdapter;
+
+    if (categoryKey === 'about') return buildAboutSteps(adapter, exitToHub);
+    if (categoryKey === 'lifestyle') return buildLifestyleSteps(adapter.form, adapter.setForm, exitToHub);
+    if (categoryKey === 'mental') {
+      return isSelfTurn
+        ? buildMentalSteps(selfMentalOptIn, setSelfMentalOptIn, selfMentalAnswers, setSelfMentalAnswers, exitToHub)
+        : buildMentalSteps(prospectMentalOptIn, setProspectMentalOptIn, prospectMentalAnswers, setProspectMentalAnswers, exitToHub);
+    }
+    if (categoryKey === 'pathology') {
+      return [uploadStep({
+        title: isSelfTurn ? 'Upload your Pathology Report' : "Upload prospect's Pathology Report",
+        subtitle: 'PDF with parameters like HbA1c, Lipids, AMH or Semen readings',
+        isUploading: isSelfTurn ? isUserUploading : isProspectUploading,
+        error: isSelfTurn ? userUploadError : prospectUploadError,
+        hasReport: isSelfTurn ? !!userReport : !!prospectReport,
+        required: true,
+        advance: exitToHub,
+        onUpload: () => (isSelfTurn ? userFileInputRef : prospectFileInputRef).current.click(),
+        onMock: () => triggerMockData(!isSelfTurn)
+      })];
+    }
+    if (categoryKey === 'radiology') {
+      return [uploadStep({
+        title: isSelfTurn ? 'Upload your Radiology Report' : "Upload prospect's Radiology Report",
+        subtitle: 'USG, TVS, Echo, or DEXA scans',
+        isUploading: isSelfTurn ? isUserRadUploading : isProspectRadUploading,
+        error: isSelfTurn ? userRadError : prospectRadError,
+        hasReport: isSelfTurn ? !!userRadiology : !!prospectRadiology,
+        required: false,
+        advance: exitToHub,
+        onUpload: () => (isSelfTurn ? userRadFileInputRef : prospectRadFileInputRef).current.click(),
+        onMock: () => triggerMockRadiology(!isSelfTurn)
+      })];
+    }
+    return [];
+  };
+
+  const isPersonReady = (person) => {
+    const cats = buildCategories(person);
+    const about = cats.find((c) => c.key === 'about');
+    const lifestyle = cats.find((c) => c.key === 'lifestyle');
+    const pathology = cats.find((c) => c.key === 'pathology');
+    return about.progress >= 100 && lifestyle.progress >= 100 && pathology.progress >= 100;
+  };
 
   if (!user) return null;
+
+  // ---- Loading overlay while the final match is computing ----
+  const isLoadingResults = isSavingProfile || isMatching;
+
+  // ---- Invite-status timeline (unchanged legacy path) ----
+  if (fillByProspect && activeInvite) {
+    return (
+      <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
+        <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-4 overflow-hidden">
+          <div className="flex items-center justify-between mb-4 shrink-0">
+            <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>New Compatibility Check</span>
+            <button
+              onClick={() => { handleLogout(); router.push('/'); }}
+              className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
+              style={{ color: 'var(--muted)' }}
+            >
+              Logout
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto rounded-2xl border p-5" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+            {renderTimeline()}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  let body;
+  if (isLoadingResults) {
+    body = <AnalysisLoadingScreen active />;
+  } else if (showSelector) {
+    body = (
+      <ComparisonSelector
+        selected={comparisonSelection}
+        onToggle={(key) => setComparisonSelection((prev) => ({ ...prev, [key]: !prev[key] }))}
+        onContinue={() => setShowSelector(false)}
+      />
+    );
+  } else if (showRouting) {
+    const routingSteps = [];
+    routingSteps.push(choiceStep('How will your prospect share their details?', PROSPECT_MODE_OPTIONS, prospectMode, (v) => setProspectMode(v)));
+    if (prospectMode) {
+      routingSteps.push(fieldStep("What's your prospect's name?", prospectForm.name, (v) => setProspectForm({ ...prospectForm, name: v }), { placeholder: 'Enter their name' }));
+    }
+    if (prospectMode === 'invite') {
+      routingSteps.push({
+        title: 'Ready to generate your invite link?',
+        subtitle: `We'll create a secure link for ${prospectForm.name || 'them'} to fill in their own details — you copy and send it yourself.`,
+        canAdvance: !isSendingInvite,
+        nextLabel: isSendingInvite ? 'Generating…' : 'Generate Link',
+        onNext: handleCreateInviteLink,
+        content: inviteError ? (
+          <div className="p-3 rounded-lg text-xs font-medium" style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}>{inviteError}</div>
+        ) : null
+      });
+    }
+
+    const clamped = Math.max(0, Math.min(stepIndex, routingSteps.length - 1));
+    const step = routingSteps[clamped];
+    const isLastRoutingStep = clamped === routingSteps.length - 1;
+    const advanceToProspectHub = () => {
+      setShowRouting(false);
+      setActivePerson('prospect');
+      setActiveCategory(null);
+      setStepIndex(0);
+    };
+    const defaultOnNext = isLastRoutingStep && prospectMode === 'self' ? advanceToProspectHub : goNext;
+    body = (
+      <QuestionScreen
+        key={`routing-${clamped}`}
+        stepIndex={clamped}
+        totalSteps={routingSteps.length}
+        title={step.title}
+        subtitle={step.subtitle}
+        onBack={clamped > 0 ? goBack : () => { setShowRouting(false); setActiveCategory(null); }}
+        onNext={step.onNext || defaultOnNext}
+        nextLabel={step.nextLabel || 'Next'}
+        nextDisabled={step.canAdvance === false}
+      >
+        {step.content}
+      </QuestionScreen>
+    );
+  } else if (activeCategory) {
+    const steps = getCategorySteps(activeCategory, activePerson);
+    const clamped = Math.max(0, Math.min(stepIndex, steps.length - 1));
+    const step = steps[clamped];
+    body = (
+      <QuestionScreen
+        key={`${activePerson}-${activeCategory}-${clamped}`}
+        stepIndex={clamped}
+        totalSteps={steps.length}
+        title={step.title}
+        subtitle={step.subtitle}
+        onBack={clamped > 0 ? goBack : exitToHub}
+        onNext={step.onNext || goNext}
+        nextLabel={step.nextLabel || 'Next'}
+        nextDisabled={step.canAdvance === false}
+        nextVariant={step.nextVariant}
+        onSkip={step.onSkip}
+      >
+        {step.content}
+      </QuestionScreen>
+    );
+  } else {
+    // Hub view for the active person
+    const quotaExceeded = runsUsed >= 1;
+    const ready = isPersonReady(activePerson);
+    body = (
+      <CategoryHub
+        heading={activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Prospect'}'s Health Profile`}
+        subheading="Pick up right where you left off — each card saves as you go."
+        categories={buildCategories(activePerson)}
+        onEnter={enterCategory}
+        primaryLabel={
+          activePerson === 'self'
+            ? 'Continue'
+            : isSavingProfile ? 'Saving…' : isMatching ? 'Generating…' : 'Generate Insights'
+        }
+        primaryDisabled={activePerson === 'self' ? !ready : (!ready || quotaExceeded)}
+        primaryHint={
+          activePerson === 'prospect' && quotaExceeded
+            ? "You've used your free match. Reset your quota from the dashboard to run another."
+            : matchError || undefined
+        }
+        onPrimary={() => {
+          if (activePerson === 'self') {
+            setShowRouting(true);
+            setStepIndex(0);
+          } else {
+            handleMatch();
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
@@ -1077,29 +1257,7 @@ export default function AddProspectPage() {
           </button>
         </div>
 
-        {fillByProspect && activeInvite ? (
-          <div className="flex-1 overflow-y-auto rounded-2xl border p-5" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
-            {renderTimeline()}
-          </div>
-        ) : isSavingProfile || isMatching ? (
-          <AnalysisLoadingScreen active />
-        ) : (
-          <QuestionScreen
-            key={clampedIndex}
-            stepIndex={clampedIndex}
-            totalSteps={steps.length}
-            title={currentStep.title}
-            subtitle={currentStep.subtitle}
-            onBack={clampedIndex > 0 ? goBack : undefined}
-            onNext={currentStep.onNext || goNext}
-            nextLabel={currentStep.nextLabel || 'Next'}
-            nextDisabled={currentStep.canAdvance === false}
-            nextVariant={currentStep.nextVariant}
-            onSkip={currentStep.onSkip}
-          >
-            {currentStep.content}
-          </QuestionScreen>
-        )}
+        {body}
       </div>
 
       <input type="file" ref={userFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleFileUpload(e.target.files[0], false)} />

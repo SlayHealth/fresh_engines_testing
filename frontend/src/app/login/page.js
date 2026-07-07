@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Phone } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
-import { setAccessToken } from '../../utils/api';
-import styles from '../page.module.css';
+import { apiFetch, setAccessToken } from '../../utils/api';
+import QuestionScreen from '../../components/wizard/QuestionScreen';
+import ChoiceList from '../../components/wizard/ChoiceList';
+import SplashScreen from '../../components/wizard/SplashScreen';
+import { RELATIONS, MARRIAGE_TIMELINES } from '../../constants/lifestyleOptions';
 
 const COUNTRIES = [
   { code: '+91', flag: '🇮🇳', name: 'India' },
@@ -17,31 +20,33 @@ const COUNTRIES = [
   { code: '+61', flag: '🇦🇺', name: 'Australia' }
 ];
 
+const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
+const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
+
+const STEP_ORDER_NEW = ['phone', 'name', 'relation', 'eta', 'otp'];
+const STEP_ORDER_RETURNING = ['phone', 'otp'];
+
 export default function LoginPage() {
   const router = useRouter();
   const {
-    user,
     setUser,
-    authPhone,
-    setAuthPhone,
-    authOtp,
-    setAuthOtp,
-    authStep,
-    setAuthStep,
-    isAuthLoading,
-    setIsAuthLoading,
-    authError,
-    setAuthError,
+    authPhone, setAuthPhone,
+    authOtp, setAuthOtp,
+    authStep, setAuthStep,
+    isAuthLoading, setIsAuthLoading,
+    authError, setAuthError,
     setRunsUsed,
     setChatsUsed,
     fetchRecentMatches,
-    setOnboardingStep
+    setOnboardingStep,
+    onboardingForm, setOnboardingForm
   } = useCompatibility();
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [cooldown, setCooldown] = useState(0);
   const [selectedCountry, setSelectedCountry] = useState('+91');
   const [phoneNumberInput, setPhoneNumberInput] = useState('');
+  const [isNewUser, setIsNewUser] = useState(false);
 
   // Authentication status checker & guard redirect
   useEffect(() => {
@@ -64,16 +69,12 @@ export default function LoginPage() {
     }
   }, [router, setOnboardingStep]);
 
-  // Listen for session expiry to clear loading state if silent refresh fails while on this page
   useEffect(() => {
-    const handleExpired = () => {
-      setCheckingAuth(false);
-    };
+    const handleExpired = () => setCheckingAuth(false);
     window.addEventListener('auth_session_expired', handleExpired);
     return () => window.removeEventListener('auth_session_expired', handleExpired);
   }, []);
 
-  // Cooldown timer effect
   useEffect(() => {
     if (cooldown > 0) {
       const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
@@ -81,191 +82,290 @@ export default function LoginPage() {
     }
   }, [cooldown]);
 
-  // Phone Authentication Submit
-  const handleAuthSubmit = async (e) => {
-    e.preventDefault();
-    if (authStep === 'phone') {
-      if (!phoneNumberInput.trim()) return;
-      if (cooldown > 0) {
-        setAuthError(`Please wait ${cooldown}s before requesting a new OTP.`);
-        return;
-      }
-      setIsAuthLoading(true);
-      setAuthError(null);
+  const goNext = () => {
+    const order = isNewUser ? STEP_ORDER_NEW : STEP_ORDER_RETURNING;
+    const idx = order.indexOf(authStep);
+    if (idx >= 0 && idx < order.length - 1) setAuthStep(order[idx + 1]);
+  };
 
-      let cleanDigits = phoneNumberInput.replace(/\D/g, '');
-      if (cleanDigits.startsWith('0')) {
-        cleanDigits = cleanDigits.slice(1);
-      }
-      const countryDigits = selectedCountry.replace(/\D/g, '');
-      const fullPhone = cleanDigits.startsWith(countryDigits)
-        ? `+${cleanDigits}`
-        : `${selectedCountry}${cleanDigits}`;
-      setAuthPhone(fullPhone);
+  const goBack = () => {
+    const order = isNewUser ? STEP_ORDER_NEW : STEP_ORDER_RETURNING;
+    const idx = order.indexOf(authStep);
+    if (idx > 0) setAuthStep(order[idx - 1]);
+  };
 
-      try {
-        const res = await fetch(`${API_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone_number: fullPhone })
-        });
-        const data = await res.json();
-        if (data.success) {
-          setAuthStep('otp');
-          setCooldown(60); // Start 60-second frontend cooldown
-        } else {
-          throw new Error(data.error || 'Login failed');
+  const submitPhone = async () => {
+    if (!phoneNumberInput.trim()) return;
+    if (cooldown > 0) {
+      setAuthError(`Please wait ${cooldown}s before requesting a new OTP.`);
+      return;
+    }
+    setIsAuthLoading(true);
+    setAuthError(null);
+
+    let cleanDigits = phoneNumberInput.replace(/\D/g, '');
+    if (cleanDigits.startsWith('0')) cleanDigits = cleanDigits.slice(1);
+    const countryDigits = selectedCountry.replace(/\D/g, '');
+    const fullPhone = cleanDigits.startsWith(countryDigits) ? `+${cleanDigits}` : `${selectedCountry}${cleanDigits}`;
+    setAuthPhone(fullPhone);
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: fullPhone })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsNewUser(!!data.is_new_user);
+        setCooldown(60);
+        setAuthStep(data.is_new_user ? 'name' : 'otp');
+      } else {
+        throw new Error(data.error || 'Login failed');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Connection failed');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const resendOtp = async () => {
+    if (cooldown > 0 || isAuthLoading) return;
+    setIsAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: authPhone })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCooldown(60);
+      } else {
+        throw new Error(data.error || 'Failed to resend code');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Connection failed');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const submitOtp = async () => {
+    if (!authOtp.trim() || authOtp.length !== 6) return;
+    setIsAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: authPhone.trim(), otp: authOtp.trim() })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Verification failed');
+
+      setAccessToken(data.accessToken);
+      let finalUser = data.user;
+
+      // First-time signup: now that we have a real user id, save the name we
+      // collected before OTP (relation/marriage-timeline are client-side-only fields).
+      if (isNewUser && onboardingForm.userName?.trim()) {
+        try {
+          const profileRes = await apiFetch(`${API_URL}/api/auth/profile`, {
+            method: 'POST',
+            body: JSON.stringify({ id: data.user.id, name: onboardingForm.userName.trim() })
+          });
+          const profileData = await profileRes.json();
+          if (profileData.success) finalUser = profileData.user;
+        } catch (e) {
+          // Fall through — user still lands somewhere sensible below, and can
+          // (re)supply their name via /onboarding if this save didn't stick.
         }
-      } catch (err) {
-        setAuthError(err.message || 'Connection failed');
-      } finally {
-        setIsAuthLoading(false);
       }
-    } else {
-      if (!authOtp.trim() || authOtp.length !== 6) return;
-      setIsAuthLoading(true);
-      setAuthError(null);
-      try {
-        const res = await fetch(`${API_URL}/api/auth/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone_number: authPhone.trim(), otp: authOtp.trim() })
-        });
-        const data = await res.json();
-        if (data.success) {
-          setAccessToken(data.accessToken); // Store access token in memory
-          localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
-          if (data.refreshToken) {
-            localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
-          }
-          setUser(data.user);
-          setRunsUsed(data.user.runs_used || 0);
-          setChatsUsed(data.user.chats_used || 0);
-          fetchRecentMatches(data.user.id);
 
-          if (!data.user.name) {
-            setOnboardingStep(1);
-            router.push('/onboarding');
-          } else {
-            router.push('/dashboard');
-          }
-        } else {
-          throw new Error(data.error || 'Verification failed');
-        }
-      } catch (err) {
-        setAuthError(err.message || 'Verification failed');
-      } finally {
-        setIsAuthLoading(false);
+      finalUser = {
+        ...finalUser,
+        userRelation: onboardingForm.userRelation,
+        marriageTimeline: onboardingForm.marriageTimeline
+      };
+      localStorage.setItem('slayhealth_user', JSON.stringify(finalUser));
+      if (data.refreshToken) localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
+      setUser(finalUser);
+      setRunsUsed(finalUser.runs_used || 0);
+      setChatsUsed(finalUser.chats_used || 0);
+      fetchRecentMatches(finalUser.id);
+
+      if (!finalUser.name) {
+        setOnboardingStep(1);
+        router.push('/onboarding');
+      } else if (isNewUser) {
+        setAuthStep('splash');
+      } else {
+        router.push('/dashboard');
       }
+    } catch (err) {
+      setAuthError(err.message || 'Verification failed');
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
   if (checkingAuth) {
     return (
-      <main className={styles.authContainer} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <RefreshCw className="animate-spin" size={32} style={{ color: '#28c79a' }} />
-        <span style={{ color: '#64748b', fontSize: '14px', fontWeight: '500' }}>Initializing SlayHealth Portal...</span>
+      <main className="h-dvh flex flex-col items-center justify-center gap-4 wizard-bg">
+        <RefreshCw className="animate-spin" size={32} style={{ color: 'var(--teal)' }} />
+        <span className="text-sm font-medium" style={{ color: 'var(--muted)' }}>Initializing SlayHealth Portal...</span>
       </main>
     );
   }
 
-  return (
-    <main className={styles.authContainer}>
-      <div className={styles.authCard}>
-        <div style={{ display: 'inline-flex', padding: '1rem', borderRadius: '16px', background: 'rgba(40, 199, 154, 0.1)', color: '#28c79a', marginBottom: '1.5rem' }}>
-          <Lock size={36} />
+  if (authStep === 'splash') {
+    return <SplashScreen name={onboardingForm.userName} onDone={() => router.push('/dashboard')} />;
+  }
+
+  const order = isNewUser ? STEP_ORDER_NEW : STEP_ORDER_RETURNING;
+  const stepIndex = Math.max(0, order.indexOf(authStep));
+
+  const errorBanner = authError && (
+    <div
+      className="flex items-center gap-2 p-3 rounded-lg text-sm font-medium mb-4"
+      style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}
+    >
+      <AlertCircle className="w-4 h-4 shrink-0" />
+      <span>{authError}</span>
+    </div>
+  );
+
+  let title, subtitle, content, onNext, nextLabel, nextDisabled, onBack, onSkip;
+
+  if (authStep === 'phone') {
+    title = 'What’s your phone number?';
+    subtitle = 'We’ll send a one-time code to verify it’s you.';
+    onNext = submitPhone;
+    nextLabel = isAuthLoading ? 'Sending code…' : 'Send OTP Code';
+    nextDisabled = !phoneNumberInput.trim() || isAuthLoading;
+    content = (
+      <div>
+        {errorBanner}
+        <div className="flex gap-2">
+          <select
+            value={selectedCountry}
+            onChange={(e) => setSelectedCountry(e.target.value)}
+            className="rounded-xl border outline-none px-3 shrink-0"
+            style={{ ...fieldInputStyle, minWidth: '95px' }}
+          >
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
+            ))}
+          </select>
+          <input
+            type="tel"
+            placeholder="98765 43210"
+            value={phoneNumberInput}
+            onChange={(e) => setPhoneNumberInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+            autoFocus
+            className={`${fieldInputClass} flex-1 min-w-0`}
+            style={fieldInputStyle}
+          />
         </div>
-        <h2 className={styles.authTitle}>SlayHealth Engines</h2>
-        <p className={styles.authSubtitle}>Verify your mobile number to access clinical compatibility portals.</p>
+      </div>
+    );
+  } else if (authStep === 'name') {
+    title = 'What’s your name?';
+    onNext = goNext;
+    nextDisabled = !onboardingForm.userName?.trim();
+    onBack = goBack;
+    content = (
+      <input
+        type="text"
+        placeholder="Enter your name"
+        value={onboardingForm.userName || ''}
+        onChange={(e) => setOnboardingForm({ ...onboardingForm, userName: e.target.value })}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+        autoFocus
+        className={fieldInputClass}
+        style={fieldInputStyle}
+      />
+    );
+  } else if (authStep === 'relation') {
+    title = 'Who are you in relation to the person getting married?';
+    onBack = goBack;
+    nextDisabled = true;
+    content = (
+      <ChoiceList
+        options={RELATIONS}
+        value={onboardingForm.userRelation}
+        onChange={(v) => setOnboardingForm({ ...onboardingForm, userRelation: v })}
+        onAdvance={goNext}
+      />
+    );
+  } else if (authStep === 'eta') {
+    title = 'What’s your ETA for marriage?';
+    onBack = goBack;
+    nextDisabled = true;
+    content = (
+      <ChoiceList
+        options={MARRIAGE_TIMELINES}
+        value={onboardingForm.marriageTimeline}
+        onChange={(v) => setOnboardingForm({ ...onboardingForm, marriageTimeline: v })}
+        onAdvance={goNext}
+      />
+    );
+  } else if (authStep === 'otp') {
+    title = 'Enter the 6-digit code';
+    subtitle = `Sent via WhatsApp to ${authPhone}`;
+    onNext = submitOtp;
+    nextLabel = isAuthLoading ? 'Verifying…' : 'Verify & Continue';
+    nextDisabled = authOtp.trim().length !== 6 || isAuthLoading;
+    onBack = () => { setAuthStep('phone'); setAuthOtp(''); setAuthError(null); };
+    onSkip = cooldown > 0 ? undefined : resendOtp;
+    content = (
+      <div>
+        {errorBanner}
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          placeholder="000000"
+          value={authOtp}
+          onChange={(e) => setAuthOtp(e.target.value.replace(/\D/g, ''))}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+          autoFocus
+          className={`${fieldInputClass} text-center text-2xl tracking-[0.3em] font-bold`}
+          style={fieldInputStyle}
+        />
+        <p className="text-xs mt-3 text-center" style={{ color: 'var(--muted)' }}>
+          {cooldown > 0 ? `Resend available in ${cooldown}s` : 'Didn’t get it? Tap below to resend.'}
+        </p>
+      </div>
+    );
+  }
 
-        <form className={styles.authForm} onSubmit={handleAuthSubmit}>
-          {authStep === 'phone' ? (
-            <div className={styles.inputGroup}>
-              <label className={styles.inputLabel}>Mobile Phone Number</label>
-              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                <select
-                  value={selectedCountry}
-                  onChange={(e) => setSelectedCountry(e.target.value)}
-                  style={{
-                    padding: '12px 16px',
-                    fontSize: '15px',
-                    borderRadius: '12px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    color: '#2b2b3f',
-                    outline: 'none',
-                    cursor: 'pointer',
-                    minWidth: '95px',
-                    flexShrink: 0
-                  }}
-                >
-                  {COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.flag} {c.code}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="tel"
-                  placeholder="98765 43210"
-                  className={styles.authInput}
-                  value={phoneNumberInput}
-                  onChange={(e) => setPhoneNumberInput(e.target.value)}
-                  style={{ flex: 1, minWidth: 0, width: '100%' }}
-                  required
-                />
-              </div>
-            </div>
-          ) : (
-            <div className={styles.inputGroup}>
-              <label className={styles.inputLabel}>Enter 6-Digit OTP Code</label>
-              <div className={styles.otpGrid}>
-                <input
-                  type="text"
-                  maxLength="6"
-                  placeholder="000000"
-                  className={styles.otpInput}
-                  value={authOtp}
-                  onChange={(e) => setAuthOtp(e.target.value)}
-                  style={{ width: '120px' }}
-                  required
-                />
-              </div>
-              <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '6px' }}>
-                OTP sent via WhatsApp. Verification required.
-              </p>
-            </div>
-          )}
-
-          {authError && (
-            <div style={{ color: '#ef4444', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', background: '#fef2f2', padding: '10px', borderRadius: '8px' }}>
-              <AlertCircle size={16} />
-              <span>{authError}</span>
-            </div>
-          )}
-
-          <button type="submit" className={styles.primaryBtn} disabled={isAuthLoading} style={{ cursor: 'pointer' }}>
-            {isAuthLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <RefreshCw className="animate-spin" size={16} />
-                <span>Loading...</span>
-              </div>
-            ) : (
-              authStep === 'phone' ? 'Request OTP code' : 'Verify and enter'
-            )}
-          </button>
-
-          {authStep === 'otp' && (
-            <button
-              type="button"
-              className={styles.secondaryBtn}
-              onClick={() => { setAuthStep('phone'); setAuthOtp(''); }}
-              style={{ marginTop: '-8px', cursor: 'pointer' }}
-            >
-              Change mobile number
-            </button>
-          )}
-        </form>
+  return (
+    <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
+      <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-5 overflow-hidden">
+        <div className="flex items-center justify-center gap-2 mb-2 shrink-0">
+          <Phone className="w-4 h-4" style={{ color: 'var(--teal-d)' }} />
+          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Sign in to SlayHealth</span>
+        </div>
+        <QuestionScreen
+          key={authStep}
+          stepIndex={stepIndex}
+          totalSteps={order.length}
+          title={title}
+          subtitle={subtitle}
+          onBack={onBack}
+          onNext={onNext}
+          nextLabel={nextLabel || 'Next'}
+          nextDisabled={nextDisabled}
+          onSkip={authStep === 'otp' ? onSkip : undefined}
+          skipLabel="Resend code"
+        >
+          {content}
+        </QuestionScreen>
       </div>
     </main>
   );

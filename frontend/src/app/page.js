@@ -10,6 +10,7 @@ import StoryTabs from '../components/landing/StoryTabs';
 import PersonaSection from '../components/landing/PersonaSection';
 import TestimonialCard from '../components/landing/TestimonialCard';
 import PricingCard from '../components/landing/PricingCard';
+import Accordion from '../components/landing/Accordion';
 import { TrustSignals } from '../components/landing/TrustSignals';
 import { STORIES, TESTIMONIALS, PRICING_PLANS, PERSONAS, ANALYSIS_AREAS } from '../constants/landingContent';
 
@@ -142,38 +143,44 @@ export default function LandingPage() {
 
       {/* ANALYSIS AREAS */}
       <section className="py-16 lg:py-20">
-        <div className="container mx-auto px-4 sm:px-6 max-w-6xl">
-          <Reveal as="div" className="text-center mb-12 lg:mb-16">
+        <div className="container mx-auto px-4 sm:px-6 max-w-4xl">
+          <Reveal as="div" className="text-center mb-10 lg:mb-12">
             <h2 className="text-3xl md:text-4xl font-bold" style={{ color: 'var(--ink)' }}>
               6 Critical Areas Most Couples Never Discuss
             </h2>
+            <p className="mt-3 text-sm lg:text-base" style={{ color: 'var(--muted)' }}>Tap any area to see why it matters.</p>
           </Reveal>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {ANALYSIS_AREAS.map((card, i) => {
-              const Icon = AREA_ICONS[card.icon] || Users;
-              return (
-                <Reveal key={card.title} delay={(i % 3) * 100}>
-                  <div
-                    className="p-7 lg:p-8 rounded-xl border transition-all group cursor-default h-full"
-                    style={{ background: 'var(--surface)', borderColor: 'var(--line)' }}
-                  >
-                    <div className="flex justify-between items-start mb-5">
-                      <div className="p-3.5 rounded-lg transition-colors" style={{ background: 'var(--paper)' }}>
-                        <Icon className="w-6 h-6 lg:w-7 lg:h-7" style={{ color: 'var(--teal-d)' }} />
+          <Reveal>
+            <Accordion
+              defaultOpenKey={ANALYSIS_AREAS[0]?.title}
+              items={ANALYSIS_AREAS.map((card) => {
+                const Icon = AREA_ICONS[card.icon] || Users;
+                return {
+                  key: card.title,
+                  header: (
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-lg shrink-0" style={{ background: 'var(--paper)' }}>
+                        <Icon className="w-5 h-5 lg:w-6 lg:h-6" style={{ color: 'var(--teal-d)' }} />
                       </div>
-                      <span className="text-xs font-bold px-2.5 py-1.5 rounded" style={{ background: 'var(--paper)', color: 'var(--muted)' }}>
+                      <div>
+                        <h3 className="text-base lg:text-lg font-bold" style={{ color: 'var(--ink)' }}>{card.title}</h3>
+                        <p className="text-sm" style={{ color: 'var(--muted)' }}>{card.desc}</p>
+                      </div>
+                      <span className="ml-auto text-xs font-bold px-2.5 py-1.5 rounded shrink-0 hidden sm:inline-block" style={{ background: 'var(--paper)', color: 'var(--muted)' }}>
                         {card.score} of score
                       </span>
                     </div>
-                    <h3 className="text-lg lg:text-xl font-bold mb-2.5" style={{ color: 'var(--ink)' }}>{card.title}</h3>
-                    <p className="text-sm lg:text-base mb-4" style={{ color: 'var(--muted)' }}>{card.desc}</p>
-                    <p className="text-sm lg:text-base leading-relaxed border-t pt-4" style={{ color: 'var(--muted)', borderColor: 'var(--line)' }}>{card.detail}</p>
-                  </div>
-                </Reveal>
-              );
-            })}
-          </div>
+                  ),
+                  content: (
+                    <p className="text-sm lg:text-base leading-relaxed border-t pt-4" style={{ color: 'var(--muted)', borderColor: 'var(--line)' }}>
+                      {card.detail}
+                    </p>
+                  )
+                };
+              })}
+            />
+          </Reveal>
         </div>
       </section>
 

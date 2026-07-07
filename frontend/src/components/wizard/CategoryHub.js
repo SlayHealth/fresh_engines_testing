@@ -1,0 +1,162 @@
+'use client';
+
+import { useState } from 'react';
+import { Check, ChevronDown, Lock, ArrowRight } from 'lucide-react';
+
+function ProgressRing({ progress, size = 44, locked, done }) {
+  const stroke = 4;
+  const r = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference - (progress / 100) * circumference;
+  const color = locked ? 'var(--muted)' : done ? 'var(--teal)' : progress > 0 ? 'var(--pink)' : 'var(--line)';
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
+        {!locked && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={stroke}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="transition-[stroke-dashoffset] duration-500 ease-out"
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        {locked ? (
+          <Lock className="w-4 h-4" style={{ color: 'var(--muted)' }} />
+        ) : done ? (
+          <Check className="w-4 h-4" style={{ color: 'var(--teal)' }} />
+        ) : (
+          <span className="text-[10px] font-bold" style={{ color: 'var(--muted)' }}>{Math.round(progress)}%</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CategoryCard({ category, onEnter }) {
+  const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, boostPct, suggestedTests } = category;
+  const [showSuggested, setShowSuggested] = useState(false);
+  const done = progress >= 100;
+
+  return (
+    <div
+      className="rounded-2xl border transition-all"
+      style={{
+        background: 'var(--surface)',
+        borderColor: done ? 'var(--teal)' : locked ? 'var(--line)' : 'var(--line)',
+        opacity: comingSoon ? 0.65 : 1
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => !locked && !comingSoon && onEnter(category.key)}
+        disabled={locked || comingSoon}
+        className="w-full flex items-center gap-3.5 p-4 text-left"
+        style={{ cursor: locked || comingSoon ? 'default' : 'pointer' }}
+      >
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--paper)' }}>
+          <Icon className="w-5 h-5" style={{ color: locked ? 'var(--muted)' : 'var(--teal-d)' }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-sm" style={{ color: 'var(--ink)' }}>{label}</h3>
+            {comingSoon && (
+              <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: 'var(--line)', color: 'var(--muted)' }}>
+                Coming soon
+              </span>
+            )}
+          </div>
+          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--muted)' }}>{desc}</p>
+        </div>
+        {!comingSoon && <ProgressRing progress={progress} locked={locked} done={done} />}
+      </button>
+
+      {locked && !comingSoon && (
+        <div className="px-4 pb-4">
+          <div className="rounded-xl p-3 flex items-center justify-between gap-3" style={{ background: 'var(--soft-amber)' }}>
+            <div>
+              <p className="text-xs font-bold" style={{ color: 'var(--amber-d)' }}>{price}</p>
+              {boostPct && <p className="text-[11px]" style={{ color: 'var(--amber-d)' }}>+{boostPct}% engine confidence</p>}
+            </div>
+            <span className="text-xs font-bold px-3 py-1.5 rounded-full text-white shrink-0" style={{ background: 'var(--amber)' }}>
+              Unlock
+            </span>
+          </div>
+        </div>
+      )}
+
+      {suggestedTests && suggestedTests.length > 0 && !comingSoon && (
+        <div className="px-4 pb-4">
+          <button
+            type="button"
+            onClick={() => setShowSuggested((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold"
+            style={{ color: 'var(--teal-d)' }}
+          >
+            Suggested tests
+            <ChevronDown className="w-3.5 h-3.5 transition-transform duration-200" style={{ transform: showSuggested ? 'rotate(180deg)' : 'none' }} />
+          </button>
+          {showSuggested && (
+            <ul className="mt-2 space-y-1">
+              {suggestedTests.map((t) => (
+                <li key={t} className="text-xs flex items-start gap-1.5" style={{ color: 'var(--muted)' }}>
+                  <span className="w-1 h-1 rounded-full mt-1.5 shrink-0" style={{ background: 'var(--line)' }} />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CategoryHub({
+  heading,
+  subheading,
+  categories,
+  onEnter,
+  primaryLabel,
+  onPrimary,
+  primaryDisabled,
+  primaryHint
+}) {
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="mb-4 shrink-0">
+        <h2 className="font-serif text-xl leading-snug" style={{ color: 'var(--ink)' }}>{heading}</h2>
+        {subheading && <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{subheading}</p>}
+      </div>
+
+      <div className="flex-1 overflow-y-auto space-y-3 pb-2">
+        {categories.map((cat) => (
+          <CategoryCard key={cat.key} category={cat} onEnter={onEnter} />
+        ))}
+      </div>
+
+      <div className="mt-4 pt-2 shrink-0">
+        {primaryHint && <p className="text-xs text-center mb-2" style={{ color: 'var(--amber-d)' }}>{primaryHint}</p>}
+        <button
+          type="button"
+          onClick={onPrimary}
+          disabled={primaryDisabled}
+          className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-shadow duration-150 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          style={{ background: 'var(--pink)' }}
+        >
+          {primaryLabel}
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
