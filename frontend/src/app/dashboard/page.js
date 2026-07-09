@@ -191,7 +191,7 @@ export default function DashboardPage() {
         )}
 
         {/* Primary CTA */}
-        <div className="rounded-2xl p-5 sm:p-6 mt-4 mb-4 relative overflow-hidden" style={{ background: 'var(--pink)' }}>
+        <div className="cta-gradient-pink rounded-2xl p-5 sm:p-6 mt-4 mb-4 relative overflow-hidden">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] uppercase tracking-wider font-semibold mb-1.5 text-white/80">
@@ -202,7 +202,7 @@ export default function DashboardPage() {
               </h2>
               <p className="text-xs text-white/70">Begin a new compatibility analysis</p>
             </div>
-            <Sparkles className="w-7 h-7 shrink-0 text-white/85" />
+            <Sparkles className="w-7 h-7 shrink-0" style={{ color: 'var(--teal)' }} />
           </div>
 
           <div className="flex gap-2 mt-4">

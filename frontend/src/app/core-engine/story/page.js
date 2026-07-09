@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useCompatibility } from '../../../contexts/CompatibilityContext';
 import { API_URL } from '../../../config/api';
-import { apiFetch, getAccessToken } from '../../../utils/api';
-import { 
-  Heart, Sparkles, ChevronDown, ChevronUp, Info, 
-  CheckCircle2, AlertTriangle, ShieldCheck, HeartPulse, Dna, ClipboardList
+import { apiFetch } from '../../../utils/api';
+import { toast } from '../../../components/Toast';
+import {
+  Heart, Sparkles, ChevronDown, ChevronUp, Info,
+  CheckCircle2, AlertTriangle, ShieldCheck, HeartPulse, Dna, ClipboardList, Loader2
 } from 'lucide-react';
 
 // Sub-component to animate numeric reveals inside threads
@@ -60,6 +61,8 @@ export default function YourStoryPage() {
   const [revealedNumbers, setRevealedNumbers] = useState({});
   const [radiologyData, setRadiologyData] = useState(null);
   const [radLoading, setRadLoading] = useState(false);
+  const [radError, setRadError] = useState(null);
+  const [isPdfDownloading, setIsPdfDownloading] = useState(false);
 
   // Sync match details on mount
   useEffect(() => {
@@ -73,20 +76,45 @@ export default function YourStoryPage() {
     const fetchRad = async () => {
       if (!activeMatchId) return;
       setRadLoading(true);
+      setRadError(null);
       try {
         const res = await apiFetch(`${API_URL}/api/compatibility/matches/${activeMatchId}/radiology`);
-        if (res.ok) {
-          const json = await res.json();
-          setRadiologyData(json);
+        if (!res.ok) {
+          throw new Error('Could not load radiology scan data.');
         }
+        const json = await res.json();
+        setRadiologyData(json);
       } catch (err) {
         console.error('Failed to fetch radiology data:', err);
+        setRadError(err.message || 'Could not load radiology scan data.');
       } finally {
         setRadLoading(false);
       }
     };
     fetchRad();
   }, [activeMatchId]);
+
+  const handleDownloadPdf = async () => {
+    if (!activeMatchId) return;
+    setIsPdfDownloading(true);
+    try {
+      const res = await apiFetch(`${API_URL}/api/compatibility/matches/${activeMatchId}/pdf`);
+      if (!res.ok) throw new Error('Failed to generate PDF report.');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `slayhealth-report-${activeMatchId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err.message || 'Could not download PDF report.');
+    } finally {
+      setIsPdfDownloading(false);
+    }
+  };
 
   // Partner Names
   const partnerAName = user?.name || 'Partner A';
@@ -149,18 +177,21 @@ export default function YourStoryPage() {
       sumWeights += 0.10;
     }
 
-    return sumWeights > 0 ? Math.round(sumScores / sumWeights) : 85;
+    // No domain has produced a result yet — there is nothing real to report.
+    return sumWeights > 0 ? Math.round(sumScores / sumWeights) : null;
   };
 
   const targetScore = calculateDynamicScore(selectedYear, isAct);
+  const hasScoreData = targetScore !== null;
 
   // Score transition counters, scale pulsing, and shimmers
-  const [displayScore, setDisplayScore] = useState(targetScore);
-  const [prevScore, setPrevScore] = useState(targetScore);
+  const [displayScore, setDisplayScore] = useState(targetScore ?? 0);
+  const [prevScore, setPrevScore] = useState(targetScore ?? 0);
   const [isPulsing, setIsPulsing] = useState(false);
   const [isShimmering, setIsShimmering] = useState(false);
 
   useEffect(() => {
+    if (targetScore === null) return;
     if (targetScore > prevScore) {
       setIsPulsing(true);
       setIsShimmering(true);
@@ -679,51 +710,66 @@ export default function YourStoryPage() {
         >
           <div>
             <span className="text-[9px] tracking-wider uppercase font-bold text-slate-400 block mb-1 font-sans">
-              "Health Together" index
+              Your combined score
             </span>
             <h3 className="text-xl font-normal text-slate-800 font-serif mb-1 tracking-tight">Health Together Index</h3>
             <p className="text-[10px] text-slate-400 font-sans tracking-normal leading-normal">Combined vitality score based on current data.</p>
           </div>
 
-          {/* SVG Progress Ring */}
-          <div 
-            className="relative flex items-center justify-center p-3 rounded-full flex-shrink-0 mx-auto"
-            style={{ background: radialGlowStyle }}
-          >
-            <svg className="w-24 h-24 transform -rotate-90 select-none flex-shrink-0" viewBox="0 0 100 100">
-              <circle
-                cx="50"
-                cy="50"
-                r="41"
-                stroke="#F1F5F9"
-                strokeWidth="6"
-                fill="transparent"
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r="41"
-                stroke={ringStrokeColor}
-                strokeWidth="6"
-                fill="transparent"
-                strokeDasharray="257.6"
-                strokeDashoffset={257.6 - (257.6 * displayScore) / 100}
-                strokeLinecap="round"
-                className="transition-all duration-500 ease-out"
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-extrabold text-slate-800 tracking-tighter leading-none font-sans">{displayScore}</span>
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 font-sans">pts</span>
-            </div>
-          </div>
+          {hasScoreData ? (
+            <>
+              {/* SVG Progress Ring */}
+              <div
+                className="relative flex items-center justify-center p-3 rounded-full flex-shrink-0 mx-auto"
+                style={{ background: radialGlowStyle }}
+              >
+                <svg className="w-24 h-24 transform -rotate-90 select-none flex-shrink-0" viewBox="0 0 100 100">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="41"
+                    stroke="#F1F5F9"
+                    strokeWidth="6"
+                    fill="transparent"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="41"
+                    stroke={ringStrokeColor}
+                    strokeWidth="6"
+                    fill="transparent"
+                    strokeDasharray="257.6"
+                    strokeDashoffset={257.6 - (257.6 * displayScore) / 100}
+                    strokeLinecap="round"
+                    className="transition-all duration-500 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-extrabold text-slate-800 tracking-tighter leading-none font-sans">{displayScore}</span>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 font-sans">pts</span>
+                </div>
+              </div>
 
-          {/* Status tag */}
-          <div className="mx-auto mt-1">
-            <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-[10px] font-bold bg-(--soft-teal) border border-(--teal)/25 text-(--teal-d) uppercase tracking-wider font-sans">
-              {scoreBand === 'Strong' ? 'Excellent Synergy' : scoreBand === 'Steady' ? 'Moderate Synergy' : 'Watch Synergy'}
-            </span>
-          </div>
+              {/* Status tag */}
+              <div className="mx-auto mt-1">
+                <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-[10px] font-bold bg-(--soft-teal) border border-(--teal)/25 text-(--teal-d) uppercase tracking-wider font-sans">
+                  {scoreBand === 'Strong' ? 'Excellent Synergy' : scoreBand === 'Steady' ? 'Moderate Synergy' : 'Watch Synergy'}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+              {radLoading ? (
+                <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+              ) : (
+                <Info className="w-8 h-8 text-slate-300" />
+              )}
+              <p className="text-[11px] text-slate-400 font-sans leading-relaxed max-w-[180px]">
+                {radLoading ? 'Loading your results…' : 'Complete an assessment to see your combined score.'}
+              </p>
+            </div>
+          )}
         </section>
 
         {/* 2. Timeline Projection Card (Desktop Row 2 Left column, Mobile top-2) */}
@@ -748,7 +794,7 @@ export default function YourStoryPage() {
                 background: 'linear-gradient(to right, var(--teal), var(--pink))' 
               }}
             >
-              {targetScore}
+              {targetScore ?? '–'}
             </div>
 
             <input
@@ -757,8 +803,10 @@ export default function YourStoryPage() {
               max="10"
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              aria-label="Select projection year, from today to 10 years out"
+              aria-valuetext={selectedYear === 0 ? 'Today (Baseline)' : `Year ${selectedYear}`}
               className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none transition-all"
-              style={{ 
+              style={{
                 background: `linear-gradient(to right, var(--teal) 0%, var(--teal) ${rangePercent}%, #E2E8F0 ${rangePercent}%, #E2E8F0 100%)`
               }}
             />
@@ -782,14 +830,17 @@ export default function YourStoryPage() {
                 labelStyle = "text-slate-600 font-bold scale-100";
               }
               return (
-                <span 
-                  key={item.yr} 
+                <button
+                  key={item.yr}
+                  type="button"
                   onClick={() => setSelectedYear(item.yr)}
-                  className={`absolute cursor-pointer transition-all duration-200 hover:text-slate-800 -translate-x-1/2 ${labelStyle}`}
+                  aria-label={`Jump to ${item.yr === 0 ? 'today (baseline)' : `year ${item.yr}`}`}
+                  aria-current={distance === 0 ? 'true' : undefined}
+                  className={`absolute cursor-pointer transition-all duration-200 hover:text-slate-800 -translate-x-1/2 bg-transparent border-0 p-0 ${labelStyle}`}
                   style={{ left: `${item.pos}%` }}
                 >
                   {item.text}
-                </span>
+                </button>
               );
             })}
           </div>
@@ -883,9 +934,25 @@ export default function YourStoryPage() {
           className="order-4 lg:col-start-2 lg:col-end-3 lg:row-start-2 lg:row-end-3 lg:sticky lg:top-[310px] lg:self-start space-y-4 animate-fade-in-up"
           style={{ animationDelay: '200ms' }}
         >
-          <h3 className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block font-sans px-1">
-            tracked markers
-          </h3>
+          <div className="flex items-center justify-between px-1 gap-2">
+            <h3 className="text-[10px] uppercase tracking-widest font-bold text-slate-400 font-sans">
+              tracked markers
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsClinicalMode(!isClinicalMode)}
+              title="Switch the wording used in the details below between plain and clinical language"
+              className="text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-(--line) text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors font-sans whitespace-nowrap"
+            >
+              {isClinicalMode ? 'Plain words' : 'Clinical terms'}
+            </button>
+          </div>
+          {radError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl text-[11px] font-sans" style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}>
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>{radError} Your other results are unaffected.</span>
+            </div>
+          )}
           <div className="space-y-3">
             {threads.map((thread) => {
               const state = getThreadState(thread.id, selectedYear, isAct);
@@ -904,12 +971,14 @@ export default function YourStoryPage() {
                     isExpanded ? 'shadow-md border-slate-300 scale-[1.01]' : 'hover:-translate-y-0.5 hover:shadow-sm border-slate-200'
                   }`}
                 >
-                  <div 
+                  <button
+                    type="button"
                     onClick={() => setExpandedThreads(prev => ({ ...prev, [thread.id]: !prev[thread.id] }))}
-                    className="p-4 flex items-center justify-between cursor-pointer select-none"
+                    aria-expanded={isExpanded}
+                    className="w-full text-left p-4 flex items-center justify-between cursor-pointer select-none bg-transparent border-0"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-xl border ${style.badge} flex-shrink-0`}>
+                      <div className={`p-2 rounded-xl border ${style.badge} shrink-0`}>
                         <DomainIcon size={14} />
                       </div>
                       <div>
@@ -918,7 +987,7 @@ export default function YourStoryPage() {
                       </div>
                     </div>
                     {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-                  </div>
+                  </button>
 
                   {isExpanded && (
                     <div className="px-4 pb-4 border-t border-slate-50 pt-3 text-[11px] text-slate-600 space-y-3 font-sans">
@@ -984,22 +1053,16 @@ export default function YourStoryPage() {
             </div>
 
             {/* CTA action buttons inside dark card */}
-            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto flex-shrink-0">
-              <button 
-                onClick={() => setIsClinicalMode(!isClinicalMode)}
-                className="bg-[#2A2A2A] hover:bg-[#333] text-white border border-slate-700 rounded-xl px-5 py-2.5 font-bold font-sans text-xs transition-all duration-300 cursor-pointer text-center"
-              >
-                {isClinicalMode ? "Show Plain Words" : "Show Clinical Indices"}
-              </button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
               {activeMatchId && (
-                <a
-                  href={`${API_URL}/api/compatibility/matches/${activeMatchId}/pdf?token=${getAccessToken()}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-(--teal) hover:bg-(--teal-d) text-white rounded-xl px-5 py-2.5 font-bold font-sans text-xs transition-all duration-300 cursor-pointer text-center"
+                <button
+                  type="button"
+                  onClick={handleDownloadPdf}
+                  disabled={isPdfDownloading}
+                  className="bg-(--teal) hover:bg-(--teal-d) disabled:opacity-60 text-white rounded-xl px-5 py-2.5 font-bold font-sans text-xs transition-all duration-300 cursor-pointer text-center"
                 >
-                  Download PDF Report
-                </a>
+                  {isPdfDownloading ? 'Preparing…' : 'Download PDF Report'}
+                </button>
               )}
             </div>
           </div>

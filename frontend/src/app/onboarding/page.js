@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
+import { toast } from '../../components/Toast';
 import QuestionScreen from '../../components/wizard/QuestionScreen';
 import ChoiceList from '../../components/wizard/ChoiceList';
 import { RELATIONS, MARRIAGE_TIMELINES } from '../../constants/lifestyleOptions';
@@ -68,7 +69,7 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Failed to save your details');
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setIsOnboardingSaving(false);
     }

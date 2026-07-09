@@ -1,6 +1,8 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CompatibilityProvider } from "../contexts/CompatibilityContext";
+import { ToastContainer } from "../components/Toast";
+import { ConfirmDialogContainer } from "../components/ConfirmDialog";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,6 +38,8 @@ export default function RootLayout({ children }) {
         <CompatibilityProvider>
           {children}
         </CompatibilityProvider>
+        <ToastContainer />
+        <ConfirmDialogContainer />
       </body>
     </html>
   );

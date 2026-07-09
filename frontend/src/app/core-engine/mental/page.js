@@ -11,6 +11,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { useCompatibility } from '../../../contexts/CompatibilityContext';
+import { confirmDialog } from '../../../components/ConfirmDialog';
 
 const surveyQuestions = [
   {
@@ -1295,8 +1296,9 @@ export default function MentalWellbeingPage() {
       {/* Retake Profile Questionnaire */}
       <div className="text-center pt-6">
         <button
-          onClick={() => {
-            if (confirm('Are you sure you want to clear this profile and retake the survey?')) {
+          onClick={async () => {
+            const ok = await confirmDialog({ title: 'Clear this profile?', message: 'Are you sure you want to clear this profile and retake the survey?', confirmLabel: 'Clear', danger: true });
+            if (ok) {
               setMentalResult(null);
             }
           }}

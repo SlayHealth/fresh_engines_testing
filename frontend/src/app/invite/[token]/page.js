@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../../../config/api';
 import { apiFetch } from '../../../utils/api';
+import { toast } from '../../../components/Toast';
 import QuestionScreen from '../../../components/wizard/QuestionScreen';
 import ChoiceList from '../../../components/wizard/ChoiceList';
 import MeasurementSlider from '../../../components/wizard/MeasurementSlider';
@@ -75,6 +76,9 @@ export default function ProspectOnboardingPage() {
   const [submitError, setSubmitError] = useState(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  // Progress persistence
+  const [isHydrated, setIsHydrated] = useState(false);
+
   // Refs
   const pathFileInputRef = useRef(null);
   const radFileInputRef = useRef(null);
@@ -111,6 +115,65 @@ export default function ProspectOnboardingPage() {
     validate();
   }, [token]);
 
+  // Restore persisted progress for this invite token, if any
+  useEffect(() => {
+    if (!token) return;
+    try {
+      const raw = localStorage.getItem(`slayhealth_invite_progress_${token}`);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved.dob) setDob(saved.dob);
+        if (saved.city) setCity(saved.city);
+        if (saved.gender) setGender(saved.gender);
+        if (saved.height) setHeight(saved.height);
+        if (saved.weight) setWeight(saved.weight);
+        if (saved.waist) setWaist(saved.waist);
+        if (saved.activityLevel) setActivityLevel(saved.activityLevel);
+        if (saved.dailySteps) setDailySteps(saved.dailySteps);
+        if (saved.occupationStyle) setOccupationStyle(saved.occupationStyle);
+        if (saved.drinkingHabits) setDrinkingHabits(saved.drinkingHabits);
+        if (saved.smokingHabits) setSmokingHabits(saved.smokingHabits);
+        if (saved.tobaccoHabits) setTobaccoHabits(saved.tobaccoHabits);
+        if (saved.sleepCycle) setSleepCycle(saved.sleepCycle);
+        if (saved.menstrualCycle) setMenstrualCycle(saved.menstrualCycle);
+        if (saved.mentalOptIn) setMentalOptIn(saved.mentalOptIn);
+        if (saved.mentalAnswers) setMentalAnswers(saved.mentalAnswers);
+        if (typeof saved.stepIndex === 'number') setStepIndex(saved.stepIndex);
+      }
+    } catch (err) {
+      // corrupt or unavailable localStorage — proceed with a blank form
+    } finally {
+      setIsHydrated(true);
+    }
+  }, [token]);
+
+  // Persist progress as the user answers, so a reload doesn't lose it
+  useEffect(() => {
+    if (!token || !isHydrated || submitSuccess) return;
+    const progress = {
+      dob, city, gender, height, weight, waist,
+      activityLevel, dailySteps, occupationStyle, drinkingHabits,
+      smokingHabits, tobaccoHabits, sleepCycle, menstrualCycle,
+      mentalOptIn, mentalAnswers, stepIndex
+    };
+    try {
+      localStorage.setItem(`slayhealth_invite_progress_${token}`, JSON.stringify(progress));
+    } catch (err) {
+      // localStorage unavailable (private mode, quota exceeded) — progress won't persist
+    }
+  }, [
+    token, isHydrated, submitSuccess, dob, city, gender, height, weight, waist,
+    activityLevel, dailySteps, occupationStyle, drinkingHabits, smokingHabits,
+    tobaccoHabits, sleepCycle, menstrualCycle, mentalOptIn, mentalAnswers, stepIndex
+  ]);
+
+  // Clear persisted progress once the questionnaire has been submitted
+  useEffect(() => {
+    if (submitSuccess && token) {
+      localStorage.removeItem(`slayhealth_invite_progress_${token}`);
+    }
+  }, [submitSuccess, token]);
+
   const handleConsent = async (accepted) => {
     setIsConsentSubmitting(true);
     try {
@@ -125,7 +188,7 @@ export default function ProspectOnboardingPage() {
       setConsentDecided(true);
       setConsentAccepted(accepted);
     } catch (err) {
-      alert(err.message || 'Error recording consent. Please try again.');
+      toast.error(err.message || 'Error recording consent. Please try again.');
     } finally {
       setIsConsentSubmitting(false);
     }
@@ -332,6 +395,7 @@ export default function ProspectOnboardingPage() {
   const choiceStep = (title, options, value, onChange, extra = {}) => ({
     title,
     subtitle: extra.subtitle,
+    category: extra.category,
     content: <ChoiceList options={options} value={value} onChange={onChange} onAdvance={goNext} />,
     canAdvance: !!value
   });
@@ -339,6 +403,7 @@ export default function ProspectOnboardingPage() {
   const fieldStep = (title, value, onChange, extra = {}) => ({
     title,
     subtitle: extra.subtitle,
+    category: extra.category,
     content: (
       <input
         type={extra.type || 'text'}
@@ -355,40 +420,43 @@ export default function ProspectOnboardingPage() {
     canAdvance: !!(value && value.toString().trim())
   });
 
-  const measurementStep = (title, measureType, value, onChange) => ({
+  const measurementStep = (title, measureType, value, onChange, category) => ({
     title,
+    category,
     content: <MeasurementSlider type={measureType} value={value} onChange={onChange} />,
     canAdvance: true
   });
 
   // 2. Questionnaire & File Upload wizard
   const steps = [
-    choiceStep('Gender', GENDERS, gender, setGender),
-    fieldStep('Date of Birth', dob, setDob, { type: 'date' }),
+    choiceStep('Gender', GENDERS, gender, setGender, { category: 'about' }),
+    fieldStep('Date of Birth', dob, setDob, { type: 'date', category: 'about' }),
     {
       title: 'City',
+      category: 'about',
       content: <CityInput value={city} onChange={setCity} />,
       canAdvance: !!(city && city.trim())
     },
-    measurementStep('Height', 'height', height, setHeight),
-    measurementStep('Weight', 'weight', weight, setWeight),
-    measurementStep('Waist', 'waist', waist, setWaist),
-    choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, activityLevel, setActivityLevel),
-    choiceStep('Daily Steps', LIFESTYLE_STEPS, dailySteps, setDailySteps),
-    choiceStep('Occupation & Work Style', LIFESTYLE_OCCUPATIONS, occupationStyle, setOccupationStyle),
-    choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, drinkingHabits, setDrinkingHabits),
-    choiceStep('Smoking Habits', LIFESTYLE_SMOKING, smokingHabits, setSmokingHabits),
-    choiceStep('Tobacco Consumption', LIFESTYLE_TOBACCO, tobaccoHabits, setTobaccoHabits),
-    choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, sleepCycle, setSleepCycle)
+    measurementStep('Height', 'height', height, setHeight, 'about'),
+    measurementStep('Weight', 'weight', weight, setWeight, 'about'),
+    measurementStep('Waist', 'waist', waist, setWaist, 'about'),
+    choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, activityLevel, setActivityLevel, { category: 'lifestyle' }),
+    choiceStep('Daily Steps', LIFESTYLE_STEPS, dailySteps, setDailySteps, { category: 'lifestyle' }),
+    choiceStep('Occupation & Work Style', LIFESTYLE_OCCUPATIONS, occupationStyle, setOccupationStyle, { category: 'lifestyle' }),
+    choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, drinkingHabits, setDrinkingHabits, { category: 'lifestyle' }),
+    choiceStep('Smoking Habits', LIFESTYLE_SMOKING, smokingHabits, setSmokingHabits, { category: 'lifestyle' }),
+    choiceStep('Tobacco Consumption', LIFESTYLE_TOBACCO, tobaccoHabits, setTobaccoHabits, { category: 'lifestyle' }),
+    choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, sleepCycle, setSleepCycle, { category: 'lifestyle' })
   ];
 
   if (gender === 'Female') {
-    steps.push(choiceStep('Menstrual Cycle Status', LIFESTYLE_MENSTRUAL, menstrualCycle, setMenstrualCycle, { subtitle: 'Optional' }));
+    steps.push(choiceStep('Menstrual Cycle Status', LIFESTYLE_MENSTRUAL, menstrualCycle, setMenstrualCycle, { subtitle: 'Optional', category: 'lifestyle' }));
   }
 
   steps.push({
     title: 'Upload your Pathology Report',
     subtitle: 'Required — PDF with your blood/pathology parameters',
+    category: 'pathology',
     canAdvance: !!pathologyFile || useMockPathology,
     content: (
       <div className="space-y-3">
@@ -424,6 +492,7 @@ export default function ProspectOnboardingPage() {
   steps.push({
     title: 'Upload your Radiology Report',
     subtitle: 'Optional — USG, TVS, Echo, or DEXA scans',
+    category: 'radiology',
     canAdvance: true,
     onSkip: goNext,
     content: (
@@ -461,6 +530,7 @@ export default function ProspectOnboardingPage() {
   const mentalSteps = [{
     title: 'Add Mental Health Compatibility?',
     subtitle: 'Up to 20% deeper insight into long-term emotional & personality compatibility.',
+    category: 'mental',
     canAdvance: !!mentalOptIn,
     content: (
       <div className="space-y-3">
@@ -476,7 +546,7 @@ export default function ProspectOnboardingPage() {
   }];
   if (mentalOptIn === 'yes') {
     MENTAL_HEALTH_QUESTIONS.forEach((q) => {
-      mentalSteps.push(choiceStep(q.title, q.options, mentalAnswers[q.id], (v) => setMentalAnswers({ ...mentalAnswers, [q.id]: v }), { subtitle: q.desc }));
+      mentalSteps.push(choiceStep(q.title, q.options, mentalAnswers[q.id], (v) => setMentalAnswers({ ...mentalAnswers, [q.id]: v }), { subtitle: q.desc, category: 'mental' }));
     });
   }
   const lastMentalStep = mentalSteps[mentalSteps.length - 1];
@@ -499,6 +569,9 @@ export default function ProspectOnboardingPage() {
 
   const clampedIndex = Math.max(0, Math.min(stepIndex, steps.length - 1));
   const currentStep = steps[clampedIndex];
+  // How many earlier steps share this step's category — keeps each section's
+  // trust message starting fresh at index 0 instead of a raw flow-wide index.
+  const trustSeed = steps.slice(0, clampedIndex).filter((s) => s.category === currentStep.category).length;
 
   return (
     <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
@@ -518,6 +591,9 @@ export default function ProspectOnboardingPage() {
           onNext={currentStep.onNext || goNext}
           nextLabel={currentStep.nextLabel || 'Next'}
           nextDisabled={currentStep.canAdvance === false}
+          userName={invite?.prospectName}
+          trustCategory={currentStep.category}
+          trustSeed={trustSeed}
         >
           {currentStep.content}
         </QuestionScreen>

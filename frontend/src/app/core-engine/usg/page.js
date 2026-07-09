@@ -5,6 +5,7 @@ import { ShieldCheck, Sparkles, AlertCircle } from 'lucide-react';
 import { useCompatibility } from '../../../contexts/CompatibilityContext';
 import { API_URL } from '../../../config/api';
 import { apiFetch } from '../../../utils/api';
+import { toast } from '../../../components/Toast';
 
 import ModalityBadgeRow from '../../../components/usg/ModalityBadgeRow';
 import ScrotalHealthPanel from '../../../components/usg/ScrotalHealthPanel';
@@ -71,7 +72,7 @@ export default function UsgPage() {
   const handleRadiologyUpload = async (file, isProspect) => {
     if (!file) return;
     if (file.type !== 'application/pdf') {
-      alert('Please upload a valid radiology report (PDF).');
+      toast.error('Please upload a valid radiology report (PDF).');
       return;
     }
 

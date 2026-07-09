@@ -143,6 +143,20 @@ body {
   animation: fadeIn 0.6s ease both;
 }
 
+/* Living pink gradient for hero CTA cards — slow diagonal color drift, kept to
+   one hue family (pink/rose/magenta) so the blend never muddies. */
+.cta-gradient-pink {
+  background: linear-gradient(120deg, #DE457D 0%, #F0699F 30%, #B8305F 65%, #DE457D 100%);
+  background-size: 300% 300%;
+  animation: gradientDrift 10s ease-in-out infinite;
+}
+
+@keyframes gradientDrift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
 /* Scroll-triggered reveal — toggled by the <Reveal> component via IntersectionObserver */
 .reveal {
   opacity: 0;
@@ -161,5 +175,9 @@ body {
     transition: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+  .cta-gradient-pink {
+    animation: none !important;
+    background: var(--pink) !important;
   }
 }

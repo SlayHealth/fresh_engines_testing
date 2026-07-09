@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useRef, useMemo } from 
 import { API_URL } from '../config/api';
 import { parsePatientMeta, findExtractedParam } from '../utils/reportParser';
 import { apiFetch, setAccessToken } from '../utils/api';
+import { toast } from '../components/Toast';
 
 const CompatibilityContext = createContext(null);
 
@@ -450,11 +451,11 @@ export function CompatibilityProvider({ children }) {
         setActiveMatchId(null);
         setChatSessionId(null);
         setIsChatOpen(false);
-        alert('Quota has been reset! (Free Match and Counselor messages restored)');
+        toast.success('Quota has been reset! (Free Match and Counselor messages restored)');
       }
     } catch (err) {
       console.error('Quota reset failed:', err);
-      alert('Quota reset failed');
+      toast.error('Quota reset failed');
     } finally {
       setIsUpgradingQuota(false);
     }
@@ -487,7 +488,7 @@ export function CompatibilityProvider({ children }) {
   // Run Compatibility Matching
   const handleCompatibilityMatch = async (selfUser = user) => {
     if (!userReport || !prospectReport) {
-      alert('Please upload pathology reports for both yourself and your prospect first.');
+      toast.error('Please upload pathology reports for both yourself and your prospect first.');
       return;
     }
 
@@ -731,7 +732,7 @@ export function CompatibilityProvider({ children }) {
         throw new Error(data.error || 'Failed to process mental profile analysis.');
       }
     } catch (err) {
-      alert(err.message || 'An error occurred during profiling.');
+      toast.error(err.message || 'An error occurred during profiling.');
       return false;
     }
   };

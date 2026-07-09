@@ -1,7 +1,8 @@
 'use client';
 
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Sparkles } from 'lucide-react';
 import styles from '../../app/page.module.css';
+import { getTrustMessage } from '../../constants/trustMessages';
 
 /**
  * One-question-at-a-time step shell. Pass `key={stepIndex}` when rendering
@@ -21,6 +22,9 @@ export default function QuestionScreen({
   nextVariant = 'teal', // 'teal' (default, most steps) | 'pink' (the one true final/hero action)
   onSkip,
   skipLabel = 'Skip',
+  userName,
+  trustCategory = 'general',
+  trustSeed,
   children
 }) {
   const progressPct = totalSteps > 0 ? ((stepIndex + 1) / totalSteps) * 100 : 0;
@@ -28,6 +32,7 @@ export default function QuestionScreen({
   const nextShadowClass = nextVariant === 'pink'
     ? 'hover:shadow-[0_6px_20px_rgba(222,69,125,0.3)]'
     : 'hover:shadow-[0_6px_20px_rgba(24,204,150,0.3)]';
+  const trustMessage = getTrustMessage(userName, trustCategory, trustSeed ?? stepIndex);
 
   return (
     <div className={`flex-1 flex flex-col overflow-hidden ${styles.dashboard}`}>
@@ -66,8 +71,22 @@ export default function QuestionScreen({
       </div>
 
       {/* Answer content */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        {children}
+      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+        <div>{children}</div>
+
+        {trustMessage && (
+          <div className="mt-auto pt-8 pb-1 flex justify-center shrink-0 animate-fade-in">
+            <div
+              className="flex items-start gap-2 max-w-[260px] px-3.5 py-2.5 rounded-2xl"
+              style={{ background: 'var(--soft-pink)' }}
+            >
+              <Sparkles className="w-3 h-3 mt-0.5 shrink-0" style={{ color: 'var(--pink)' }} />
+              <p className="text-[11px] leading-relaxed font-medium text-left" style={{ color: 'var(--pink-d)' }}>
+                {trustMessage}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}

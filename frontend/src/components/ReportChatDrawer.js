@@ -54,6 +54,8 @@ export default function ReportChatDrawer({
   const [error, setError] = useState(null);
 
   const messagesEndRef = useRef(null);
+  const drawerRef = useRef(null);
+  const closeButtonRef = useRef(null);
 
   // Sync prop sessionId to state
   useEffect(() => {
@@ -77,6 +79,39 @@ export default function ReportChatDrawer({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSending]);
+
+  // Escape-to-close, focus the close button on open, and trap Tab focus within the drawer
+  useEffect(() => {
+    if (!isOpen) return;
+
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !drawerRef.current) return;
+
+      const focusable = drawerRef.current.querySelectorAll(
+        'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const initializeSession = async () => {
     setIsInitializing(true);
@@ -209,7 +244,13 @@ export default function ReportChatDrawer({
         className={`${styles.overlay} ${isOpen ? styles.overlayActive : ''}`} 
         onClick={onClose}
       />
-      <div className={`${styles.drawer} ${isOpen ? styles.drawerActive : ''}`}>
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="AI Health Counselor chat"
+        className={`${styles.drawer} ${isOpen ? styles.drawerActive : ''}`}
+      >
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.headerInfo}>
@@ -221,7 +262,7 @@ export default function ReportChatDrawer({
               <span className={styles.subtitle}>Empathetic, jargon-free guidance</span>
             </div>
           </div>
-          <button className={styles.closeButton} onClick={onClose} aria-label="Close Chat">
+          <button ref={closeButtonRef} className={styles.closeButton} onClick={onClose} aria-label="Close Chat">
             <X size={20} />
           </button>
         </div>
@@ -312,6 +353,7 @@ export default function ReportChatDrawer({
             className={styles.sendButton}
             onClick={() => handleSend()}
             disabled={isInitializing || isSending || !inputText.trim()}
+            aria-label="Send message"
           >
             <Send size={16} />
           </button>

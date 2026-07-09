@@ -5,6 +5,7 @@ import { Database, Table as TableIcon, LayoutGrid, Loader2, AlertCircle, Eye, X 
 import styles from './page.module.css';
 import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
+import { confirmDialog } from '../../components/ConfirmDialog';
 
 export default function DatabaseViewer() {
   const [tables, setTables] = useState([]);
@@ -103,8 +104,10 @@ export default function DatabaseViewer() {
   };
 
   const handleDeleteRow = async (id) => {
-    if (!confirm('Are you sure you want to delete this row?')) return;
-    
+    const ok = await confirmDialog({ title: 'Delete this row?', message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
+
+
     setIsUpdating(true);
     try {
       const response = await apiFetch(`${API_URL}/api/db/tables/${activeTable}/${id}`, {

@@ -6,6 +6,8 @@ import { RefreshCw, Check, Share2, UserRound, HeartPulse, Brain, FlaskConical, S
 import { useCompatibility, calculateAge, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
+import { toast } from '../../components/Toast';
+import { confirmDialog } from '../../components/ConfirmDialog';
 import QuestionScreen from '../../components/wizard/QuestionScreen';
 import ChoiceList from '../../components/wizard/ChoiceList';
 import MeasurementSlider from '../../components/wizard/MeasurementSlider';
@@ -59,6 +61,7 @@ function AddProspectPageInner() {
   const [matchRunError, setMatchRunError] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [stepIndex, setStepIndex] = useState(0); // index within the active category / routing sub-flow
+  const [cameFromDeepLink, setCameFromDeepLink] = useState(false); // entered directly from a Dashboard health-profile card
 
   const fillByProspect = prospectMode === 'invite';
 
@@ -127,24 +130,34 @@ function AddProspectPageInner() {
     const firstIncomplete = steps.findIndex((s) => s.canAdvance === false);
     setStepIndex(firstIncomplete === -1 ? 0 : firstIncomplete);
   };
-  const exitToHub = () => { setActiveCategory(null); setStepIndex(0); };
+  const exitToHub = () => {
+    // Someone who deep-linked in from a single Dashboard health-profile card never
+    // chose to start the full "New Compatibility Check" flow — back should return
+    // them to the Dashboard, not drop them into this flow's category hub.
+    if (cameFromDeepLink) {
+      router.push('/dashboard');
+      return;
+    }
+    setActiveCategory(null);
+    setStepIndex(0);
+  };
 
   // Radiology Upload Handler
   const handleRadiologyUpload = async (file, isProspect) => {
     if (!file) return;
     if (file.type !== 'application/pdf') {
-      alert('Please upload a valid radiology report (PDF).');
+      toast.error('Please upload a valid radiology report (PDF).');
       return;
     }
 
     if (isProspect) {
       if (!prospectForm.name || !prospectForm.gender || !prospectForm.dob) {
-        alert("Please enter the prospect's Name, Gender, and DOB first so we can parse and store their radiology report correctly.");
+        toast.error("Please enter the prospect's Name, Gender, and DOB first so we can parse and store their radiology report correctly.");
         return;
       }
     } else {
       if (!onboardingForm.candidateName || !onboardingForm.candidateGender || !onboardingForm.candidateDob) {
-        alert("Please enter your Name, Gender, and DOB first so we can parse and store your radiology report correctly.");
+        toast.error("Please enter your Name, Gender, and DOB first so we can parse and store your radiology report correctly.");
         return;
       }
     }
@@ -196,12 +209,12 @@ function AddProspectPageInner() {
   const triggerMockRadiology = async (isProspect) => {
     if (isProspect) {
       if (!prospectForm.name || !prospectForm.gender || !prospectForm.dob) {
-        alert("Please enter the prospect's Name, Gender, and DOB first.");
+        toast.error("Please enter the prospect's Name, Gender, and DOB first.");
         return;
       }
     } else {
       if (!onboardingForm.candidateName || !onboardingForm.candidateGender || !onboardingForm.candidateDob) {
-        alert("Please enter your Name, Gender, and DOB first.");
+        toast.error("Please enter your Name, Gender, and DOB first.");
         return;
       }
     }
@@ -344,7 +357,11 @@ function AddProspectPageInner() {
     if (deepLinkCategory) {
       setShowSelector(false);
       setActivePerson('self');
+      setCameFromDeepLink(true);
       enterCategory(deepLinkCategory);
+      // Consume the query param immediately so it can never re-trigger this effect
+      // (e.g. on a later re-render or fast-refresh) and re-enter the category.
+      router.replace('/add-prospect');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkCategory]);
@@ -521,7 +538,13 @@ function AddProspectPageInner() {
 
   const handleRevokeInvite = async () => {
     if (!activeInvite) return;
-    if (!confirm("Are you sure you want to revoke this invitation? The link will become immediately invalid.")) return;
+    const ok = await confirmDialog({
+      title: 'Revoke this invitation?',
+      message: 'The link will become immediately invalid.',
+      confirmLabel: 'Revoke',
+      danger: true
+    });
+    if (!ok) return;
 
     try {
       const res = await apiFetch(`${API_URL}/api/invite/revoke/${activeInvite.id}`, {
@@ -530,7 +553,7 @@ function AddProspectPageInner() {
       if (res.ok) {
         setActiveInvite(null);
       } else {
-        alert("Failed to revoke invite");
+        toast.error("Failed to revoke invite");
       }
     } catch (err) {
       console.error(err);
@@ -690,7 +713,7 @@ function AddProspectPageInner() {
   // File Upload parsing
   const handleFileUpload = async (file, isProspect) => {
     if (file.type !== 'application/pdf') {
-      alert('Please upload a valid pathology report (PDF).');
+      toast.error('Please upload a valid pathology report (PDF).');
       return;
     }
 
@@ -1137,6 +1160,7 @@ function AddProspectPageInner() {
   }
 
   let body;
+  let headerTitle = 'New Compatibility Check';
   if (isLoadingResults) {
     body = <AnalysisLoadingScreen active />;
   } else if (showSelector) {
@@ -1195,6 +1219,7 @@ function AddProspectPageInner() {
     const steps = getCategorySteps(activeCategory, activePerson);
     const clamped = Math.max(0, Math.min(stepIndex, steps.length - 1));
     const step = steps[clamped];
+    headerTitle = buildCategories(activePerson).find((c) => c.key === activeCategory)?.label || headerTitle;
     body = (
       <QuestionScreen
         key={`${activePerson}-${activeCategory}-${clamped}`}
@@ -1208,6 +1233,8 @@ function AddProspectPageInner() {
         nextDisabled={step.canAdvance === false}
         nextVariant={step.nextVariant}
         onSkip={step.onSkip}
+        userName={onboardingForm.userName || user?.userName || user?.name}
+        trustCategory={activeCategory}
       >
         {step.content}
       </QuestionScreen>
@@ -1216,6 +1243,7 @@ function AddProspectPageInner() {
     // Hub view for the active person
     const quotaExceeded = runsUsed >= 1;
     const ready = isPersonReady(activePerson);
+    headerTitle = activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Prospect'}'s Health Profile`;
     body = (
       <CategoryHub
         heading={activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Prospect'}'s Health Profile`}
@@ -1249,7 +1277,7 @@ function AddProspectPageInner() {
     <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
       <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-4 overflow-hidden">
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>New Compatibility Check</span>
+          <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>{headerTitle}</span>
           <button
             onClick={() => { handleLogout(); router.push('/'); }}
             className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
