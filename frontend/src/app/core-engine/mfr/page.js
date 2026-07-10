@@ -347,7 +347,7 @@ export default function MfrEnginePage() {
               <span style={{ opacity: 0.8 }}>Year {hoveredPoint.idx}</span>
             </div>
             <div style={{ fontSize: '13px', fontWeight: 'bold', margin: '2px 0' }}>
-              12-Month Chance: <span style={{ color: '#fff' }}>{hoveredPoint.val.toFixed(1)}%</span>
+              Conception Chance: <span style={{ color: '#fff' }}>{hoveredPoint.val.toFixed(1)}%</span>
             </div>
             <div style={{ marginTop: '4px', opacity: 0.95 }}>
               {hoveredPoint.val >= 85 ? (
@@ -499,7 +499,7 @@ export default function MfrEnginePage() {
         {/* Current MFR 12m Cumulative Chance */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col items-center justify-center text-center">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            Chance of Pregnancy in 12 Months (Year {selectedProjYear})
+            {selectedProjYear === 0 ? 'Chance of Pregnancy — Today' : `Chance of Pregnancy — Year ${selectedProjYear}`}
           </div>
           <div className="text-5xl font-bold text-slate-900 my-2" style={{ fontFamily: 'Georgia, serif' }}>
             {mfrResult.details?.gate ? '—' : `${cumCurY.toFixed(1)}%`}
@@ -514,7 +514,9 @@ export default function MfrEnginePage() {
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex items-center justify-between gap-6">
             <div className="flex-1">
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                Chance of Pregnancy (With Lifestyle Improvements, Year {selectedProjYear})
+                {selectedProjYear === 0
+                  ? 'Chance of Pregnancy (With Lifestyle Improvements) — Today'
+                  : `Chance of Pregnancy (With Lifestyle Improvements) — Year ${selectedProjYear}`}
               </div>
               <div className="text-5xl font-bold text-emerald-700 my-2" style={{ fontFamily: 'Georgia, serif' }}>
                 {mfrResult.details?.gate ? '—' : `${cumOptY.toFixed(1)}%`}
@@ -548,7 +550,7 @@ export default function MfrEnginePage() {
             {timeToConceiveY}
           </div>
           <div className="text-sm text-slate-600">
-            {mfrResult.details?.gate ? 'Pathways physically blocked' : `Expected months of trying (Year {selectedProjYear})`}
+            {mfrResult.details?.gate ? 'Pathways physically blocked' : `Expected months of trying (Year ${selectedProjYear})`}
           </div>
         </div>
 

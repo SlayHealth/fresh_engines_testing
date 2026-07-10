@@ -14,10 +14,9 @@ import MeasurementSlider from '../../components/wizard/MeasurementSlider';
 import CityInput from '../../components/wizard/CityInput';
 import AnalysisLoadingScreen from '../../components/wizard/AnalysisLoadingScreen';
 import CategoryHub from '../../components/wizard/CategoryHub';
-import ComparisonSelector from '../../components/wizard/ComparisonSelector';
 import {
-  LIFESTYLE_ACTIVITIES, LIFESTYLE_STEPS, LIFESTYLE_OCCUPATIONS, LIFESTYLE_DRINKING,
-  LIFESTYLE_SMOKING, LIFESTYLE_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL,
+  LIFESTYLE_ACTIVITIES, LIFESTYLE_DRINKING,
+  LIFESTYLE_SMOKING_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL,
   GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS, RELATIONSHIP_STATUSES
 } from '../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS } from '../../constants/mentalHealthQuestions';
@@ -77,8 +76,9 @@ function AddProspectPageInner() {
   const deepLinkCategory = searchParams.get('enter');
 
   // ---- Flow-level navigation state ----
-  const [showSelector, setShowSelector] = useState(true);
-  const [comparisonSelection, setComparisonSelection] = useState({ lifestyle: true, pathology: true, mental: true, radiology: false, genomics: false });
+  // Whether the paid Radiology engine has been unlocked for this session. There's no
+  // payment gateway wired up yet — this just tracks the demo "Unlock" click from the hub.
+  const [radiologyUnlocked, setRadiologyUnlocked] = useState(false);
   const [activePerson, setActivePerson] = useState('self'); // 'self' | 'prospect'
   const [activeCategory, setActiveCategory] = useState(null); // null = hub view
   const [showRouting, setShowRouting] = useState(false); // the "how will your prospect share" transition screen
@@ -126,7 +126,8 @@ function AddProspectPageInner() {
     matchError,
     setMatchError,
     handleCompatibilityMatch,
-    handleMentalAnalysis
+    handleMentalAnalysis,
+    restoreMatchSession
   } = useCompatibility();
 
   const isSelf = !onboardingForm.userRelation || onboardingForm.userRelation === 'Self';
@@ -403,10 +404,9 @@ function AddProspectPageInner() {
   }, [router]);
 
   // Deep link from the dashboard's health-profile cards (?enter=lifestyle etc.) —
-  // jump straight into that category for "self", skipping the selector/routing screens.
+  // jump straight into that category for "self", skipping the routing screen.
   useEffect(() => {
     if (deepLinkCategory) {
-      setShowSelector(false);
       setActivePerson('self');
       setCameFromDeepLink(true);
       enterCategory(deepLinkCategory);
@@ -416,6 +416,26 @@ function AddProspectPageInner() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkCategory]);
+
+  // A completed invite never surfaces a persisted matchId to the frontend — the SSE payload
+  // has a transient one, but prospect_invites has no match_id column at all, so polling can't
+  // see it — and chronicResult/mfrResult/mentalResult still need to be loaded into context
+  // before navigating, otherwise core-engine/layout.js's own guard (`!chronicResult ||
+  // !mfrResult`) immediately bounces back to /dashboard since nothing populated them for this
+  // brand-new match. The invite's own match is always the most recent one for this user
+  // (matches are ordered by created_at DESC), so load that instead of needing an exact id.
+  const loadCompletedInviteMatch = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await apiFetch(`${API_URL}/api/compatibility/matches?userId=${user.id}`);
+      if (res.ok) {
+        const matches = await res.json();
+        if (matches[0]) restoreMatchSession(matches[0]);
+      }
+    } catch (err) {
+      console.error('Failed to load completed invite match:', err);
+    }
+  };
 
   // Load active invites on mount
   useEffect(() => {
@@ -428,7 +448,6 @@ function AddProspectPageInner() {
           if (active) {
             setActiveInvite(active);
             setProspectMode('invite');
-            setShowSelector(false);
             setShowRouting(false);
           }
         }
@@ -464,7 +483,8 @@ function AddProspectPageInner() {
           });
 
           if (data.status === 'completed') {
-            setTimeout(() => {
+            setTimeout(async () => {
+              await loadCompletedInviteMatch();
               router.push('/core-engine/story');
             }, 2500);
           }
@@ -502,7 +522,8 @@ function AddProspectPageInner() {
               });
 
               if (current.status === 'completed') {
-                setTimeout(() => {
+                setTimeout(async () => {
+                  await loadCompletedInviteMatch();
                   router.push('/core-engine/story');
                 }, 2500);
               }
@@ -833,11 +854,8 @@ function AddProspectPageInner() {
     if (!onboardingForm.candidateCity?.trim()) missingSelf.push("Your City");
     if (!onboardingForm.relationshipStatus) missingSelf.push("Relationship Status");
     if (!onboardingForm.activity_level) missingSelf.push("Your Activity Level");
-    if (!onboardingForm.daily_steps) missingSelf.push("Your Daily Steps");
-    if (!onboardingForm.occupation_style) missingSelf.push("Your Occupation style");
     if (!onboardingForm.drinking_habits) missingSelf.push("Your Drinking habits");
-    if (!onboardingForm.smoking_habits) missingSelf.push("Your Smoking habits");
-    if (!onboardingForm.tobacco_habits) missingSelf.push("Your Tobacco habits");
+    if (!onboardingForm.smoking_habits) missingSelf.push("Your Smoking & Tobacco habits");
     if (!onboardingForm.sleep_cycle) missingSelf.push("Your Sleep cycle");
     if (!onboardingForm.height) missingSelf.push("Your Height");
     if (!onboardingForm.weight) missingSelf.push("Your Weight");
@@ -860,11 +878,8 @@ function AddProspectPageInner() {
           dob: onboardingForm.candidateDob,
           city: onboardingForm.candidateCity,
           activity_level: onboardingForm.activity_level,
-          daily_steps: onboardingForm.daily_steps,
-          occupation_style: onboardingForm.occupation_style,
           drinking_habits: onboardingForm.drinking_habits,
           smoking_habits: onboardingForm.smoking_habits,
-          tobacco_habits: onboardingForm.tobacco_habits,
           sleep_cycle: onboardingForm.sleep_cycle,
           height: onboardingForm.height,
           weight: onboardingForm.weight,
@@ -1027,11 +1042,8 @@ function AddProspectPageInner() {
     const set = (patch) => setForm({ ...form, ...patch });
     const arr = [
       choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, form.activity_level, (v) => set({ activity_level: v })),
-      choiceStep('Daily Steps', LIFESTYLE_STEPS, form.daily_steps, (v) => set({ daily_steps: v })),
-      choiceStep('Occupation & Work Style', LIFESTYLE_OCCUPATIONS, form.occupation_style, (v) => set({ occupation_style: v })),
       choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, form.drinking_habits, (v) => set({ drinking_habits: v })),
-      choiceStep('Smoking Habits', LIFESTYLE_SMOKING, form.smoking_habits, (v) => set({ smoking_habits: v })),
-      choiceStep('Tobacco Consumption', LIFESTYLE_TOBACCO, form.tobacco_habits, (v) => set({ tobacco_habits: v })),
+      choiceStep('Smoking & Tobacco Habits', LIFESTYLE_SMOKING_TOBACCO, form.smoking_habits, (v) => set({ smoking_habits: v })),
       choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, form.sleep_cycle, (v) => set({ sleep_cycle: v }))
     ];
     if (form.gender === 'Female' || form.candidateGender === 'Female') {
@@ -1122,7 +1134,7 @@ function AddProspectPageInner() {
       {
         key: 'radiology', label: 'Radiology Reports', desc: `Scans for ${label}`, icon: ScanLine,
         progress: isSelfTurn ? (userRadiology ? 100 : 0) : (prospectRadiology ? 100 : 0),
-        locked: !comparisonSelection.radiology,
+        locked: !radiologyUnlocked,
         price: '₹999', boostPct: 12,
         suggestedTests: SUGGESTED_RADIOLOGY_TESTS
       },
@@ -1214,14 +1226,6 @@ function AddProspectPageInner() {
   let headerTitle = 'New Compatibility Check';
   if (isLoadingResults) {
     body = <AnalysisLoadingScreen active />;
-  } else if (showSelector) {
-    body = (
-      <ComparisonSelector
-        selected={comparisonSelection}
-        onToggle={(key) => setComparisonSelection((prev) => ({ ...prev, [key]: !prev[key] }))}
-        onContinue={() => setShowSelector(false)}
-      />
-    );
   } else if (showRouting) {
     // Distinct from the initial "New Compatibility Check" engine-selection screen —
     // reusing that title here made it look like the flow was restarting from scratch
@@ -1301,10 +1305,10 @@ function AddProspectPageInner() {
     headerTitle = activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Prospect'}'s Health Profile`;
     body = (
       <CategoryHub
-        heading={activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Prospect'}'s Health Profile`}
-        subheading="Pick up right where you left off — each card saves as you go."
+        subheading="Pick up right where you left off — each card reflects what's already saved."
         categories={buildCategories(activePerson)}
         onEnter={enterCategory}
+        onUnlock={(key) => { if (key === 'radiology') setRadiologyUnlocked(true); }}
         primaryLabel={
           activePerson === 'self'
             ? 'Continue'

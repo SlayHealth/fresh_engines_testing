@@ -1,4 +1,4 @@
-export const ABOUT_LIFESTYLE_FIELDS = ['activity_level', 'daily_steps', 'occupation_style', 'drinking_habits', 'smoking_habits', 'tobacco_habits', 'sleep_cycle'];
+export const ABOUT_LIFESTYLE_FIELDS = ['activity_level', 'drinking_habits', 'smoking_habits', 'sleep_cycle'];
 
 export const MENTAL_QUESTION_COUNT = 21;
 

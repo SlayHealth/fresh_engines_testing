@@ -1,61 +1,76 @@
 import {
-  Coffee, Footprints, Zap, Trophy, Briefcase, Beer, Flame, Sparkles, Moon, Calendar
+  Coffee, Footprints, Zap, Trophy,
+  WineOff, Martini, Beer, BottleWine,
+  CigaretteOff, Cigarette, Package,
+  Sunrise, MoonStar, Shuffle, Eye,
+  CalendarCheck, CalendarX, CalendarOff
 } from 'lucide-react';
 
+// Renders a tight row of `count` copies of the same icon, for options whose intensity
+// reads better as a quantity (one glass vs two) than a single symbol. Ignores the
+// `w-5 h-5` sizing className ChoiceList passes in — a cluster needs its own compact
+// layout — but still honors the incoming `style` (color), so selected/unselected
+// states keep working.
+function iconCluster(Icon, count) {
+  return function Cluster({ style }) {
+    return (
+      <div className="flex items-center justify-center gap-px" style={{ width: 22, height: 20 }}>
+        {Array.from({ length: count }).map((_, i) => (
+          <Icon key={i} style={{ ...style, width: 11, height: 11 }} />
+        ))}
+      </div>
+    );
+  };
+}
+
+// Same idea, stacked vertically instead of side-by-side — for cases where a
+// horizontal row of `count` icons reads as too compact/small to tell apart.
+function iconStack(Icon, count) {
+  return function Stack({ style }) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-px" style={{ width: 20, height: 22 }}>
+        {Array.from({ length: count }).map((_, i) => (
+          <Icon key={i} style={{ ...style, width: 13, height: 13 }} />
+        ))}
+      </div>
+    );
+  };
+}
+
 export const LIFESTYLE_ACTIVITIES = [
-  { val: 'Sedentary', label: 'Sedentary', desc: 'Little to no regular exercise', icon: Coffee },
-  { val: 'Moderate', label: 'Moderate', desc: 'Light exercise 1-3 times/week', icon: Footprints },
-  { val: 'Active', label: 'Active', desc: 'Exercise 3-5 times/week', icon: Zap },
-  { val: 'Athletic', label: 'Athletic', desc: 'Daily intense exercise/sports', icon: Trophy }
-];
-
-export const LIFESTYLE_STEPS = [
-  { val: '<3,000', label: 'Less than 3,000', desc: 'Mostly sitting', icon: Footprints },
-  { val: '3,000 - 5,000', label: '3,000 - 5,000', desc: 'Light walking', icon: Footprints },
-  { val: '5,000 - 10,000', label: '5,000 - 10,000', desc: 'Active day', icon: Footprints },
-  { val: '10,000+', label: '10,000+', desc: 'Very active', icon: Footprints }
-];
-
-export const LIFESTYLE_OCCUPATIONS = [
-  { val: 'Sitting 8h+', label: 'Sitting 8h+', desc: 'Desk bound, high sedentary time', icon: Briefcase },
-  { val: 'Sitting 4h+', label: 'Sitting 4h+', desc: 'Moderate movement during work', icon: Briefcase },
-  { val: 'travelling', label: 'Travelling', desc: 'On the move frequently', icon: Briefcase },
-  { val: 'other', label: 'Other', desc: 'Varying work environment', icon: Briefcase }
+  { val: 'Sedentary', label: 'Sedentary', desc: 'Little to no regular exercise, 0-1 times a week', icon: Coffee },
+  { val: 'Moderate', label: 'Moderate', desc: 'Light exercise, about 1-3 times a week', icon: Footprints },
+  { val: 'Active', label: 'Active', desc: 'Regular exercise, about 3-5 times a week', icon: Zap },
+  { val: 'Athletic', label: 'Athletic', desc: 'Daily intense exercise or sports, 6-7 times a week', icon: Trophy }
 ];
 
 export const LIFESTYLE_DRINKING = [
-  { val: 'Never', label: 'Never', desc: 'No alcohol consumption', icon: Beer },
-  { val: 'socially', label: 'Socially', desc: 'Occasional drinks with company', icon: Beer },
-  { val: 'regularly', label: 'Regularly', desc: 'Regular weekly drinks', icon: Beer },
-  { val: 'heavily', label: 'Heavily', desc: 'High frequency/binge drinking', icon: Beer },
-  { val: 'other', label: 'Other', desc: 'Varying patterns', icon: Beer }
+  { val: 'Never', label: 'Never', desc: 'No alcohol consumption at all', icon: WineOff },
+  { val: 'socially', label: 'Socially', desc: 'Occasional drinks with company, roughly 1-2 times a month', icon: Martini },
+  { val: 'regularly', label: 'Regularly', desc: 'Regular drinking, roughly 2-3 times a week', icon: iconCluster(Beer, 2) },
+  { val: 'heavily', label: 'Heavily', desc: 'Frequent or binge drinking, 4 or more times a week', icon: BottleWine }
 ];
 
-export const LIFESTYLE_SMOKING = [
-  { val: 'never', label: 'Never', desc: 'No tobacco smoking', icon: Flame },
-  { val: 'occasion', label: 'Occasion', desc: 'Occasional social smoking', icon: Flame },
-  { val: 'regular', label: 'Regular', desc: 'Daily smoking', icon: Flame },
-  { val: 'chain', label: 'Chain', desc: 'High frequency smoking', icon: Flame }
-];
-
-export const LIFESTYLE_TOBACCO = [
-  { val: 'never', label: 'Never', desc: 'No tobacco use', icon: Sparkles },
-  { val: 'occasional', label: 'Occasional', desc: 'Occasional usage', icon: Sparkles },
-  { val: 'regular', label: 'Regular', desc: 'Daily usage', icon: Sparkles }
+// Smoking and (smokeless) tobacco use — chewing tobacco, gutka, paan masala — asked as one
+// combined question rather than two, since both map to the same downstream risk signal.
+export const LIFESTYLE_SMOKING_TOBACCO = [
+  { val: 'never', label: 'Never', desc: 'No smoking or tobacco use of any kind', icon: CigaretteOff },
+  { val: 'occasion', label: 'Occasional', desc: 'A few cigarettes or tobacco uses a month, mostly social settings', icon: Cigarette },
+  { val: 'regular', label: 'Regular', desc: 'Daily use, roughly 5-10 cigarettes or tobacco servings a day', icon: iconStack(Cigarette, 2) },
+  { val: 'chain', label: 'Heavy', desc: 'Heavy daily use — a pack (20+ cigarettes) or more, or equivalent tobacco intake', icon: Package }
 ];
 
 export const LIFESTYLE_SLEEP = [
-  { val: 'Early Bird', label: 'Early Bird', desc: 'Sleep early, wake early', icon: Moon },
-  { val: 'night owl', label: 'Night Owl', desc: 'Sleep late, wake late', icon: Moon },
-  { val: 'irregular', label: 'Irregular', desc: 'Shifting sleep schedule', icon: Moon },
-  { val: 'insomniac', label: 'Insomniac', desc: 'Difficulty sleeping', icon: Moon }
+  { val: 'Early Bird', label: 'Early Bird', desc: 'Sleep early, wake early', icon: Sunrise },
+  { val: 'night owl', label: 'Night Owl', desc: 'Sleep late, wake late', icon: MoonStar },
+  { val: 'irregular', label: 'Irregular', desc: 'Shifting sleep schedule', icon: Shuffle },
+  { val: 'insomniac', label: 'Insomniac', desc: 'Difficulty sleeping', icon: Eye }
 ];
 
 export const LIFESTYLE_MENSTRUAL = [
-  { val: 'Regular', label: 'Regular', desc: 'Normal cycle monthly pattern', icon: Calendar },
-  { val: 'Irregular', label: 'Irregular', desc: 'Inconsistent start times', icon: Calendar },
-  { val: 'Menopause', label: 'Menopause', desc: 'Permanent cessation of cycle', icon: Calendar },
-  { val: 'Other', label: 'Other', desc: 'Other patterns', icon: Calendar }
+  { val: 'Regular', label: 'Regular', desc: 'Normal cycle monthly pattern', icon: CalendarCheck },
+  { val: 'Irregular', label: 'Irregular', desc: 'Inconsistent start times', icon: CalendarX },
+  { val: 'Menopause', label: 'Menopause', desc: 'Permanent cessation of cycle', icon: CalendarOff }
 ];
 
 export const GENDERS = [

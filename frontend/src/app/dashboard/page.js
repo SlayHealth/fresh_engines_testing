@@ -67,7 +67,7 @@ export default function DashboardPage() {
   const chatsLeft = Math.max(0, 5 - chatsUsed);
   const editProfile = () => {
     setOnboardingForm(buildOnboardingFormFromUser(user));
-    router.push('/add-prospect');
+    router.push('/add-prospect?enter=about');
   };
 
   const selfAdapter = {

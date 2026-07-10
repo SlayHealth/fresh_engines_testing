@@ -10,6 +10,10 @@ import {
   CheckCircle2, AlertTriangle, ShieldCheck, HeartPulse, Dna, ClipboardList, Loader2
 } from 'lucide-react';
 
+// Users choose a projection checkpoint, not a raw year count — only these stops are
+// ever selectable, though the underlying projection curves still hold every year 0-10.
+const PROJECTION_YEARS = [0, 3, 5, 7, 10];
+
 // Sub-component to animate numeric reveals inside threads
 function RevealedCount({ targetValue, suffix = '' }) {
   const [count, setCount] = useState(0);
@@ -123,6 +127,26 @@ export default function YourStoryPage() {
     ? `${partnerAName} & ${partnerBName}` 
     : 'Your health';
 
+  // Real carrier-pair genetics status for the "tracked markers" reveal below — mirrors
+  // the same thalassemia status logic already used in the composite score calculation
+  // (see the Genetics block inside calculateDynamicScore), instead of the reveal being
+  // unconditionally hardcoded to "100% / Clear" regardless of what carrier_pair_risk
+  // actually says (a couple flagged elsewhere on this same page as "Needs attention"
+  // could previously still see a reassuring 100%/Clear here).
+  const genomicsReveal = () => {
+    const thal = activeMatchDetails?.presentation_json?.carrier_pair_risk?.thalassemia;
+    if (thal?.male_status === 'red' || thal?.female_status === 'red') {
+      return { value: 50, label: 'Needs attention' };
+    }
+    if (thal?.male_status === 'yellow' || thal?.female_status === 'yellow') {
+      return { value: 75, label: 'Worth a look' };
+    }
+    if (thal?.male_status === 'gray' || thal?.female_status === 'gray') {
+      return { value: null, label: 'Not fully assessed' };
+    }
+    return { value: 100, label: 'Clear' };
+  };
+
   // Dynamic cross-domain score calculation
   const calculateDynamicScore = (year, actBranch) => {
     let sumScores = 0;
@@ -158,7 +182,12 @@ export default function YourStoryPage() {
     const hasRadA = radiologyData?.partner_A && Object.keys(radiologyData.partner_A).length > 0;
     const hasRadB = radiologyData?.partner_B && Object.keys(radiologyData.partner_B).length > 0;
     if (radiologyData && hasRadA && hasRadB) {
-      const radScore = (radiologyData.partner_A.scores_json?.radiology_nuptia_contribution || 25) / 30 * 100;
+      // The backend deliberately reports a genuine catastrophic-finding score as a
+      // real 0 (not null) so it can never be diluted away — `|| 25` would treat that
+      // real 0 as falsy and silently substitute a much better-looking 25 instead,
+      // undermining that exact safeguard.
+      const rawRadContribution = radiologyData.partner_A.scores_json?.radiology_nuptia_contribution;
+      const radScore = (typeof rawRadContribution === 'number' ? rawRadContribution : 25) / 30 * 100;
       sumScores += radScore * 0.10;
       sumWeights += 0.10;
     }
@@ -285,15 +314,15 @@ export default function YourStoryPage() {
 
       if (year === 0) {
         if (isMfrGood) {
-          paragraphs.push(`When it comes to starting a family, your biological baselines are fully aligned. Based on your current age profiles, your 12-month conception success rate is standard at ${cumNow}%, with an average time-to-conceive of around ${mfrResult.time_to_conceive || '5 months'}.`);
+          paragraphs.push(`When it comes to starting a family, your biological baselines are fully aligned. Based on your current age profiles, your conception success rate today is standard at ${cumNow}%, with an average time-to-conceive of around ${mfrResult.time_to_conceive || '5 months'}.`);
         } else {
-          paragraphs.push(`When it comes to starting a family, a couple of indicators suggest natural family planning may take more time, giving you a baseline 12-month conception likelihood of ${cumNow}%.`);
+          paragraphs.push(`When it comes to starting a family, a couple of indicators suggest natural family planning may take more time, giving you a baseline conception likelihood of ${cumNow}% today.`);
         }
       } else {
         if (actBranch) {
-          paragraphs.push(`If you actively follow your fertility wellness recommendations—focusing on nutritional timing, increased physical activity, and precise cycle tracking—your conception likelihood remains highly optimized, yielding a cumulative success rate of ${cumOpt}% at Year ${year}.`);
+          paragraphs.push(`If you actively follow your fertility wellness recommendations—focusing on nutritional timing, increased physical activity, and precise cycle tracking—your conception likelihood remains highly optimized, yielding a success rate of ${cumOpt}% at Year ${year}.`);
         } else {
-          paragraphs.push(`If you leave things to chance, the natural biological age curve will gradually influence your fertility baseline. By Year ${year}, your cumulative 12-month conception success rate is projected to decline to ${cumCur}%, meaning family planning could require clinical tracking or external assistance.`);
+          paragraphs.push(`If you leave things to chance, the natural biological age curve will gradually influence your fertility baseline. By Year ${year}, your conception success rate is projected to decline to ${cumCur}%, meaning family planning could require clinical tracking or external assistance.`);
         }
       }
     }
@@ -395,7 +424,7 @@ export default function YourStoryPage() {
       const valOpt = (optimizedCurve[selectedYear] ?? 15) / 100;
       const cumOpt = Math.round((1.0 - Math.pow(1.0 - valOpt, 12)) * 100);
 
-      mfrOpt = `Optimal range remains open. 12-month conception success rate is highly optimized at ${cumOpt}% with nutritional planning.`;
+      mfrOpt = `Optimal range remains open. Conception success rate is highly optimized at ${cumOpt}% with nutritional planning.`;
       mfrCur = `Biological age curve drops likelihood to ${cumCur}% by Year ${selectedYear} without cycle tracking.`;
     } else {
       mfrOpt = "Reproductive markers are stable. Cycle mapping is recommended in Year 3.";
@@ -505,7 +534,7 @@ export default function YourStoryPage() {
           const curve = isAct ? (mfrResult?.projection?.optimised || mfrResult?.projection?.optimized || []) : (mfrResult?.projection?.current || []);
           const val = (curve[selectedYear] ?? 15) / 100;
           const cum = Math.round((1.0 - Math.pow(1.0 - val, 12)) * 100);
-          return { value: cum, suffix: '%', text: `Cumulative likelihood of natural conception within 12 months is ` };
+          return { value: cum, suffix: '%', text: `Cumulative likelihood of natural conception ${selectedYear === 0 ? 'today' : `by Year ${selectedYear}`} is ` };
         }
       },
       clinical: {
@@ -564,7 +593,10 @@ export default function YourStoryPage() {
         why: "Anatomical checkups, pelvic structural wellness, and cardiac ECHO outputs mapped.",
         revealBtnText: "The organ score contribution, if you want it",
         revealDetail: () => {
-          const score = Math.round(radiologyData?.partner_A?.scores_json?.radiology_nuptia_contribution || 25);
+          // See the note on the same `|| 25` pattern above — a genuine 0 (the worst
+          // possible finding) must not be displayed as a reassuring 25.
+          const raw = radiologyData?.partner_A?.scores_json?.radiology_nuptia_contribution;
+          const score = Math.round(typeof raw === 'number' ? raw : 25);
           return { value: score, suffix: '/30', text: `Organ scans contribution resolves to ` };
         }
       },
@@ -572,7 +604,8 @@ export default function YourStoryPage() {
         why: "USG Abdomen, TVS/scrotal Doppler, Echocardiography outputs mapped.",
         revealBtnText: "See radiology score contribution",
         revealDetail: () => {
-          const score = Math.round(radiologyData?.partner_A?.scores_json?.radiology_nuptia_contribution || 25);
+          const raw = radiologyData?.partner_A?.scores_json?.radiology_nuptia_contribution;
+          const score = Math.round(typeof raw === 'number' ? raw : 25);
           return { value: score, suffix: '/30', text: `Nuptia USG contribution resolves to ` };
         }
       }
@@ -584,12 +617,26 @@ export default function YourStoryPage() {
       plain: {
         why: activeMatchDetails?.presentation_json?.carrier_pair_risk?.thalassemia?.narrative || "Autosomal recessive trait carrier pair risk matching.",
         revealBtnText: "The genetic carrier analysis, if you want it",
-        revealDetail: () => ({ value: 100, suffix: '%', text: `Genetic screening indicates overlapping trait safety profile at ` })
+        revealDetail: () => {
+          const status = genomicsReveal();
+          return {
+            value: status.value,
+            suffix: status.value !== null ? `% (${status.label})` : status.label,
+            text: `Genetic screening indicates overlapping trait safety profile at `
+          };
+        }
       },
       clinical: {
         why: activeMatchDetails?.presentation_json?.carrier_pair_risk?.thalassemia?.clinical_footnote || "Carrier screening for inherited mutations.",
         revealBtnText: "See carrier variant status",
-        revealDetail: () => ({ value: 100, suffix: ' (Clear)', text: `HPLC beta-thalassemia and variant overlap compatibility: ` })
+        revealDetail: () => {
+          const status = genomicsReveal();
+          return {
+            value: status.value,
+            suffix: status.value !== null ? ` (${status.label})` : status.label,
+            text: `HPLC beta-thalassemia and variant overlap compatibility: `
+          };
+        }
       }
     }
   ];
@@ -616,7 +663,8 @@ export default function YourStoryPage() {
   const isGeneticCovered = activeMatchDetails?.presentation_json?.report_confidence?.domains?.genetic?.covered;
   if (!isGeneticCovered) pendingDomains.push("genetics");
 
-  const rangePercent = (selectedYear / 10) * 100;
+  const selectedYearIndex = Math.max(0, PROJECTION_YEARS.indexOf(selectedYear));
+  const rangePercent = (selectedYearIndex / (PROJECTION_YEARS.length - 1)) * 100;
 
   return (
     <div className="w-full text-left select-none relative">
@@ -773,7 +821,7 @@ export default function YourStoryPage() {
         </section>
 
         {/* 2. Timeline Projection Card (Desktop Row 2 Left column, Mobile top-2) */}
-        <section 
+        <section
           className="order-2 lg:col-start-1 lg:col-end-2 lg:row-start-2 lg:row-end-3 bg-white border border-(--line) rounded-3xl p-6 shadow-[0_8px_30px_rgba(15,23,42,0.025)] animate-fade-in-up"
           style={{ animationDelay: '100ms' }}
         >
@@ -787,11 +835,11 @@ export default function YourStoryPage() {
           {/* Range Slider Scrubber */}
           <div className="relative pt-4 pb-2">
             {/* Tooltip badge */}
-            <div 
+            <div
               className="absolute -top-3 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-md pointer-events-none transition-all duration-150 -translate-x-1/2 flex items-center justify-center min-w-[28px] font-sans"
-              style={{ 
+              style={{
                 left: `${rangePercent}%`,
-                background: 'linear-gradient(to right, var(--teal), var(--pink))' 
+                background: 'linear-gradient(to right, var(--teal), var(--pink))'
               }}
             >
               {targetScore ?? '–'}
@@ -800,10 +848,11 @@ export default function YourStoryPage() {
             <input
               type="range"
               min="0"
-              max="10"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              aria-label="Select projection year, from today to 10 years out"
+              max={PROJECTION_YEARS.length - 1}
+              step="1"
+              value={selectedYearIndex}
+              onChange={(e) => setSelectedYear(PROJECTION_YEARS[parseInt(e.target.value)])}
+              aria-label="Select projection checkpoint, from today to 10 years out"
               aria-valuetext={selectedYear === 0 ? 'Today (Baseline)' : `Year ${selectedYear}`}
               className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none transition-all"
               style={{
@@ -816,10 +865,9 @@ export default function YourStoryPage() {
           <div className="relative w-full h-6 mt-3 select-none font-sans text-[10px] border-b border-(--line) pb-5">
             {[
               { yr: 0, text: 'Now', pos: 0 },
-              { yr: 1, text: 'Y1', pos: 10 },
-              { yr: 3, text: 'Y3', pos: 30 },
+              { yr: 3, text: 'Y3', pos: 25 },
               { yr: 5, text: 'Y5', pos: 50 },
-              { yr: 7, text: 'Y7', pos: 70 },
+              { yr: 7, text: 'Y7', pos: 75 },
               { yr: 10, text: 'Y10', pos: 100 }
             ].map((item) => {
               const distance = Math.abs(item.yr - selectedYear);
@@ -849,19 +897,19 @@ export default function YourStoryPage() {
           <div className="pt-5 pb-5">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-3 font-sans">Your Move</span>
             <div className="relative grid grid-cols-2 bg-slate-100 p-1 rounded-xl border border-slate-200 select-none">
-              <div 
-                className="absolute top-1 bottom-1 left-1 bg-white rounded-lg shadow-sm border border-slate-200 transition-transform duration-300 ease-out" 
-                style={{ 
+              <div
+                className="absolute top-1 bottom-1 left-1 bg-white rounded-lg shadow-sm border border-slate-200 transition-transform duration-300 ease-out"
+                style={{
                   width: 'calc(50% - 4px)',
                   transform: isAct ? 'translateX(0)' : 'translateX(100%)'
                 }}
               />
-              
+
               <button
                 onClick={() => setIsAct(true)}
                 className={`relative z-10 py-2 text-xs font-bold rounded-lg transition-all duration-300 font-sans ${
-                  isAct 
-                    ? 'text-(--teal) font-extrabold' 
+                  isAct
+                    ? 'text-(--teal) font-extrabold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -870,8 +918,8 @@ export default function YourStoryPage() {
               <button
                 onClick={() => setIsAct(false)}
                 className={`relative z-10 py-2 text-xs font-bold rounded-lg transition-all duration-300 font-sans ${
-                  !isAct 
-                    ? 'text-slate-700 font-extrabold' 
+                  !isAct
+                    ? 'text-slate-700 font-extrabold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -897,7 +945,7 @@ export default function YourStoryPage() {
         </section>
 
         {/* 3. Your Health Story (Desktop Row 1 Left column, Mobile top-3) */}
-        <section 
+        <section
           className="order-3 lg:col-start-1 lg:col-end-2 lg:row-start-1 lg:row-end-2 bg-white border border-(--line) rounded-3xl p-6 sm:p-8 shadow-[0_8px_30px_rgba(15,23,42,0.025)] animate-fade-in-up"
           style={{ animationDelay: '150ms' }}
         >
@@ -909,7 +957,7 @@ export default function YourStoryPage() {
           </div>
 
           {/* Book page layout */}
-          <div 
+          <div
             className={`text-slate-800 transition-opacity duration-150 leading-relaxed font-serif ${fadeStatus}`}
             style={{ fontFamily: 'var(--font-serif)' }}
           >
@@ -1006,10 +1054,16 @@ export default function YourStoryPage() {
                           <div className="mt-2.5 p-2.5 bg-slate-50 rounded-lg border border-slate-100 text-slate-500 font-semibold leading-relaxed transition-all font-sans">
                             {(() => {
                               const detailsObj = copy.revealDetail();
+                              // A null value means genuinely not-yet-assessed (e.g.
+                              // carrier screening incomplete for one partner) — showing
+                              // the animated counter would coerce it to a misleading
+                              // "0", so fall back to plain text instead.
                               return (
                                 <p>
                                   {detailsObj.text}
-                                  <RevealedCount targetValue={detailsObj.value} suffix={detailsObj.suffix} />
+                                  {detailsObj.value !== null && detailsObj.value !== undefined
+                                    ? <RevealedCount targetValue={detailsObj.value} suffix={detailsObj.suffix} />
+                                    : <span>{detailsObj.suffix}</span>}
                                 </p>
                               );
                             })()}

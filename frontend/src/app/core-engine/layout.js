@@ -13,6 +13,11 @@ import { getAccessToken, apiFetch } from '../../utils/api';
 import styles from '../page.module.css';
 import ReportChatDrawer from '../../components/ReportChatDrawer';
 
+// Users choose a projection checkpoint, not a raw month/year count — only these
+// stops are ever selectable, though the underlying model still computes (and the
+// "In-depth Calculations" trace still shows) every year 0-10 under the hood.
+const PROJECTION_YEARS = [0, 3, 5, 7, 10];
+
 export default function CoreEngineLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -325,22 +330,20 @@ export default function CoreEngineLayout({ children }) {
                 <input
                   type="range"
                   min="0"
-                  max="10"
-                  value={selectedProjYear}
-                  onChange={(e) => setSelectedProjYear(parseInt(e.target.value))}
+                  max={PROJECTION_YEARS.length - 1}
+                  step="1"
+                  value={Math.max(0, PROJECTION_YEARS.indexOf(selectedProjYear))}
+                  onChange={(e) => setSelectedProjYear(PROJECTION_YEARS[parseInt(e.target.value)])}
                   className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                  style={{ 
-                    background: `linear-gradient(to right, var(--teal) 0%, var(--teal) ${(selectedProjYear / 10) * 100}%, #E2E8F0 ${(selectedProjYear / 10) * 100}%, #E2E8F0 100%)`
+                  style={{
+                    background: `linear-gradient(to right, var(--teal) 0%, var(--teal) ${(Math.max(0, PROJECTION_YEARS.indexOf(selectedProjYear)) / (PROJECTION_YEARS.length - 1)) * 100}%, #E2E8F0 ${(Math.max(0, PROJECTION_YEARS.indexOf(selectedProjYear)) / (PROJECTION_YEARS.length - 1)) * 100}%, #E2E8F0 100%)`
                   }}
                 />
               </div>
               <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-semibold select-none">
-                <span>0 (Today)</span>
-                <span>Yr 1</span>
-                <span>Yr 3</span>
-                <span>Yr 5</span>
-                <span>Yr 7</span>
-                <span>Yr 10</span>
+                {PROJECTION_YEARS.map((yr) => (
+                  <span key={yr}>{yr === 0 ? '0 (Today)' : `Yr ${yr}`}</span>
+                ))}
               </div>
             </div>
           )}

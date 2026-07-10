@@ -13,8 +13,8 @@ import ChoiceList from '../../../components/wizard/ChoiceList';
 import MeasurementSlider from '../../../components/wizard/MeasurementSlider';
 import CityInput from '../../../components/wizard/CityInput';
 import {
-  LIFESTYLE_ACTIVITIES, LIFESTYLE_STEPS, LIFESTYLE_OCCUPATIONS, LIFESTYLE_DRINKING,
-  LIFESTYLE_SMOKING, LIFESTYLE_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL, GENDERS
+  LIFESTYLE_ACTIVITIES, LIFESTYLE_DRINKING,
+  LIFESTYLE_SMOKING_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL, GENDERS
 } from '../../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS } from '../../../constants/mentalHealthQuestions';
 
@@ -53,11 +53,8 @@ export default function ProspectOnboardingPage() {
 
   // Lifestyle Habits States
   const [activityLevel, setActivityLevel] = useState('');
-  const [dailySteps, setDailySteps] = useState('');
-  const [occupationStyle, setOccupationStyle] = useState('');
   const [drinkingHabits, setDrinkingHabits] = useState('');
   const [smokingHabits, setSmokingHabits] = useState('');
-  const [tobaccoHabits, setTobaccoHabits] = useState('');
   const [sleepCycle, setSleepCycle] = useState('');
   const [menstrualCycle, setMenstrualCycle] = useState('');
 
@@ -129,11 +126,8 @@ export default function ProspectOnboardingPage() {
         if (saved.weight) setWeight(saved.weight);
         if (saved.waist) setWaist(saved.waist);
         if (saved.activityLevel) setActivityLevel(saved.activityLevel);
-        if (saved.dailySteps) setDailySteps(saved.dailySteps);
-        if (saved.occupationStyle) setOccupationStyle(saved.occupationStyle);
         if (saved.drinkingHabits) setDrinkingHabits(saved.drinkingHabits);
         if (saved.smokingHabits) setSmokingHabits(saved.smokingHabits);
-        if (saved.tobaccoHabits) setTobaccoHabits(saved.tobaccoHabits);
         if (saved.sleepCycle) setSleepCycle(saved.sleepCycle);
         if (saved.menstrualCycle) setMenstrualCycle(saved.menstrualCycle);
         if (saved.mentalOptIn) setMentalOptIn(saved.mentalOptIn);
@@ -152,8 +146,8 @@ export default function ProspectOnboardingPage() {
     if (!token || !isHydrated || submitSuccess) return;
     const progress = {
       dob, city, gender, height, weight, waist,
-      activityLevel, dailySteps, occupationStyle, drinkingHabits,
-      smokingHabits, tobaccoHabits, sleepCycle, menstrualCycle,
+      activityLevel, drinkingHabits,
+      smokingHabits, sleepCycle, menstrualCycle,
       mentalOptIn, mentalAnswers, stepIndex
     };
     try {
@@ -163,8 +157,8 @@ export default function ProspectOnboardingPage() {
     }
   }, [
     token, isHydrated, submitSuccess, dob, city, gender, height, weight, waist,
-    activityLevel, dailySteps, occupationStyle, drinkingHabits, smokingHabits,
-    tobaccoHabits, sleepCycle, menstrualCycle, mentalOptIn, mentalAnswers, stepIndex
+    activityLevel, drinkingHabits, smokingHabits,
+    sleepCycle, menstrualCycle, mentalOptIn, mentalAnswers, stepIndex
   ]);
 
   // Clear persisted progress once the questionnaire has been submitted
@@ -195,7 +189,7 @@ export default function ProspectOnboardingPage() {
   };
 
   const handleSubmit = async () => {
-    if (!dob || !city || !gender || !height || !weight || !waist || !activityLevel || !dailySteps || !occupationStyle || !drinkingHabits || !smokingHabits || !tobaccoHabits || !sleepCycle) {
+    if (!dob || !city || !gender || !height || !weight || !waist || !activityLevel || !drinkingHabits || !smokingHabits || !sleepCycle) {
       setSubmitError('Please answer all required metrics and lifestyle questions.');
       return;
     }
@@ -217,11 +211,8 @@ export default function ProspectOnboardingPage() {
     formData.append('weight', weight);
     formData.append('waist', waist);
     formData.append('activity_level', activityLevel);
-    formData.append('daily_steps', dailySteps);
-    formData.append('occupation_style', occupationStyle);
     formData.append('drinking_habits', drinkingHabits);
     formData.append('smoking_habits', smokingHabits);
-    formData.append('tobacco_habits', tobaccoHabits);
     formData.append('sleep_cycle', sleepCycle);
     if (gender === 'Female' && menstrualCycle) {
       formData.append('menstrualCycle', menstrualCycle);
@@ -338,14 +329,14 @@ export default function ProspectOnboardingPage() {
               <p>
                 By accepting this invitation, you agree to submit your basic clinical details, lifestyle habits, and upload your pathology/radiology reports (PDF) to the SlayHealth portal.
               </p>
-              <p>
+              <div>
                 <strong>How SlayHealth uses your data:</strong>
                 <ul className="list-disc pl-5 mt-1.5 space-y-1.5">
                   <li>To securely extract biomarkers (e.g. Hemoglobin, AMH, metabolic parameters) from your uploaded PDFs.</li>
                   <li>To run premarital and genetic compatibility matching against {invite.inviterName}'s records.</li>
                   <li>Your raw information will be processed securely using clinical ontologies. You can withdraw your consent at any time before clicking "Submit Form".</li>
                 </ul>
-              </p>
+              </div>
             </div>
           </div>
 
@@ -441,11 +432,8 @@ export default function ProspectOnboardingPage() {
     measurementStep('Weight', 'weight', weight, setWeight, 'about'),
     measurementStep('Waist', 'waist', waist, setWaist, 'about'),
     choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, activityLevel, setActivityLevel, { category: 'lifestyle' }),
-    choiceStep('Daily Steps', LIFESTYLE_STEPS, dailySteps, setDailySteps, { category: 'lifestyle' }),
-    choiceStep('Occupation & Work Style', LIFESTYLE_OCCUPATIONS, occupationStyle, setOccupationStyle, { category: 'lifestyle' }),
     choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, drinkingHabits, setDrinkingHabits, { category: 'lifestyle' }),
-    choiceStep('Smoking Habits', LIFESTYLE_SMOKING, smokingHabits, setSmokingHabits, { category: 'lifestyle' }),
-    choiceStep('Tobacco Consumption', LIFESTYLE_TOBACCO, tobaccoHabits, setTobaccoHabits, { category: 'lifestyle' }),
+    choiceStep('Smoking & Tobacco Habits', LIFESTYLE_SMOKING_TOBACCO, smokingHabits, setSmokingHabits, { category: 'lifestyle' }),
     choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, sleepCycle, setSleepCycle, { category: 'lifestyle' })
   ];
 

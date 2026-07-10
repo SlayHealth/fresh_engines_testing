@@ -149,11 +149,8 @@ export const buildOnboardingFormFromUser = (user) => ({
   relationshipStatus: user?.relationshipStatus || 'Single',
   marriageTimeline: user?.marriageTimeline || 'Not sure yet',
   activity_level: user?.activity_level || '',
-  daily_steps: user?.daily_steps || '',
-  occupation_style: user?.occupation_style || '',
   drinking_habits: user?.drinking_habits || '',
   smoking_habits: user?.smoking_habits || '',
-  tobacco_habits: user?.tobacco_habits || '',
   sleep_cycle: user?.sleep_cycle || '',
   height: user?.height || '',
   weight: user?.weight || '',
@@ -237,11 +234,8 @@ export function CompatibilityProvider({ children }) {
     relationshipStatus: '',
     marriageTimeline: '',
     activity_level: '',
-    daily_steps: '',
-    occupation_style: '',
     drinking_habits: '',
     smoking_habits: '',
-    tobacco_habits: '',
     sleep_cycle: '',
     height: '',
     weight: '',
@@ -259,11 +253,8 @@ export function CompatibilityProvider({ children }) {
     platformName: '',
     meetingStory: '',
     activity_level: '',
-    daily_steps: '',
-    occupation_style: '',
     drinking_habits: '',
     smoking_habits: '',
-    tobacco_habits: '',
     sleep_cycle: '',
     height: '',
     weight: '',
@@ -339,11 +330,8 @@ export function CompatibilityProvider({ children }) {
       relationshipStatus: '',
       marriageTimeline: '',
       activity_level: '',
-      daily_steps: '',
-      occupation_style: '',
       drinking_habits: '',
       smoking_habits: '',
-      tobacco_habits: '',
       sleep_cycle: '',
       height: '',
       weight: '',
@@ -359,11 +347,8 @@ export function CompatibilityProvider({ children }) {
       platformName: '',
       meetingStory: '',
       activity_level: '',
-      daily_steps: '',
-      occupation_style: '',
       drinking_habits: '',
       smoking_habits: '',
-      tobacco_habits: '',
       sleep_cycle: '',
       height: '',
       weight: '',
@@ -561,11 +546,8 @@ export function CompatibilityProvider({ children }) {
     if (!prospectForm.dob) missing.push("Prospect's DOB");
     if (!prospectForm.city.trim()) missing.push("Prospect's City");
     if (!prospectForm.activity_level) missing.push("Prospect's Activity Level");
-    if (!prospectForm.daily_steps) missing.push("Prospect's Daily Steps");
-    if (!prospectForm.occupation_style) missing.push("Prospect's Occupation style");
     if (!prospectForm.drinking_habits) missing.push("Prospect's Drinking habits");
-    if (!prospectForm.smoking_habits) missing.push("Prospect's Smoking habits");
-    if (!prospectForm.tobacco_habits) missing.push("Prospect's Tobacco habits");
+    if (!prospectForm.smoking_habits) missing.push("Prospect's Smoking & Tobacco habits");
     if (!prospectForm.sleep_cycle) missing.push("Prospect's Sleep cycle");
     if (!prospectForm.height) missing.push("Prospect's Height");
     if (!prospectForm.weight) missing.push("Prospect's Weight");

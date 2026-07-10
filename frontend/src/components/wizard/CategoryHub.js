@@ -42,7 +42,7 @@ function ProgressRing({ progress, size = 44, locked, done }) {
   );
 }
 
-function CategoryCard({ category, onEnter }) {
+function CategoryCard({ category, onEnter, onUnlock }) {
   const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, boostPct, suggestedTests, required } = category;
   const [showSuggested, setShowSuggested] = useState(false);
   const done = progress >= 100;
@@ -86,7 +86,13 @@ function CategoryCard({ category, onEnter }) {
 
       {locked && !comingSoon && (
         <div className="px-4 pb-4">
-          <div className="rounded-xl p-3 flex items-center justify-between gap-3" style={{ background: 'var(--soft-amber)' }}>
+          <button
+            type="button"
+            onClick={() => onUnlock?.(category.key)}
+            disabled={!onUnlock}
+            className="w-full rounded-xl p-3 flex items-center justify-between gap-3 text-left transition-opacity duration-150 hover:opacity-90 disabled:cursor-default"
+            style={{ background: 'var(--soft-amber)' }}
+          >
             <div>
               <p className="text-xs font-bold" style={{ color: 'var(--amber-d)' }}>{price}</p>
               {boostPct && <p className="text-[11px]" style={{ color: 'var(--amber-d)' }}>+{boostPct}% engine confidence</p>}
@@ -94,7 +100,7 @@ function CategoryCard({ category, onEnter }) {
             <span className="text-xs font-bold px-3 py-1.5 rounded-full text-white shrink-0" style={{ background: 'var(--amber)' }}>
               Unlock
             </span>
-          </div>
+          </button>
         </div>
       )}
 
@@ -130,6 +136,7 @@ export default function CategoryHub({
   subheading,
   categories,
   onEnter,
+  onUnlock,
   primaryLabel,
   onPrimary,
   primaryDisabled,
@@ -147,7 +154,7 @@ export default function CategoryHub({
 
       <div className={embedded ? 'space-y-3' : 'flex-1 overflow-y-auto space-y-3 pb-2'}>
         {categories.map((cat) => (
-          <CategoryCard key={cat.key} category={cat} onEnter={onEnter} />
+          <CategoryCard key={cat.key} category={cat} onEnter={onEnter} onUnlock={onUnlock} />
         ))}
       </div>
 
