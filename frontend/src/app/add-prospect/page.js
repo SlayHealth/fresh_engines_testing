@@ -1142,7 +1142,7 @@ function AddProspectPageInner() {
       <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
         <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-4 overflow-hidden">
           <div className="flex items-center justify-between mb-4 shrink-0">
-            <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>New Compatibility Check</span>
+            <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Invite Status</span>
             <button
               onClick={() => { handleLogout(); router.push('/'); }}
               className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
@@ -1172,6 +1172,10 @@ function AddProspectPageInner() {
       />
     );
   } else if (showRouting) {
+    // Distinct from the initial "New Compatibility Check" engine-selection screen —
+    // reusing that title here made it look like the flow was restarting from scratch
+    // partway through the same session.
+    headerTitle = 'Add Your Prospect';
     const routingSteps = [];
     routingSteps.push(choiceStep('How will your prospect share their details?', PROSPECT_MODE_OPTIONS, prospectMode, (v) => setProspectMode(v)));
     if (prospectMode) {

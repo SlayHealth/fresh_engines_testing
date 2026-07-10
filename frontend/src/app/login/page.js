@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, RefreshCw, Phone } from 'lucide-react';
+import { AlertCircle, RefreshCw, Phone, ClipboardPaste } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
 import { apiFetch, setAccessToken } from '../../utils/api';
@@ -23,13 +23,13 @@ const COUNTRIES = [
 const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
-const STEP_ORDER_NEW = ['phone', 'name', 'relation', 'eta', 'otp'];
+const STEP_ORDER_NEW = ['phone', 'otp', 'name', 'relation', 'eta'];
 const STEP_ORDER_RETURNING = ['phone', 'otp'];
 
 export default function LoginPage() {
   const router = useRouter();
   const {
-    setUser,
+    user, setUser,
     authPhone, setAuthPhone,
     authOtp, setAuthOtp,
     authStep, setAuthStep,
@@ -82,6 +82,40 @@ export default function LoginPage() {
     }
   }, [cooldown]);
 
+  // Reads a 6-digit code from the clipboard, if present, into the OTP field.
+  // The code arrives via WhatsApp (not SMS), so browser/OS SMS-autofill (iOS
+  // QuickType, Android WebOTP) can't see it — those only read actual SMS
+  // messages. This is the practical substitute: the user copies the code in
+  // WhatsApp, switches back here, and it's one tap (or, where the browser
+  // allows a permission-less read, automatic) instead of retyping 6 digits.
+  const pasteOtpFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const digits = (text.match(/\d/g) || []).join('').slice(-6);
+      if (digits.length === 6) setAuthOtp(digits);
+    } catch (e) {
+      // Clipboard API unavailable/denied/empty — user can still type it in manually.
+    }
+  };
+
+  // Best-effort auto-fill: when the user switches back to this tab (e.g. after
+  // copying the code from a WhatsApp notification) try a silent clipboard read.
+  // Browsers that require a direct user gesture for clipboard access will just
+  // reject this quietly — the explicit "Paste code" button below always works.
+  useEffect(() => {
+    if (authStep !== 'otp') return;
+    const handleFocus = () => {
+      if (!authOtp) pasteOtpFromClipboard();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStep, authOtp]);
+
   const goNext = () => {
     const order = isNewUser ? STEP_ORDER_NEW : STEP_ORDER_RETURNING;
     const idx = order.indexOf(authStep);
@@ -119,7 +153,7 @@ export default function LoginPage() {
       if (data.success) {
         setIsNewUser(!!data.is_new_user);
         setCooldown(60);
-        setAuthStep(data.is_new_user ? 'name' : 'otp');
+        setAuthStep('otp');
       } else {
         throw new Error(data.error || 'Login failed');
       }
@@ -167,22 +201,52 @@ export default function LoginPage() {
       if (!data.success) throw new Error(data.error || 'Verification failed');
 
       setAccessToken(data.accessToken);
-      let finalUser = data.user;
+      if (data.refreshToken) localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
 
-      // First-time signup: now that we have a real user id, save the name we
-      // collected before OTP (relation/marriage-timeline are client-side-only fields).
-      if (isNewUser && onboardingForm.userName?.trim()) {
-        try {
-          const profileRes = await apiFetch(`${API_URL}/api/auth/profile`, {
-            method: 'POST',
-            body: JSON.stringify({ id: data.user.id, name: onboardingForm.userName.trim() })
-          });
-          const profileData = await profileRes.json();
-          if (profileData.success) finalUser = profileData.user;
-        } catch (e) {
-          // Fall through — user still lands somewhere sensible below, and can
-          // (re)supply their name via /onboarding if this save didn't stick.
-        }
+      if (isNewUser) {
+        // Name/relation/marriage-timeline still need to be collected — hold off on
+        // persisting/finalizing the session and continue the wizard instead. See
+        // completeSignup, called once those remaining steps are answered.
+        setUser(data.user);
+        setAuthStep('name');
+        return;
+      }
+
+      localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
+      setUser(data.user);
+      setRunsUsed(data.user.runs_used || 0);
+      setChatsUsed(data.user.chats_used || 0);
+      fetchRecentMatches(data.user.id);
+
+      if (!data.user.name) {
+        setOnboardingStep(1);
+        router.push('/onboarding');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Verification failed');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  // Final step of new-user signup (called after name/relation/eta are all answered):
+  // saves the name collected earlier now that OTP has verified a real user id, then
+  // finalizes the session the same way the returning-user path does.
+  const completeSignup = async () => {
+    if (isAuthLoading) return;
+    setIsAuthLoading(true);
+    setAuthError(null);
+    try {
+      let finalUser = user;
+      if (onboardingForm.userName?.trim()) {
+        const profileRes = await apiFetch(`${API_URL}/api/auth/profile`, {
+          method: 'POST',
+          body: JSON.stringify({ id: finalUser.id, name: onboardingForm.userName.trim() })
+        });
+        const profileData = await profileRes.json();
+        if (profileData.success) finalUser = profileData.user;
       }
 
       finalUser = {
@@ -191,22 +255,13 @@ export default function LoginPage() {
         marriageTimeline: onboardingForm.marriageTimeline
       };
       localStorage.setItem('slayhealth_user', JSON.stringify(finalUser));
-      if (data.refreshToken) localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
       setUser(finalUser);
       setRunsUsed(finalUser.runs_used || 0);
       setChatsUsed(finalUser.chats_used || 0);
       fetchRecentMatches(finalUser.id);
-
-      if (!finalUser.name) {
-        setOnboardingStep(1);
-        router.push('/onboarding');
-      } else if (isNewUser) {
-        setAuthStep('splash');
-      } else {
-        router.push('/dashboard');
-      }
+      setAuthStep('splash');
     } catch (err) {
-      setAuthError(err.message || 'Verification failed');
+      setAuthError(err.message || 'Failed to save your details.');
     } finally {
       setIsAuthLoading(false);
     }
@@ -313,7 +368,7 @@ export default function LoginPage() {
         options={MARRIAGE_TIMELINES}
         value={onboardingForm.marriageTimeline}
         onChange={(v) => setOnboardingForm({ ...onboardingForm, marriageTimeline: v })}
-        onAdvance={goNext}
+        onAdvance={completeSignup}
       />
     );
   } else if (authStep === 'otp') {
@@ -340,7 +395,16 @@ export default function LoginPage() {
           className={`${fieldInputClass} text-center text-2xl tracking-[0.3em] font-bold`}
           style={fieldInputStyle}
         />
-        <p className="text-xs mt-3 text-center" style={{ color: 'var(--muted)' }}>
+        <button
+          type="button"
+          onClick={pasteOtpFromClipboard}
+          className="w-full flex items-center justify-center gap-1.5 mt-3 py-2 text-xs font-semibold transition-opacity duration-150 hover:opacity-70"
+          style={{ color: 'var(--teal-d)' }}
+        >
+          <ClipboardPaste className="w-3.5 h-3.5" />
+          Paste code
+        </button>
+        <p className="text-xs mt-1 text-center" style={{ color: 'var(--muted)' }}>
           {cooldown > 0 ? `Resend available in ${cooldown}s` : 'Didn’t get it? Tap below to resend.'}
         </p>
       </div>
