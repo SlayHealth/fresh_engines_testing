@@ -15,7 +15,7 @@ const radiologyController = require('./radiology.controller');
 // Import scoring & matching logic
 const chronicController = require('./chronic.controller');
 const mfrController = require('./mfr.controller');
-const { computeMentalResult } = require('./mental.controller');
+const { computeMentalResult, isMentalQuestionnaireComplete } = require('./mental.controller');
 const ontologyMapper = require('../services/parser/ontologyMapper.service');
 
 function calculateAge(dobString) {
@@ -317,8 +317,8 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
 
     if (!inviterPathologyId) {
       const inviterPathRes = await db.query(
-        `SELECT id, extracted_json FROM reports 
-         WHERE file_name != 'mock_report.pdf' 
+        `SELECT id, extracted_json FROM reports
+         WHERE is_mock = FALSE
          AND id IN (SELECT male_report_id FROM matches WHERE user_id = $1 UNION SELECT female_report_id FROM matches WHERE user_id = $1)
          ORDER BY created_at DESC LIMIT 1`,
         [userId]
@@ -327,19 +327,10 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
     }
 
     if (!inviterPathologyId) {
-      const mockId = uuidv4();
-      const mockExtracted = {
-        cbc: {
-          hemoglobin: { value: 15.2, unit: 'g/dL', reference_range: '13.5-17.5', confidence: 0.98 },
-          total_rbc_count: { value: 4.8, unit: 'mill/uL', reference_range: '4.5-5.5', confidence: 0.95 }
-        }
-      };
-      await db.query(`
-        INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [mockId, 'mock_inviter_report.pdf', 'completed', 0.97, JSON.stringify(mockExtracted)]);
-      inviterPathologyId = mockId;
-      logger.info(`[processCompatibilityBackground] Created mock pathology report ${mockId} for inviter ${userId} (no previous reports found)`);
+      // Never fabricate clinical data to fill this gap — a couple's real compatibility
+      // result must never be partly computed from invented lab values. Fail clearly so
+      // the inviter is prompted to complete their own real pathology report.
+      throw new Error('Your pathology report must be uploaded and completed before you can run a compatibility match with your prospect.');
     }
 
     if (!pathologyReportId) {
@@ -389,26 +380,24 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
     const maleBmi = parseFloat((parseFloat(isInviterMale ? inviter.weight : prospect.weight) / Math.pow(parseFloat(isInviterMale ? inviter.height : prospect.height) / 100, 2)).toFixed(1));
     const femaleBmi = parseFloat((parseFloat(isInviterMale ? prospect.weight : inviter.weight) / Math.pow(parseFloat(isInviterMale ? prospect.height : inviter.height) / 100, 2)).toFixed(1));
 
+    // Deliberately no bloodPressure/glucose/lipids/history fields here — those are
+    // manual-override values, and chronic.controller.js's extractPatientData() treats
+    // ANY truthy manual value as an override that wins over the real category it
+    // auto-detects from the parsed pathology report. Hardcoding e.g. bloodPressure:
+    // 'Normal' here would silently mask a real elevated/high reading the OCR pipeline
+    // actually found. Leaving these fields out lets the real detected values through.
     const maleManual = {
       name: isInviterMale ? inviter.name : prospect.name,
       age: calculateAge(isInviterMale ? inviter.dob : prospect.dob),
       bmi: maleBmi,
-      waist: classifyWaist(isInviterMale ? inviter.waist : prospect.waist, 'male'),
-      bloodPressure: 'Normal',
-      glucose: 'Normal',
-      lipids: 'Normal',
-      history: { parentDiabetes: false }
+      waist: classifyWaist(isInviterMale ? inviter.waist : prospect.waist, 'male')
     };
 
     const femaleManual = {
       name: isInviterMale ? prospect.name : inviter.name,
       age: calculateAge(isInviterMale ? prospect.dob : inviter.dob),
       bmi: femaleBmi,
-      waist: classifyWaist(isInviterMale ? prospect.waist : inviter.waist, 'female'),
-      bloodPressure: 'Normal',
-      glucose: 'Normal',
-      lipids: 'Normal',
-      history: { parentDiabetes: false }
+      waist: classifyWaist(isInviterMale ? prospect.waist : inviter.waist, 'female')
     };
 
     const sharedLifestyle = {
@@ -449,16 +438,18 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
       body: {
         male_report_id: maleReportId,
         female_report_id: femaleReportId,
+        // No semenQuality/scrotalFinding/ovarianReserve here for the same reason as
+        // maleManual/femaleManual above — mfr.controller.js treats any truthy manual
+        // value as an override of the real classification it computes from the
+        // parsed report's semen/AMH/AFC values, so hardcoding 'Normal' here would
+        // silently mask a real abnormal finding.
         male_manual_data: {
           name: maleManual.name,
-          age: maleManual.age,
-          semenQuality: 'Normal',
-          scrotalFinding: 'Normal'
+          age: maleManual.age
         },
         female_manual_data: {
           name: femaleManual.name,
-          age: femaleManual.age,
-          ovarianReserve: 'Normal'
+          age: femaleManual.age
         },
         shared_lifestyle: {
           smoke: sharedLifestyle.smoking === 'Never' ? 0 : 0.5,
@@ -497,15 +488,19 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
     const inviterName = chronicResultData.partner_A?.name || maleManual.name || 'Partner A';
     const prospectName = chronicResultData.partner_B?.name || femaleManual.name || 'Partner B';
 
-    // If either side opted into the mental health questionnaire, score it now
+    // Only score mental compatibility when BOTH sides completed the full 21-question
+    // survey — a partially-filled or missing side must not silently score as if
+    // everyone answered positively across the board (same treatment as "didn't opt in").
     let mentalResult = null;
     if (invite.mental_answers_json) {
       try {
         const stored = JSON.parse(invite.mental_answers_json);
-        if (stored.inviter || stored.prospect) {
-          mentalResult = await computeMentalResult(stored.inviter || {}, stored.prospect || {}, {
+        if (isMentalQuestionnaireComplete(stored.inviter) && isMentalQuestionnaireComplete(stored.prospect)) {
+          mentalResult = await computeMentalResult(stored.inviter, stored.prospect, {
             cacheKey: `mental_insights_${matchId}`
           });
+        } else if (stored.inviter || stored.prospect) {
+          logger.warn(`[Background Match] Mental health answers present but incomplete for invite ${inviteId} — skipping mental scoring.`);
         }
       } catch (mentalErr) {
         logger.error(`[Background Match] Mental health scoring failed: ${mentalErr.message}`);
@@ -639,8 +634,8 @@ async function submitQuestionnaire(req, res, next) {
         }
       };
       await db.query(`
-        INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json) 
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json, is_mock)
+        VALUES ($1, $2, $3, $4, $5, TRUE)
       `, [pathId, 'mock_pathology.pdf', 'completed', 0.96, JSON.stringify(extractedData)]);
     }
 
@@ -693,8 +688,8 @@ async function submitQuestionnaire(req, res, next) {
       };
 
       await db.query(
-        `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, is_mock)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)`,
         [
           radId,
           invite.prospect_name,
@@ -771,8 +766,20 @@ async function runInviteMatch(req, res, next) {
 
     const { inviterPathologyId } = req.body;
 
-    // Update status to processing
-    await db.query("UPDATE prospect_invites SET status = 'processing' WHERE id = $1", [id]);
+    // Atomic compare-and-swap: only proceed if THIS request is the one that actually
+    // transitions the invite out of a runnable status. Without this, a double-click or
+    // a client retry racing another in-flight request could both pass the status check
+    // above, both flip to 'processing', and both kick off a duplicate (and separately
+    // paid-for) background match.
+    const claimRes = await db.query(
+      `UPDATE prospect_invites SET status = 'processing'
+       WHERE id = $1 AND status IN ('questionnaire_submitted', 'failed')
+       RETURNING id`,
+      [id]
+    );
+    if (claimRes.rowCount === 0) {
+      return res.status(409).json({ success: false, error: 'A match scan is already running or was already started for this invite.' });
+    }
     broadcastInviteUpdate(userId, id, 'processing');
 
     // Run the matching worker in the background

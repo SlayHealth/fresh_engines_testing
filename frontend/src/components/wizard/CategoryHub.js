@@ -43,16 +43,20 @@ function ProgressRing({ progress, size = 44, locked, done }) {
 }
 
 function CategoryCard({ category, onEnter }) {
-  const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, boostPct, suggestedTests } = category;
+  const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, boostPct, suggestedTests, required } = category;
   const [showSuggested, setShowSuggested] = useState(false);
   const done = progress >= 100;
+  // Subtle nudge toward the one card that's effectively mandatory (basics like
+  // age/gender live here) — nothing else in the hub visually distinguishes it
+  // from optional cards, so it's easy to skip straight to uploads and never see it.
+  const needsAttention = required && !done && !locked && !comingSoon;
 
   return (
     <div
       className="rounded-2xl border transition-all"
       style={{
-        background: 'var(--surface)',
-        borderColor: done ? 'var(--teal)' : locked ? 'var(--line)' : 'var(--line)',
+        background: needsAttention ? 'var(--soft-blue)' : 'var(--surface)',
+        borderColor: done ? 'var(--teal)' : needsAttention ? 'var(--info)' : 'var(--line)',
         opacity: comingSoon ? 0.65 : 1
       }}
     >

@@ -186,6 +186,15 @@ async function initDB() {
       ADD COLUMN IF NOT EXISTS mental_answers_json JSONB DEFAULT NULL;
     `);
 
+    // Explicit mock-data tracking. Reports created via a "use a mock report" opt-in
+    // (rather than a real uploaded PDF) must stay distinguishable from real reports —
+    // previously only inferred from filename (e.g. 'mock_report.pdf'), which was
+    // inconsistent across code paths and let some synthetic reports pass as real.
+    await pool.query(`
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS is_mock BOOLEAN DEFAULT FALSE;
+      ALTER TABLE radiology_reports ADD COLUMN IF NOT EXISTS is_mock BOOLEAN DEFAULT FALSE;
+    `);
+
     // Create indexes if they don't exist
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_usg_reports_patient_slay_id ON usg_reports(patient_slay_id);
@@ -219,7 +228,18 @@ async function initDB() {
 
 async function cleanupOldReports() {
   try {
-    const result = await pool.query("DELETE FROM reports WHERE created_at < NOW() - INTERVAL '1 day'");
+    // `matches` has ON DELETE CASCADE back to `reports` — deleting a report that's
+    // still referenced by a match would silently destroy that couple's completed
+    // compatibility result along with it. Only prune reports no match points to.
+    const result = await pool.query(`
+      DELETE FROM reports
+      WHERE created_at < NOW() - INTERVAL '1 day'
+        AND id NOT IN (
+          SELECT male_report_id FROM matches WHERE male_report_id IS NOT NULL
+          UNION
+          SELECT female_report_id FROM matches WHERE female_report_id IS NOT NULL
+        )
+    `);
     logger.info(`Cleaned up old reports. Removed rows: ${result.rowCount}`);
     return result.rowCount;
   } catch (error) {

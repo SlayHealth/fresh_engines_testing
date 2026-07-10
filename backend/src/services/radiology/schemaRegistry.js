@@ -5,6 +5,7 @@ const schemas = {
   USG_TVS:              require('./schemas/usg.tvs.schema'),
   USG_SCROTUM_DOPPLER:  require('./schemas/usg.scrotum.schema'),
   ECHO:                 require('./schemas/echo.schema'),
+  ECG:                  require('./schemas/ecg.schema'),
   XRAY_CHEST:           require('./schemas/xray.chest.schema'),
   USG_NECK:             require('./schemas/usg.neck.schema'),
   DEXA:                 require('./schemas/dexa.schema'),
@@ -22,6 +23,10 @@ const nuptiaWeights = {
   USG_TVS:              0.10,
   USG_PELVIS:           0.05,
   ECHO:                 0.05,
+  // Provisional — same weight as ECHO, treating them as peer cardiac-domain tests.
+  // This needs real clinical-weighting sign-off, not an engineering guess; flagged
+  // for follow-up rather than silently treated as final.
+  ECG:                  0.05,
   XRAY_CHEST:           0.03,
   USG_NECK:             0.02,
   DEXA:                 0.02,

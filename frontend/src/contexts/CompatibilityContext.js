@@ -175,6 +175,38 @@ export const classifyWaist = (waistVal, gender) => {
   }
 };
 
+// Draft persistence for the multi-step questionnaire (About/Lifestyle/Mental/Pathology
+// answers) — this previously lived only in memory, so any page refresh silently wiped
+// every answer already given. Namespaced per logged-in user id (read directly out of
+// localStorage rather than the `user` state, since that's only populated asynchronously
+// after mount) so switching accounts on the same device never rehydrates someone else's
+// in-progress draft.
+let cachedDraft;
+
+function getStoredUserId() {
+  try {
+    const raw = localStorage.getItem('slayhealth_user');
+    return raw ? JSON.parse(raw)?.id : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function draftStorageKey() {
+  return `slayhealth_profile_draft_${getStoredUserId() || 'anon'}`;
+}
+
+function loadDraft() {
+  if (cachedDraft !== undefined) return cachedDraft;
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(draftStorageKey()) : null;
+    cachedDraft = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    cachedDraft = null;
+  }
+  return cachedDraft;
+}
+
 export function CompatibilityProvider({ children }) {
   // Authentication & Profile
   const [user, setUser] = useState(null);
@@ -195,7 +227,7 @@ export function CompatibilityProvider({ children }) {
 
   // Forms state
   const [onboardingStep, setOnboardingStep] = useState(0);
-  const [onboardingForm, setOnboardingForm] = useState({
+  const [onboardingForm, setOnboardingForm] = useState(() => ({
     userName: '',
     userRelation: '',
     candidateName: '',
@@ -214,10 +246,11 @@ export function CompatibilityProvider({ children }) {
     height: '',
     weight: '',
     waist: '',
-    menstrualCycle: ''
-  });
+    menstrualCycle: '',
+    ...(loadDraft()?.onboardingForm || {})
+  }));
 
-  const [prospectForm, setProspectForm] = useState({
+  const [prospectForm, setProspectForm] = useState(() => ({
     name: '',
     gender: '',
     dob: '',
@@ -235,12 +268,13 @@ export function CompatibilityProvider({ children }) {
     height: '',
     weight: '',
     waist: '',
-    menstrualCycle: ''
-  });
+    menstrualCycle: '',
+    ...(loadDraft()?.prospectForm || {})
+  }));
 
   // Pathology Uploads
-  const [userReport, setUserReport] = useState(null);
-  const [prospectReport, setProspectReport] = useState(null);
+  const [userReport, setUserReport] = useState(() => loadDraft()?.userReport || null);
+  const [prospectReport, setProspectReport] = useState(() => loadDraft()?.prospectReport || null);
   const [isUserUploading, setIsUserUploading] = useState(false);
   const [isProspectUploading, setIsProspectUploading] = useState(false);
   const [userUploadError, setUserUploadError] = useState(null);
@@ -248,10 +282,10 @@ export function CompatibilityProvider({ children }) {
 
   // Mental wellbeing opt-in + answers, per person — shared across add-prospect's
   // wizard and the dashboard's health-profile progress cards.
-  const [selfMentalOptIn, setSelfMentalOptIn] = useState(null);
-  const [selfMentalAnswers, setSelfMentalAnswers] = useState({});
-  const [prospectMentalOptIn, setProspectMentalOptIn] = useState(null);
-  const [prospectMentalAnswers, setProspectMentalAnswers] = useState({});
+  const [selfMentalOptIn, setSelfMentalOptIn] = useState(() => loadDraft()?.selfMentalOptIn || null);
+  const [selfMentalAnswers, setSelfMentalAnswers] = useState(() => loadDraft()?.selfMentalAnswers || {});
+  const [prospectMentalOptIn, setProspectMentalOptIn] = useState(() => loadDraft()?.prospectMentalOptIn || null);
+  const [prospectMentalAnswers, setProspectMentalAnswers] = useState(() => loadDraft()?.prospectMentalAnswers || {});
 
   // Results State
   const [isMatching, setIsMatching] = useState(false);
@@ -270,6 +304,12 @@ export function CompatibilityProvider({ children }) {
   const [showCalculations, setShowCalculations] = useState(false);
 
   const clearAllSessionStates = () => {
+    try {
+      localStorage.removeItem(draftStorageKey());
+    } catch (e) {
+      // localStorage unavailable — nothing to clean up
+    }
+    cachedDraft = undefined;
     setAccessToken(null);
     localStorage.removeItem('slayhealth_user');
     localStorage.removeItem('slayhealth_refresh_token');
@@ -285,6 +325,10 @@ export function CompatibilityProvider({ children }) {
     setChatSessionId(null);
     setUserReport(null);
     setProspectReport(null);
+    setSelfMentalOptIn(null);
+    setSelfMentalAnswers({});
+    setProspectMentalOptIn(null);
+    setProspectMentalAnswers({});
     setOnboardingForm({
       userName: '',
       userRelation: '',
@@ -327,6 +371,26 @@ export function CompatibilityProvider({ children }) {
       menstrualCycle: ''
     });
   };
+
+  // Persist the in-progress questionnaire so a refresh (or a phone backgrounding the
+  // tab) doesn't silently wipe answers already given — mirrored into localStorage on
+  // every change and rehydrated via the lazy useState initializers above.
+  useEffect(() => {
+    try {
+      localStorage.setItem(draftStorageKey(), JSON.stringify({
+        onboardingForm,
+        prospectForm,
+        userReport,
+        prospectReport,
+        selfMentalOptIn,
+        selfMentalAnswers,
+        prospectMentalOptIn,
+        prospectMentalAnswers
+      }));
+    } catch (e) {
+      // Storage full/unavailable — draft persistence is best-effort only.
+    }
+  }, [onboardingForm, prospectForm, userReport, prospectReport, selfMentalOptIn, selfMentalAnswers, prospectMentalOptIn, prospectMentalAnswers]);
 
   // Load user session on mount
   useEffect(() => {

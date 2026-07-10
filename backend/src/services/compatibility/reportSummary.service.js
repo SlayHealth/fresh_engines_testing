@@ -31,6 +31,91 @@ function getFlatParams(details) {
 }
 
 /**
+ * Finds a single named parameter within one partner's extracted pathology data
+ * (kept separate per-partner, unlike getFlatParams which merges both partners
+ * into one dict and would let one partner's value silently overwrite the other's).
+ */
+function findPartnerParam(partnerData, canonicalName) {
+  if (!partnerData || typeof partnerData !== 'object') return null;
+  for (const sectionKey of Object.keys(partnerData)) {
+    const section = partnerData[sectionKey];
+    if (section && typeof section === 'object' && section[canonicalName] !== undefined) {
+      return section[canonicalName];
+    }
+  }
+  return null;
+}
+
+/**
+ * Real beta-thalassemia carrier-trait screen, based on each partner's own extracted
+ * HbA2 (hemoglobin_a2_hba2) value — replaces a previous hardcoded "All clear" that
+ * never actually looked at the data. HbA2 > 3.5% is the standard threshold used to
+ * flag likely beta-thalassemia trait carriers.
+ *
+ * Hemoglobin variant screening (sickle/C/D/E) isn't currently extractable from our
+ * pathology ontology, so that sub-check is honestly reported as "not assessed"
+ * rather than fabricating a clear result for a test we never ran.
+ */
+function evaluateThalassemiaCarrierRisk(maleData, femaleData) {
+  const maleRaw = parseFloat(findPartnerParam(maleData, 'hemoglobin_a2_hba2')?.value);
+  const femaleRaw = parseFloat(findPartnerParam(femaleData, 'hemoglobin_a2_hba2')?.value);
+  const hasMale = !isNaN(maleRaw);
+  const hasFemale = !isNaN(femaleRaw);
+
+  const classify = (val) => {
+    if (isNaN(val)) return 'gray';
+    return val > 3.5 ? 'red' : 'green';
+  };
+
+  const maleStatus = classify(maleRaw);
+  const femaleStatus = classify(femaleRaw);
+  const bothCarriers = maleStatus === 'red' && femaleStatus === 'red';
+  const eitherCarrier = maleStatus === 'red' || femaleStatus === 'red';
+  const eitherUntested = maleStatus === 'gray' || femaleStatus === 'gray';
+
+  let headline, narrative, badge;
+  if (bothCarriers) {
+    headline = 'Both of you may carry the same trait';
+    narrative = `Both partners show an elevated HbA2 level (Male: ${maleRaw}%, Female: ${femaleRaw}%), consistent with beta-thalassemia carrier trait. When both partners carry this trait, there is a real chance of passing it to children — please discuss this with a genetic counselor.`;
+    badge = 'Discuss with a specialist';
+  } else if (eitherCarrier) {
+    headline = 'One of you may carry this trait';
+    narrative = `One partner shows an elevated HbA2 level, consistent with possible beta-thalassemia carrier trait (Male: ${hasMale ? maleRaw + '%' : 'not tested'}, Female: ${hasFemale ? femaleRaw + '%' : 'not tested'}). This is usually not a concern on its own, but worth confirming with your doctor before family planning.`;
+    badge = 'Worth a look';
+  } else if (eitherUntested) {
+    headline = 'Carrier screening incomplete';
+    narrative = "We couldn't find an HbA2 (hemoglobin electrophoresis) value for one or both of you in the uploaded reports, so this couldn't be fully assessed.";
+    badge = 'Needs testing';
+  } else {
+    headline = 'Do you both quietly carry the same thing?';
+    narrative = `Both of your HbA2 levels are within the normal range (Male: ${maleRaw}%, Female: ${femaleRaw}%), with no indication of beta-thalassemia carrier trait.`;
+    badge = 'All clear';
+  }
+
+  return {
+    thalassemia: {
+      male_status: maleStatus,
+      female_status: femaleStatus,
+      headline,
+      narrative,
+      clinical_footnote: `In your report: HbA2 is ${hasMale ? maleRaw + '%' : 'not available'} (male), ${hasFemale ? femaleRaw + '%' : 'not available'} (female).`,
+      badge,
+      covered: hasMale || hasFemale
+    },
+    hemoglobin_variant: {
+      male_status: 'gray',
+      female_status: 'gray',
+      headline: 'Hemoglobin variant screening',
+      narrative: 'Hemoglobin variant (sickle/C/D/E) screening requires an HPLC report that was not part of this analysis.',
+      clinical_footnote: 'Not assessed — no HPLC variant screening data available.',
+      badge: 'Not assessed',
+      covered: false
+    },
+    genetic_note: 'Premarital carrier screening checks if both partners carry traits for the same genetic condition, such as thalassemia, which could affect future children.'
+  };
+}
+
+/**
  * STI Clinical Safety Gate
  * Scans both partners' extracted report data for active infectious disease markers.
  * Returns a gate object if any reactive/positive STI is found.
@@ -136,11 +221,8 @@ class ReportSummaryService {
     const flatParams = getFlatParams(details);
     const detailsFlat = details || {};
     const hasRadiology = !!(detailsFlat.male_manual_data?.uterineLining || detailsFlat.female_manual_data?.uterineLining || detailsFlat.radiology_report_id || detailsFlat.maleRadiology || detailsFlat.femaleRadiology);
-    const hasGenetic = !!(
-      detailsFlat.male_manual_data?.thalassemia || detailsFlat.female_manual_data?.thalassemia ||
-      detailsFlat.male_manual_data?.mthfr || detailsFlat.female_manual_data?.mthfr ||
-      detailsFlat.male_data?.pathology?.genetic || detailsFlat.female_data?.pathology?.genetic
-    );
+    const carrierRisk = evaluateThalassemiaCarrierRisk(detailsFlat.male_data, detailsFlat.female_data);
+    const hasGenetic = carrierRisk.thalassemia.covered;
     const hasMental = !!(
       mentalResult || detailsFlat.male_manual_data?.communication || detailsFlat.female_manual_data?.communication
     );
@@ -183,10 +265,12 @@ class ReportSummaryService {
     // 2. Couple compatibility status & score
     let coupleScore = detailsFlat.compiled_compatibility_score !== undefined
       ? Math.round(detailsFlat.compiled_compatibility_score)
-      : Math.round(chronicResult?.calculations?.coupleIndex || 85);
-    let coupleStatus = 'Excellent';
-    let coupleStatusDescription = 'You two are starting from a strong, well-matched place. Nothing here should give you pause about building a life together.';
-    let coupleStatusColor = 'green';
+      : (chronicResult?.calculations?.coupleIndex != null ? Math.round(chronicResult.calculations.coupleIndex) : null);
+    let coupleStatus = coupleScore !== null ? 'Excellent' : 'Pending';
+    let coupleStatusDescription = coupleScore !== null
+      ? 'You two are starting from a strong, well-matched place. Nothing here should give you pause about building a life together.'
+      : 'Your compatibility snapshot is still being finalized.';
+    let coupleStatusColor = coupleScore !== null ? 'green' : 'gray';
 
     const chronicState = chronicResult?.state || 'Aligned';
     const mfrState = mfrResult?.state || 'Aligned';
@@ -212,7 +296,9 @@ class ReportSummaryService {
 
     if (stiGate.triggered) {
       logger.warn(`[ReportSummaryService] STI Safety Gate TRIGGERED fallback.`);
-      coupleScore = Math.min(coupleScore, 50);
+      // An active STI finding is itself a real, definite signal (not a missing-data
+      // case), so it's fine to assert a capped score here even if no other score exists.
+      coupleScore = coupleScore !== null ? Math.min(coupleScore, 50) : 50;
       coupleStatus = 'Action Advised';
       coupleStatusDescription = 'One or more active infectious disease markers were detected. Immediate specialist consultation is required before proceeding.';
       coupleStatusColor = 'red';
@@ -525,25 +611,7 @@ class ReportSummaryService {
           severity: f.severity
         }))
       },
-      carrier_pair_risk: {
-        thalassemia: {
-          male_status: 'green',
-          female_status: 'green',
-          headline: 'Do you both quietly carry the same thing?',
-          narrative: 'No common beta-thalassemia carrier mutations were detected.',
-          clinical_footnote: 'In your report: HbA2 levels are normal for both.',
-          badge: 'All clear'
-        },
-        hemoglobin_variant: {
-          male_status: 'green',
-          female_status: 'green',
-          headline: 'Hemoglobin variant check',
-          narrative: 'No sickle cell or abnormal variant traits were detected.',
-          clinical_footnote: 'In your report: HPLC screening shows normal hemoglobin variant values.',
-          badge: 'All clear'
-        },
-        genetic_note: 'Premarital carrier screening checks if both partners carry traits for the same genetic condition, such as thalassemia, which could affect future children.'
-      },
+      carrier_pair_risk: carrierRisk,
       family_planning: familyPlanning,
       body_health: bodyHealth,
       lifestyle: lifestyle,

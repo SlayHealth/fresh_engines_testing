@@ -114,6 +114,11 @@ function spleenScore(spleen) {
   return Math.max(0, score);
 }
 
+// Below this, a single organ's finding is severe enough (e.g. a mass, high-grade
+// hydronephrosis, marked fatty liver) that it must not be averaged away by other
+// normal organs — see the cap applied in compositeAbdominalScore below.
+const CRITICAL_ORGAN_SCORE_THRESHOLD = 30;
+
 function compositeAbdominalScore(findings, sex, age) {
   if (!findings) return 100;
   const l_score = liverScore(findings.liver);
@@ -135,7 +140,7 @@ function compositeAbdominalScore(findings, sex, age) {
     bladder: 0.10,
     reproductive: 0.25
   };
-  
+
   const total = l_score * weights.liver +
                 gb_score * weights.gallbladder +
                 p_score * weights.pancreas +
@@ -143,8 +148,16 @@ function compositeAbdominalScore(findings, sex, age) {
                 k_score * weights.kidneys +
                 b_score * weights.bladder +
                 rep_score * weights.reproductive;
-                
-  return Math.round(total);
+
+  // A single critically-abnormal organ (e.g. a liver mass scoring 0) must not be
+  // diluted into a reassuring-looking composite just because the other organs are
+  // normal — cap the overall score close to the worst individual organ finding.
+  const worstOrganScore = Math.min(l_score, gb_score, p_score, s_score, k_score, b_score, rep_score);
+  const finalScore = worstOrganScore < CRITICAL_ORGAN_SCORE_THRESHOLD
+    ? Math.min(total, worstOrganScore + 20)
+    : total;
+
+  return Math.round(Math.max(0, finalScore));
 }
 
 function calculateMetabolicHealthIndex(findings, bmi) {

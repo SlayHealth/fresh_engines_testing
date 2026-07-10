@@ -49,6 +49,21 @@ const MODALITY_PATTERNS = [
     ]
   },
   {
+    key: 'ECG',
+    // Real-world ECG reports vary a lot by device/lab — these patterns were built
+    // from two genuinely different formats: a traditional 12-lead style report
+    // (QRSD/QTcB/PRI fields, "Sinus Rhythm" interpretation) and a digital/wearable
+    // device style report ("ECG Details (Lead II)", "QTc Interval").
+    patterns: [
+      /ECG\s+Details/i,
+      /ELECTROCARDIOGRAM/i,
+      /\bQTcB\b/i,
+      /\bQTc\s+Interval\b/i,
+      /based\s+on\s+ECG\s+alone/i,
+      /Sinus\s+Rhythm/i
+    ]
+  },
+  {
     key: 'XRAY_CHEST',
     patterns: [
       /X[\s-]?RAY\s+CHEST/i,

@@ -28,15 +28,53 @@ class ParameterExtractorService {
       if (/^[<>]?\s*\d+(?:\.\d+)?$/.test(str)) return true;
       // Numeric ranges like 0-5 or 0.4-4.0
       if (/^\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?$/.test(str)) return true;
+      // Blood-pressure-style slash pair: 130.0/80.0, 120/80
+      if (/^\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?$/.test(str)) return true;
       // Titer formats: 1:16, 1 : 4 — critical for Syphilis RPR titre
       if (/^\d+\s*:\s*\d+$/.test(str)) return true;
-      // Qualitative clinical terms
-      if (/^(Clear|Absent|Present|Positive|Negative|Reactive|Non-Reactive|Detected|Not\s+Detected|Immune|Non-Immune|Normal|Abnormal|Rare|Pale\s+Yellow|Pale|Not\s+Applicable)$/i.test(str)) return true;
+      // Qualitative clinical terms. "Non-Reactive"/"Non-Immune" use `[-\s]` (not a
+      // literal hyphen) because real rapid-card reports commonly print these as two
+      // space-separated words ("NON REACTIVE") rather than hyphenated — the hyphen-only
+      // version silently failed to recognize the real result as a value at all, leaving
+      // the parameter still "pending" until a stray "Reactive"/"Non Reactive" token
+      // later in the page's legend/explanation text got mistaken for the real result.
+      if (/^(Clear|Absent|Present|Positive|Negative|Reactive|Non[-\s]Reactive|Detected|Not\s+Detected|Immune|Non[-\s]Immune|Normal|Abnormal|Rare|Pale\s+Yellow|Pale|Not\s+Applicable)$/i.test(str)) return true;
       // Blood groups
       if (/^(A|B|AB|O)$/.test(str)) return true;
       // Semen interpretation categories
       if (/^(Normozoospermia|Oligozoospermia|Azoospermia|Asthenozoospermia|Teratozoospermia)$/i.test(str)) return true;
       return false;
+    };
+
+    /**
+     * Writes an extracted value into extractedData, with one special case: a
+     * "blood_pressure_combined" mapping (from a report that prints BP as a single
+     * "130.0/80.0" cell rather than separate systolic/diastolic rows) gets split into
+     * the two canonical fields the chronic engine actually reads
+     * (systolic_blood_pressure / diastolic_blood_pressure) instead of being stored
+     * as one unusable combined string.
+     */
+    const writeParam = (section, mapping, rawValue, unit, referenceRange, confidence, originalName) => {
+      if (!extractedData[section]) extractedData[section] = {};
+      if (mapping.canonical_name === 'blood_pressure_combined' && typeof rawValue === 'string' && /^\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?$/.test(rawValue)) {
+        const [sysRaw, diaRaw] = rawValue.split('/').map((s) => s.trim());
+        const sys = parseFloat(sysRaw);
+        const dia = parseFloat(diaRaw);
+        if (!isNaN(sys)) {
+          extractedData[section].systolic_blood_pressure = { original_name: originalName, value: sys, unit: unit || 'mmHg', reference_range: referenceRange, confidence };
+        }
+        if (!isNaN(dia)) {
+          extractedData[section].diastolic_blood_pressure = { original_name: originalName, value: dia, unit: unit || 'mmHg', reference_range: referenceRange, confidence };
+        }
+        return;
+      }
+      extractedData[section][mapping.canonical_name] = {
+        original_name: originalName,
+        value: isNaN(Number(rawValue)) ? rawValue : Number(rawValue),
+        unit,
+        reference_range: referenceRange,
+        confidence
+      };
     };
 
     for (const page of pages) {
@@ -122,7 +160,14 @@ class ParameterExtractorService {
 
           // 1. Detect Section
           const detectedSection = sectionDetector.detectSection(cell);
-          if (detectedSection) {
+          // Only treat this as entering a NEW section if it's actually different from
+          // the one we're already in. Many real reports repeat a near-identical string
+          // as both the section header AND the first parameter's own name (e.g. section
+          // "Erythrocyte Sedimentation Rate (ESR)" followed by a parameter row literally
+          // named "ESR - Erythrocyte Sedimentation Rate") — without this guard, the
+          // parameter name re-triggers "section detected", wipes pendingParams again,
+          // and the value that follows has nothing left to attach to and gets dropped.
+          if (detectedSection && detectedSection !== currentSection) {
             currentSection = detectedSection;
             if (!extractedData[currentSection]) extractedData[currentSection] = {};
             pendingParams = []; // reset pending on new section
@@ -132,8 +177,16 @@ class ParameterExtractorService {
             continue;
           }
 
-          // Skip column headers
-          if (/^(Parameter|Result|Reference|Unit)$/i.test(cell)) continue;
+          // Skip column headers and the "Interpretation:" marker. The latter fuzzy-matches
+          // a real ontology parameter (interpretation_diagnosis) closely enough to get
+          // queued as a pending name — and since every report page ends with an
+          // "Interpretation:" marker followed by free-text explanation (which often
+          // illustrates both possible results, e.g. "Reactive ... Non-Reactive ..." as a
+          // legend, not the actual result), that queued entry then steals whichever
+          // qualitative word appears next in the explanation as if it were the real
+          // result. Confirmed this was inverting real NON-REACTIVE HBsAg/HIV results to
+          // "Reactive" in extracted_json on real reports.
+          if (/^(Parameter|Result|Reference|Unit|Interpretation):?$/i.test(cell)) continue;
 
           // ── CRITICAL VALUE-FIRST GUARD ──────────────────────────────────────────────
           // If this cell is a recognized clinical value token (Reactive, Non-Reactive,
@@ -145,7 +198,12 @@ class ParameterExtractorService {
           if (!isValueStr(cell)) {
             // 2. Map Parameter (only for non-value cells)
             const mapping = ontologyMapper.mapParameter(cell, currentSection);
-            if (mapping && cell.length > 5 && isNaN(Number(cell))) {
+            // Trust the ontology mapper's own confidence-scored matching rather than
+            // re-gating on raw string length here — a `> 5` floor silently dropped
+            // extremely common short lab abbreviations entirely (PCV, MCV, MCH, TLC,
+            // Hb, Na, K...) on every real-world report tested. Just guard against a
+            // bare number being mistaken for a name.
+            if (mapping && cell.length >= 2 && isNaN(Number(cell))) {
               let value = null;
               let referenceRange = null;
               let unit = null;
@@ -180,17 +238,18 @@ class ParameterExtractorService {
 
               if (value !== null) {
                 const section = currentSection || mapping.section || 'general';
-                if (!extractedData[section]) extractedData[section] = {};
-                extractedData[section][mapping.canonical_name] = {
-                  original_name: cell,
-                  value: isNaN(Number(value)) ? value : Number(value),
-                  unit: unit,
-                  reference_range: referenceRange,
-                  confidence: mapping.match_score
-                };
+                writeParam(section, mapping, value, unit, referenceRange, mapping.match_score, cell);
               } else {
-                // No inline value — queue for columnar matching
-                pendingParams.push({ mapping, original_name: cell });
+                // No inline value — queue for columnar matching. Some real reports repeat
+                // a test's name twice in a row (e.g. a mini section-style line followed by
+                // the actual row name) before the method/value — without deduping, the
+                // second occurrence sits in the queue and later steals whatever value-shaped
+                // token comes next (often the reference range itself), clobbering the
+                // correct value that was already assigned to the first occurrence.
+                const alreadyPending = pendingParams.some(p => p.mapping.canonical_name === mapping.canonical_name);
+                if (!alreadyPending) {
+                  pendingParams.push({ mapping, original_name: cell });
+                }
               }
               continue;
             }
@@ -202,14 +261,7 @@ class ParameterExtractorService {
           if (pendingParams.length > 0 && isValueStr(cell)) {
             const param = pendingParams.shift();
             const section = currentSection || param.mapping.section || 'general';
-            if (!extractedData[section]) extractedData[section] = {};
-            extractedData[section][param.mapping.canonical_name] = {
-              original_name: param.original_name,
-              value: isNaN(Number(cell)) ? cell : Number(cell),
-              unit: null,
-              reference_range: null,
-              confidence: parseFloat((param.mapping.match_score * 0.9).toFixed(2))
-            };
+            writeParam(section, param.mapping, cell, null, null, parseFloat((param.mapping.match_score * 0.9).toFixed(2)), param.original_name);
           }
 
         } // end for (let i < cells.length)

@@ -175,26 +175,41 @@ exports.uploadReport = async (req, res, next) => {
   }
 };
 
+// This endpoint's only current caller is the frontend's "use a mock report" opt-in
+// (both add-prospect/page.js and core-engine/usg/page.js post fixed, hardcoded
+// findings/scores/risk_flags here — there is no real-upload path that uses it).
+// Previously it stored whatever scores/risk_flags the client sent, verbatim, with no
+// server-side recomputation and no mock marker — indistinguishable in storage from a
+// genuinely analyzed report. Now: recompute scores/flags from the supplied findings
+// server-side (so persisted scores can never be inconsistent with the findings that
+// produced them) and always flag the row as mock, since that's what this path is.
 exports.saveReport = async (req, res, next) => {
   try {
     const reportData = req.body;
     const reportId = uuidv4();
+    const sex = reportData.sex || 'Female';
+    const age = parseFloat(reportData.age) || 30;
+    const findings = reportData.findings || {};
+
+    const recomputedScores = calculateRadiologyNuptiaContribution({ unified: findings }, sex, age);
+    const recomputedRiskFlags = generateRiskFlags(findings, sex, age);
+
     await db.query(
-      `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, is_mock)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)`,
       [
         reportId,
         reportData.patient_slay_id,
-        reportData.sex,
-        reportData.age,
+        sex,
+        age,
         reportData.modalities_detected,
-        JSON.stringify(reportData.findings),
-        JSON.stringify(reportData.scores),
-        JSON.stringify(reportData.risk_flags),
+        JSON.stringify(findings),
+        JSON.stringify(recomputedScores),
+        JSON.stringify(recomputedRiskFlags),
         reportData.raw_ocr_text || ''
       ]
     );
-    const legacyMapped = mapRadiologyToLegacyFormat(reportData);
+    const legacyMapped = mapRadiologyToLegacyFormat({ ...reportData, findings, scores: recomputedScores, risk_flags: recomputedRiskFlags });
     return res.status(201).json({ reportId, analyzed: legacyMapped });
   } catch (err) {
     next(err);

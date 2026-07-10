@@ -40,6 +40,7 @@ const parametersOntology = [
     "section": "cbc",
     "aliases": [
       "hemoglobin (hb)",
+      "hemoglobin",
       "hb"
     ],
     "expected_units": [],
@@ -304,7 +305,8 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "erythrocyte sedimentation rate (esr)",
-      "esr"
+      "esr",
+      "esr - erythrocyte sedimentation rate"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -324,7 +326,8 @@ const parametersOntology = [
     "section": "cbc",
     "aliases": [
       "random blood sugar (rbs)",
-      "rbs"
+      "rbs",
+      "glucose random"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -433,7 +436,8 @@ const parametersOntology = [
     "canonical_name": "serum_creatinine",
     "section": "kft",
     "aliases": [
-      "serum creatinine"
+      "serum creatinine",
+      "creatinine"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -483,7 +487,8 @@ const parametersOntology = [
       "egfr",
       "e-gfr",
       "estimated gfr",
-      "gfr"
+      "gfr",
+      "egfr (ckd-epi)"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -602,8 +607,7 @@ const parametersOntology = [
     "aliases": [
       "hemoglobin f (hbf / fetal hemoglobin)",
       "hbf",
-      "fetal",
-      "hemoglobin"
+      "fetal"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -889,7 +893,8 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hbsag - qualitative result (reactive / non-reactive)",
-      "hbsag - qualitative result"
+      "hbsag - qualitative result",
+      "hepatitis b surface antigen (hbsag)"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -927,7 +932,8 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hiv 1 & 2 antibody - result (reactive / non-reactive)",
-      "hiv 1 & 2 antibody - result"
+      "hiv 1 & 2 antibody - result",
+      "hiv 1 & 2 antibodies"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -957,7 +963,8 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "hiv 1 & 2 antibody - result (reactive / non-reactive)",
-      "hiv 1 & 2 antibody - result"
+      "hiv 1 & 2 antibody - result",
+      "hiv 1 & 2 antibodies"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -1400,18 +1407,121 @@ const parametersOntology = [
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
+  },
+  {
+    "canonical_name": "height",
+    "section": "general",
+    "aliases": [
+      "height"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
+  },
+  {
+    "canonical_name": "weight",
+    "section": "general",
+    "aliases": [
+      "weight"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
+  },
+  {
+    "canonical_name": "bmi",
+    "section": "general",
+    "aliases": [
+      "bmi",
+      "body mass index"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
+  },
+  {
+    "canonical_name": "waist",
+    "section": "general",
+    "aliases": [
+      "waist",
+      "waist circumference"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
+  },
+  {
+    "canonical_name": "systolic_blood_pressure",
+    "section": "general",
+    "aliases": [
+      "systolic blood pressure",
+      "blood_pressure_high",
+      "bp systolic"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
+  },
+  {
+    "canonical_name": "diastolic_blood_pressure",
+    "section": "general",
+    "aliases": [
+      "diastolic blood pressure",
+      "blood_pressure_low",
+      "bp diastolic"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
+  },
+  {
+    // Special-cased in parameterExtractor.service.js: a value like "130.0/80.0" under
+    // this mapping gets split into systolic_blood_pressure / diastolic_blood_pressure
+    // rather than stored as one unusable combined string — some real reports print
+    // blood pressure as a single "Blood Pressure" row with a slash-separated value
+    // instead of two separate systolic/diastolic rows.
+    "canonical_name": "blood_pressure_combined",
+    "section": "general",
+    "aliases": [
+      "blood pressure"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
   }
 ];
 
+// Shared normalization for both the alias index and incoming raw names, so e.g. a
+// hyphenated alias ("rdw-cv") and a parenthesized real-world label ("RDW (CV)")
+// converge on the same normalized form instead of differing by punctuation alone —
+// Fuse's fuzzy threshold does NOT reliably treat "-" vs " " as a near-miss on short
+// strings, so without this the two would fail to match despite being the same test.
+function normalizeParamName(raw) {
+  return raw
+    .toLowerCase()
+    .replace(/[()]/g, ' ')
+    .replace(/[-/]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const searchableParams = [];
+// Exact-match index for short abbreviations (PCV, MCV, TLC, Hb, ...) — these are all
+// explicitly registered aliases, so an exact lookup resolves them with zero fuzzy
+// false-positive risk. Fuzzy matching short queries against a corpus of much longer
+// alias strings is inherently noisy (e.g. "ID" — from "Patient ID" — fuzzy-matched
+// "triglycerides" at the relaxed length floor below, fabricating a bogus lab value),
+// so fuzzy search stays gated behind a longer minimum length further down.
+const exactAliasIndex = new Map();
 parametersOntology.forEach(param => {
   param.aliases.forEach(alias => {
+    const normalizedAlias = normalizeParamName(alias);
     searchableParams.push({
       canonical_name: param.canonical_name,
       section: param.section,
       expected_units: param.expected_units,
-      alias: alias
+      alias: normalizedAlias
     });
+    if (!exactAliasIndex.has(normalizedAlias)) {
+      exactAliasIndex.set(normalizedAlias, {
+        canonical_name: param.canonical_name,
+        section: param.section,
+        expected_units: param.expected_units
+      });
+    }
   });
 });
 
@@ -1424,10 +1534,28 @@ const fuse = new Fuse(searchableParams, {
 class OntologyMapperService {
   mapParameter(rawName, currentSection) {
     if (!rawName) return null;
-    
-    // Normalize string by removing parentheses and lowering case
-    const normalized = rawName.toLowerCase().replace(/\(.*?\)/g, '').trim();
-    if (normalized.length < 4) return null; // Ignore very short names
+
+    // Normalize string: lowercase, and unwrap (don't delete) parenthetical content —
+    // e.g. "RDW (CV)" must stay recognizable as "rdw cv" to match the "rdw-cv" alias.
+    // Fully deleting the parenthetical (the previous behavior) reduced it to just
+    // "RDW", which is indistinguishable from the unrelated RDW-SD parameter and
+    // couldn't match the RDW-CV alias at all.
+    const normalized = normalizeParamName(rawName);
+    if (normalized.length < 2) return null;
+
+    // Exact match first — this is how real short lab abbreviations (Hb, PCV, MCV,
+    // MCH, TLC, ...) get recognized: they're registered aliases, so an exact lookup
+    // finds them with no fuzzy tolerance and thus no false-positive risk.
+    const exact = exactAliasIndex.get(normalized);
+    if (exact) {
+      return { canonical_name: exact.canonical_name, section: exact.section, expected_units: exact.expected_units || [], match_score: 1.0 };
+    }
+
+    // Fuzzy fallback (OCR typos, minor wording variance) — gated to longer strings
+    // only. Below this length, fuzzy matching against a corpus of much longer alias
+    // strings has too high a false-positive rate (e.g. "ID", from "Patient ID",
+    // fuzzy-matched "triglycerides" and fabricated a bogus lab value).
+    if (normalized.length < 4) return null;
 
     const results = fuse.search(normalized);
     

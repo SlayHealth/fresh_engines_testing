@@ -1,6 +1,7 @@
 const schemaRegistry = require('../radiology/schemaRegistry');
 const { scrotalScore, scrotalFertilityRelevanceScore } = require('./scrotum.score');
 const { echoScore } = require('./echo.score');
+const { ecgScore } = require('./ecg.score');
 const { dexaScore } = require('./dexa.score');
 const { compositeAbdominalScore, femaleReproductiveScore } = require('./abdomen.score');
 
@@ -50,6 +51,15 @@ function calculateRadiologyNuptiaContribution(aggregatedRecord, patientSex, pati
     totalWeight += weight;
   }
 
+  // ECG
+  if (unified.ECG) {
+    const ecg = ecgScore(unified.ECG, patientSex);
+    const weight = schemaRegistry.getWeight('ECG');
+    scores.ECG = ecg;
+    totalWeightedScore += ecg * weight;
+    totalWeight += weight;
+  }
+
   // DEXA
   if (unified.DEXA) {
     const ds = dexaScore(unified.DEXA);
@@ -59,14 +69,26 @@ function calculateRadiologyNuptiaContribution(aggregatedRecord, patientSex, pati
     totalWeight += weight;
   }
 
+  // A critically low score in any single modality (e.g. a severe ECHO or scrotal
+  // finding) must not be diluted away just because it happens to carry a small
+  // weight relative to the others — cap the blended average close to the worst
+  // modality's own score rather than letting it get averaged into a healthy-looking
+  // overall number.
+  const modalityScores = Object.values(scores);
+  const worstModalityScore = modalityScores.length > 0 ? Math.min(...modalityScores) : null;
+  let weightedAverage = totalWeight > 0 ? (totalWeightedScore / totalWeight) : null;
+  if (weightedAverage !== null && worstModalityScore !== null && worstModalityScore < 30) {
+    weightedAverage = Math.min(weightedAverage, worstModalityScore + 20);
+  }
+
   // Normalize to 0-30 range (radiology total weight = 30% of NuptiaScore)
-  const normalizedScore = totalWeight > 0
-    ? (totalWeightedScore / totalWeight) * 0.30
-    : null;
+  const normalizedScore = weightedAverage !== null ? weightedAverage * 0.30 : null;
 
   return {
     organ_scores: scores,
-    radiology_nuptia_contribution: normalizedScore
+    // A genuine score of 0 (worst-case finding) must still be reported as 0, not
+    // silently coerced to null the way a falsy-check would.
+    radiology_nuptia_contribution: normalizedScore !== null
       ? parseFloat(normalizedScore.toFixed(2))
       : null,
     max_possible: 0.30,

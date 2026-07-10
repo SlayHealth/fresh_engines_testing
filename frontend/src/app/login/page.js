@@ -47,6 +47,7 @@ export default function LoginPage() {
   const [selectedCountry, setSelectedCountry] = useState('+91');
   const [phoneNumberInput, setPhoneNumberInput] = useState('');
   const [isNewUser, setIsNewUser] = useState(false);
+  const [otpPasteHint, setOtpPasteHint] = useState(null);
 
   // Authentication status checker & guard redirect
   useEffect(() => {
@@ -82,19 +83,57 @@ export default function LoginPage() {
     }
   }, [cooldown]);
 
+  // Pulls a 6-digit code out of arbitrary pasted/clipboard text (the code may
+  // sit anywhere in the WhatsApp message, e.g. "482910 is your code..." or
+  // "Your code is 482910."), preferring a clean 6-in-a-row run.
+  const extractOtpDigits = (text) => {
+    if (!text) return null;
+    const contiguous = text.match(/\d{6}/);
+    if (contiguous) return contiguous[0];
+    const allDigits = (text.match(/\d/g) || []).join('');
+    return allDigits.length === 6 ? allDigits : null;
+  };
+
   // Reads a 6-digit code from the clipboard, if present, into the OTP field.
   // The code arrives via WhatsApp (not SMS), so browser/OS SMS-autofill (iOS
   // QuickType, Android WebOTP) can't see it — those only read actual SMS
-  // messages. This is the practical substitute: the user copies the code in
-  // WhatsApp, switches back here, and it's one tap (or, where the browser
-  // allows a permission-less read, automatic) instead of retyping 6 digits.
+  // messages. navigator.clipboard.readText() is also only available in a
+  // secure context (HTTPS, or localhost) — it's silently absent when testing
+  // over plain http:// on a phone's LAN IP, which is why this needs a clear
+  // fallback message rather than failing invisibly: the native long-press-paste
+  // handled by handleOtpPaste below works everywhere regardless.
   const pasteOtpFromClipboard = async () => {
+    if (!navigator.clipboard?.readText) {
+      setOtpPasteHint('Clipboard access isn’t available here — long-press the box above and choose Paste instead.');
+      return;
+    }
     try {
       const text = await navigator.clipboard.readText();
-      const digits = (text.match(/\d/g) || []).join('').slice(-6);
-      if (digits.length === 6) setAuthOtp(digits);
+      const digits = extractOtpDigits(text);
+      if (digits) {
+        setAuthOtp(digits);
+        setOtpPasteHint(null);
+      } else {
+        setOtpPasteHint('No code found on your clipboard — copy it from WhatsApp first.');
+      }
     } catch (e) {
-      // Clipboard API unavailable/denied/empty — user can still type it in manually.
+      setOtpPasteHint('Couldn’t read your clipboard — long-press the box above and choose Paste instead.');
+    }
+  };
+
+  // Native paste into the input itself — works on any page regardless of
+  // HTTPS/Clipboard-API support, since it's just a normal paste event. Also
+  // sidesteps a real bug: the input's maxLength=6 truncates whatever's pasted
+  // to its first 6 raw characters *before* our digit-only onChange filter
+  // runs, so pasting "Your code is 482910" would truncate to "Your c" and
+  // filter down to nothing. Extracting digits ourselves avoids that entirely.
+  const handleOtpPaste = (e) => {
+    const text = e.clipboardData?.getData('text') || '';
+    const digits = extractOtpDigits(text);
+    if (digits) {
+      e.preventDefault();
+      setAuthOtp(digits);
+      setOtpPasteHint(null);
     }
   };
 
@@ -105,7 +144,12 @@ export default function LoginPage() {
   useEffect(() => {
     if (authStep !== 'otp') return;
     const handleFocus = () => {
-      if (!authOtp) pasteOtpFromClipboard();
+      if (!authOtp && navigator.clipboard?.readText) {
+        navigator.clipboard.readText().then((text) => {
+          const digits = extractOtpDigits(text);
+          if (digits) setAuthOtp(digits);
+        }).catch(() => {});
+      }
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleFocus);
@@ -388,7 +432,8 @@ export default function LoginPage() {
           maxLength={6}
           placeholder="000000"
           value={authOtp}
-          onChange={(e) => setAuthOtp(e.target.value.replace(/\D/g, ''))}
+          onChange={(e) => { setAuthOtp(e.target.value.replace(/\D/g, '')); setOtpPasteHint(null); }}
+          onPaste={handleOtpPaste}
           onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
           autoFocus
           autoComplete="one-time-code"
@@ -404,6 +449,11 @@ export default function LoginPage() {
           <ClipboardPaste className="w-3.5 h-3.5" />
           Paste code
         </button>
+        {otpPasteHint && (
+          <p className="text-xs mt-1 text-center font-medium" style={{ color: 'var(--danger-d)' }}>
+            {otpPasteHint}
+          </p>
+        )}
         <p className="text-xs mt-1 text-center" style={{ color: 'var(--muted)' }}>
           {cooldown > 0 ? `Resend available in ${cooldown}s` : 'Didn’t get it? Tap below to resend.'}
         </p>

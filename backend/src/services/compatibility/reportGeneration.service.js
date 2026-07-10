@@ -1,6 +1,7 @@
 const { db } = require('../storage/postgres.service');
 const reportSummaryService = require('./reportSummary.service');
 const narrativeService = require('../llm/narrative.service');
+const radiologyLookupService = require('../radiology/radiologyLookup.service');
 const logger = require('../../utils/logger');
 
 class ReportGenerationService {
@@ -23,24 +24,30 @@ class ReportGenerationService {
     logger.info(`Orchestrator: Compiling report for match ${matchId}...`);
 
     try {
-      // Fetch radiology score if available from db
+      // Fetch each partner's own radiology analysis by identity (radiology reports
+      // aren't linked by report ID — they're looked up the same way the PDF renderer
+      // does, by patient name/slay-id — a previous version of this queried
+      // radiology_reports using the *pathology* report ID, which is a different
+      // table's ID space and essentially never matched, silently dropping the whole
+      // radiology domain out of the score).
       let hasRadiology = false;
-      let radScore = 95;
-      if (femaleReportId) {
-        try {
-          const radRes = await db.query('SELECT scores_json FROM radiology_reports WHERE id = $1', [femaleReportId]);
-          if (radRes.rows.length > 0) {
-            const scores = typeof radRes.rows[0].scores_json === 'string'
-              ? JSON.parse(radRes.rows[0].scores_json)
-              : radRes.rows[0].scores_json;
-            if (scores && (scores.radiology_nuptia_contribution || scores.organ_scores)) {
-              radScore = ((scores.radiology_nuptia_contribution || 25) / 30) * 100;
-              hasRadiology = true;
-            }
-          }
-        } catch (radErr) {
-          logger.warn(`Failed to fetch radiology score for compilation: ${radErr.message}`);
+      let radScore = null;
+      try {
+        const [maleRad, femaleRad] = await Promise.all([
+          radiologyLookupService.fetchRadiologyByIdentity(null, maleManual?.name),
+          radiologyLookupService.fetchRadiologyByIdentity(null, femaleManual?.name)
+        ]);
+
+        const partnerScores = [maleRad, femaleRad]
+          .map((rad) => rad?.scores_json?.radiology_nuptia_contribution)
+          .filter((c) => typeof c === 'number');
+
+        if (partnerScores.length > 0) {
+          radScore = (partnerScores.reduce((sum, c) => sum + (c / 30) * 100, 0)) / partnerScores.length;
+          hasRadiology = true;
         }
+      } catch (radErr) {
+        logger.warn(`Failed to fetch radiology score for compilation: ${radErr.message}`);
       }
 
       // 1. Run deterministic Presentation & Summary mapping
@@ -54,17 +61,24 @@ class ReportGenerationService {
           male_manual_data: maleManual,
           female_manual_data: femaleManual,
           shared_lifestyle: sharedLifestyle,
-          radiology_report_id: femaleReportId || null
+          radiology_report_id: hasRadiology || null
         }
       );
 
       const hasGenetic = !!presentation.report_confidence?.domains?.genetic?.covered;
+      // A carrier-pair risk only clinically matters for an autosomal recessive condition
+      // like thalassemia when BOTH partners carry the trait (that's what puts a child at
+      // real risk) — a single carrier alongside a non-carrier partner is a much smaller
+      // concern. Score accordingly rather than treating "either partner flagged" the same
+      // as "both partners flagged".
       let genScore = 100;
       if (hasGenetic) {
         const cpr = presentation.carrier_pair_risk || {};
-        if (cpr.thalassemia?.male_status === 'red' || cpr.thalassemia?.female_status === 'red') {
+        const maleRed = cpr.thalassemia?.male_status === 'red';
+        const femaleRed = cpr.thalassemia?.female_status === 'red';
+        if (maleRed && femaleRed) {
           genScore = 50;
-        } else if (cpr.thalassemia?.male_status === 'yellow' || cpr.thalassemia?.female_status === 'yellow') {
+        } else if (maleRed || femaleRed) {
           genScore = 75;
         }
       }
@@ -95,12 +109,14 @@ class ReportGenerationService {
         sumWeights += 0.10;
       }
 
-      const crossDomainScore = sumWeights > 0 ? (sumScores / sumWeights) : 85;
-      const compatibilityScore = crossDomainScore / 100;
+      // If literally no domain produced a usable score, there is nothing real to
+      // report — leave it null (pending) rather than presenting a fabricated number.
+      const crossDomainScore = sumWeights > 0 ? (sumScores / sumWeights) : null;
+      const compatibilityScore = crossDomainScore !== null ? crossDomainScore / 100 : null;
 
       if (presentation && presentation.compatibility_score) {
-        presentation.compatibility_score.percentage = Math.round(crossDomainScore);
-        presentation.compatibility_score.score = Math.round(crossDomainScore);
+        presentation.compatibility_score.percentage = crossDomainScore !== null ? Math.round(crossDomainScore) : null;
+        presentation.compatibility_score.score = crossDomainScore !== null ? Math.round(crossDomainScore) : null;
       }
 
       const analysisJson = {

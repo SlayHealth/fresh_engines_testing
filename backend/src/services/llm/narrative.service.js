@@ -44,7 +44,7 @@ CRITICAL INSTRUCTIONS:
 
 Your response must strictly match this JSON schema:
 {
-  "hero": "A warm, welcoming, and emotional overview greeting the couple by name (e.g., 'Hello Sachin & Swati 👋... You both appear well prepared for a healthy married life and future family planning.')",
+  "hero": "A warm, welcoming, and emotional overview greeting the couple by their first names, followed by a wave emoji (e.g. 'Hello, {PartnerA} & {PartnerB} 👋... You both appear well prepared for a healthy married life and future family planning.') — always substitute their actual first names, never a placeholder or example name.",
   "top_insights": [
     "Insight explanation 1 (Highlighting a deterministic strength/win, prefixed with '🏆 Biggest Win: ' or '🌟 Healthy Habit: ')",
     "Insight explanation 2 (Highlighting a priority focus area, prefixed with '⚠️ Focus Area: ')",
@@ -73,66 +73,80 @@ ${JSON.stringify(presentation, null, 2)}
 
 Provide the JSON response matching the schema.`;
 
+    // Safe, generic copy used whenever the AI narrative couldn't be generated (missing/
+    // malformed response, or the API call failing outright). This must never assert
+    // anything specific about the couple's actual clinical data — the presentation
+    // panels below already show their real, computed results; this text just points
+    // there instead of inventing a clinical claim that could be flatly wrong.
+    const safeFallback = {
+      hero: `Hello ${inviterName} & ${prospectName}! Your detailed results are ready below.`,
+      top_insights: [
+        "Your personalized summary is being finalized — see the detailed panels below for your specific results.",
+        "Each section below reflects your own computed data, not a generic template.",
+        "Check the recommendations section for your next steps."
+      ],
+      body_cards: {
+        sugar: "See the detailed panel below for your specific blood sugar results.",
+        heart: "See the detailed panel below for your specific cardiovascular results.",
+        liver: "See the detailed panel below for your specific liver results.",
+        kidney: "See the detailed panel below for your specific kidney results.",
+        hormones: "See the detailed panel below for your specific hormonal results.",
+        vitamins: "See the detailed panel below for your specific vitamin and micronutrient results."
+      },
+      recommendations: {
+        sleep: "See your personalized recommendations below.",
+        diet: "See your personalized recommendations below.",
+        exercise: "See your personalized recommendations below.",
+        retests: "See your personalized recommendations below."
+      },
+      closing_message: "Your full results and next steps are shown in detail below."
+    };
+
     try {
       // Use the deepseek-v4-pro model configured on OpenRouter
       const model = process.env.DEEPSEEK_MODEL || 'deepseek/deepseek-chat';
       logger.info(`Sending narrative request using OpenRouter model: ${model}`);
 
       const response = await openRouter.extractJSON(userPrompt, systemPrompt, model);
-      
-      // Ensure all fields exist in the response, otherwise use fallbacks
+
+      // Track whether any field had to be patched with fallback copy, so a caller can
+      // tell "fully AI-generated" apart from "partially degraded" rather than the two
+      // being silently indistinguishable.
+      let usedFallback = false;
+      const pick = (val, fallbackVal) => {
+        if (val === undefined || val === null || val === '') {
+          usedFallback = true;
+          return fallbackVal;
+        }
+        return val;
+      };
+
       const validatedNarrative = {
-        hero: response.hero || `Hello ${inviterName} & ${prospectName}! Based on your health metrics, you both appear well prepared for a healthy married life and future family planning.`,
-        top_insights: response.top_insights || [
-          "🏆 Biggest Win: You both have optimal blood sugar control—meaning zero indicators for diabetes or prediabetes!",
-          "⚠️ Focus Area: Your shared sedentary activity level is the largest area where you can improve together.",
-          "🏃 Exercise together: Exercising 3x/week will boost your cardiovascular score from 84 to 92!"
-        ],
+        hero: pick(response.hero, safeFallback.hero),
+        top_insights: pick(response.top_insights, safeFallback.top_insights),
         body_cards: {
-          sugar: response.body_cards?.sugar || "Your sugar levels are perfectly balanced, with no signs of diabetes.",
-          heart: response.body_cards?.heart || "Your cholesterol is within the target ranges, supporting a healthy heart.",
-          liver: response.body_cards?.liver || "Your liver enzymes indicate clean, normal metabolic detox pathways.",
-          kidney: response.body_cards?.kidney || "Your kidney biomarkers show excellent, healthy filtration.",
-          hormones: response.body_cards?.hormones || "Key reproductive and baseline endocrine markers look balanced.",
-          vitamins: response.body_cards?.vitamins || "Vitamin markers show minor areas for optimization like Vitamin D."
+          sugar: pick(response.body_cards?.sugar, safeFallback.body_cards.sugar),
+          heart: pick(response.body_cards?.heart, safeFallback.body_cards.heart),
+          liver: pick(response.body_cards?.liver, safeFallback.body_cards.liver),
+          kidney: pick(response.body_cards?.kidney, safeFallback.body_cards.kidney),
+          hormones: pick(response.body_cards?.hormones, safeFallback.body_cards.hormones),
+          vitamins: pick(response.body_cards?.vitamins, safeFallback.body_cards.vitamins)
         },
         recommendations: {
-          sleep: response.recommendations?.sleep || "Sleep sync: Align bedtimes within 30 minutes to match rest cycles.",
-          diet: response.recommendations?.diet || "Nutrient density: Add leafy greens and whole foods to support hormones.",
-          exercise: response.recommendations?.exercise || "Shared routine: Exercise together 3x/week to build daily stamina.",
-          retests: response.recommendations?.retests || "Plan a routine check of targeted parameters in 90 days."
+          sleep: pick(response.recommendations?.sleep, safeFallback.recommendations.sleep),
+          diet: pick(response.recommendations?.diet, safeFallback.recommendations.diet),
+          exercise: pick(response.recommendations?.exercise, safeFallback.recommendations.exercise),
+          retests: pick(response.recommendations?.retests, safeFallback.recommendations.retests)
         },
-        closing_message: response.closing_message || `Congratulations on taking this proactive step together. By making these small adjustments, you can boost your compatibility index from ${presentation.relationship_snapshot.score} to ${presentation.relationship_snapshot.score + (presentation.improvement_plan.expectedScoreImprovement || 8)} over the next 90 days.`
+        closing_message: pick(response.closing_message, safeFallback.closing_message),
+        narrative_generation_failed: usedFallback
       };
 
       return validatedNarrative;
 
     } catch (error) {
-      logger.error(`DeepSeek narrative generation failed: ${error.message}. Returning fallback narratives.`);
-      
-      return {
-        hero: `Hello ${inviterName} & ${prospectName}! Based on your parameters, you both appear well prepared for a healthy married life and future family planning.`,
-        top_insights: [
-          "🏆 Biggest Win: You both have optimal blood sugar control—meaning zero indicators for diabetes!",
-          "⚠️ Focus Area: Your shared sedentary activity level is the largest area where you can improve together.",
-          "🏃 Exercise together: Exercising 3x/week will boost your cardiovascular score from 84 to 92!"
-        ],
-        body_cards: {
-          sugar: "Your sugar levels are perfectly balanced, with no signs of diabetes.",
-          heart: "Your cholesterol is within the target ranges, supporting a healthy heart.",
-          liver: "Your liver enzymes indicate clean, normal metabolic detox pathways.",
-          kidney: "Your kidney biomarkers show excellent, healthy filtration.",
-          hormones: "Key reproductive and baseline endocrine markers look balanced.",
-          vitamins: "Vitamin D is slightly low, presenting an easy win with supplements."
-        },
-        recommendations: {
-          sleep: "Sleep sync: Align bedtimes within 30 minutes to match rest cycles.",
-          diet: "Nutrient density: Add leafy greens and whole foods to support hormones.",
-          exercise: "Shared routine: Exercise together 3x/week to build daily stamina.",
-          retests: "Check key parameters again in 90 days."
-        },
-        closing_message: `Proactive tracking keeps your journey aligned. Following the 90-day plan can elevate your health score from ${presentation.relationship_snapshot.score} to ${presentation.relationship_snapshot.score + 8}.`
-      };
+      logger.error(`DeepSeek narrative generation failed: ${error.message}. Returning safe fallback narrative (flagged, not clinical claims).`);
+      return { ...safeFallback, narrative_generation_failed: true };
     }
   }
 }

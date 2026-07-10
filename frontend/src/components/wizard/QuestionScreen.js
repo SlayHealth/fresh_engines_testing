@@ -32,7 +32,7 @@ export default function QuestionScreen({
   const nextShadowClass = nextVariant === 'pink'
     ? 'hover:shadow-[0_6px_20px_rgba(222,69,125,0.3)]'
     : 'hover:shadow-[0_6px_20px_rgba(24,204,150,0.3)]';
-  const trustMessage = getTrustMessage(userName, trustCategory, trustSeed ?? stepIndex);
+  const trustMessage = getTrustMessage(userName, trustCategory, trustSeed ?? stepIndex, title);
 
   return (
     <div className={`flex-1 flex flex-col overflow-hidden ${styles.dashboard}`}>

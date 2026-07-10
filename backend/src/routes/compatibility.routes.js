@@ -6,9 +6,6 @@ const { authenticateToken } = require('../middleware/auth.middleware');
 // Apply auth middleware to all endpoints in this router
 router.use(authenticateToken);
 
-// POST /api/compatibility/analyze
-router.post('/analyze', compatibilityController.analyzeCompatibility);
-
 // GET /api/compatibility/matches
 router.get('/matches', compatibilityController.listMatches);
 

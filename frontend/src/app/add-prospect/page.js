@@ -24,6 +24,37 @@ import { MENTAL_HEALTH_QUESTIONS } from '../../constants/mentalHealthQuestions';
 import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS, SUGGESTED_GENOMICS_TESTS } from '../../constants/suggestedTests';
 import { aboutProgress as aboutProgressShared, lifestyleProgress, mentalProgress } from '../../utils/healthProfileProgress';
 
+// Radiology upload state lives only in this page (not the shared Context), so it needs
+// its own small draft-persistence mirror — same pattern/reasoning as the profile draft
+// in CompatibilityContext.js: namespaced per logged-in user id so a refresh doesn't lose
+// an already-parsed radiology report, and switching accounts never leaks one user's
+// upload into another's session.
+let cachedRadiologyDraft;
+
+function getStoredUserId() {
+  try {
+    const raw = localStorage.getItem('slayhealth_user');
+    return raw ? JSON.parse(raw)?.id : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function radiologyDraftKey() {
+  return `slayhealth_radiology_draft_${getStoredUserId() || 'anon'}`;
+}
+
+function loadRadiologyDraft() {
+  if (cachedRadiologyDraft !== undefined) return cachedRadiologyDraft;
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(radiologyDraftKey()) : null;
+    cachedRadiologyDraft = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    cachedRadiologyDraft = null;
+  }
+  return cachedRadiologyDraft;
+}
+
 const PROSPECT_MODE_OPTIONS = [
   { val: 'self', label: "I'll enter their details myself", desc: 'Fill in your prospect’s information right now' },
   { val: 'invite', label: 'Generate a link to send them', desc: "They fill in their own details — you copy and send the link yourself" }
@@ -108,12 +139,32 @@ function AddProspectPageInner() {
   }, [user]);
 
   // Radiology States
-  const [userRadiology, setUserRadiology] = useState(null);
-  const [prospectRadiology, setProspectRadiology] = useState(null);
+  const [userRadiology, setUserRadiology] = useState(() => loadRadiologyDraft()?.userRadiology || null);
+  const [prospectRadiology, setProspectRadiology] = useState(() => loadRadiologyDraft()?.prospectRadiology || null);
   const [isUserRadUploading, setIsUserRadUploading] = useState(false);
   const [isProspectRadUploading, setIsProspectRadUploading] = useState(false);
   const [userRadError, setUserRadError] = useState(null);
   const [prospectRadError, setProspectRadError] = useState(null);
+
+  // Mirrors radiology upload state into localStorage on every change (see
+  // loadRadiologyDraft above for why this lives here instead of the shared Context).
+  useEffect(() => {
+    try {
+      localStorage.setItem(radiologyDraftKey(), JSON.stringify({ userRadiology, prospectRadiology }));
+    } catch (e) {
+      // Storage full/unavailable — draft persistence is best-effort only.
+    }
+  }, [userRadiology, prospectRadiology]);
+
+  const logoutAndClearDraft = () => {
+    try {
+      localStorage.removeItem(radiologyDraftKey());
+    } catch (e) {
+      // localStorage unavailable — nothing to clean up
+    }
+    cachedRadiologyDraft = undefined;
+    handleLogout();
+  };
 
   // Refs
   const userFileInputRef = useRef(null);
@@ -1053,7 +1104,7 @@ function AddProspectPageInner() {
       {
         key: 'about', label: isSelfTurn ? 'About You' : `About ${prospectForm.name || 'Your Prospect'}`,
         desc: 'Basics, body & relationship context', icon: UserRound,
-        progress: aboutProgress(adapter)
+        progress: aboutProgress(adapter), required: true
       },
       {
         key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,
@@ -1144,7 +1195,7 @@ function AddProspectPageInner() {
           <div className="flex items-center justify-between mb-4 shrink-0">
             <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Invite Status</span>
             <button
-              onClick={() => { handleLogout(); router.push('/'); }}
+              onClick={() => { logoutAndClearDraft(); router.push('/'); }}
               className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
               style={{ color: 'var(--muted)' }}
             >
@@ -1283,7 +1334,7 @@ function AddProspectPageInner() {
         <div className="flex items-center justify-between mb-4 shrink-0">
           <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>{headerTitle}</span>
           <button
-            onClick={() => { handleLogout(); router.push('/'); }}
+            onClick={() => { logoutAndClearDraft(); router.push('/'); }}
             className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
             style={{ color: 'var(--muted)' }}
           >

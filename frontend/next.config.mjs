@@ -14,7 +14,7 @@ const nextConfig = {
     ];
   },
   // Allow hot module replacement (HMR) websocket connections from local dev IPs (phone testing on same Wi-Fi)
-  ...(isProduction ? {} : { allowedDevOrigins: ['172.20.10.5', '192.168.1.4', '192.168.1.4:3000'] }),
+  ...(isProduction ? {} : { allowedDevOrigins: ['172.20.10.5', '192.168.1.4', '192.168.1.4:3000', '127.0.2.2', '127.0.2.2:3000','192.168.1.45'] }),
 };
 
 export default nextConfig;

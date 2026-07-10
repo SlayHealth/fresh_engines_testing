@@ -6,7 +6,8 @@ const sections = [
     "id": "blood_group_abo_typing",
     "name": "Blood Group - ABO Typing",
     "aliases": [
-      "blood group - abo typing"
+      "blood group - abo typing",
+      "blood group abo & rh typing"
     ]
   },
   {
@@ -217,6 +218,7 @@ const sections = [
     "name": "Hepatitis B Surface Antigen (HBsAg)",
     "aliases": [
       "hepatitis b surface antigen (hbsag)",
+      "hepatitis b surface antigen (hbsag), rapid card",
       "hbsag"
     ]
   },
@@ -304,6 +306,15 @@ class SectionDetectorService {
     if (text.toLowerCase().includes('utsh')) return null;
 
     const normalizedText = text.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+
+    // Guard: bare "Hemoglobin" / "Hemoglobin (Hb)" — the plain CBC parameter every real
+    // lab report lists first — fuzzy-matches the unrelated "Hemoglobin A2" section
+    // header at this threshold (confirmed against real-world reports: every single one
+    // tested had its Hemoglobin value silently dropped and the rest of its CBC panel
+    // misattributed to the hemoglobin_a2 section as a result). The real HbA2 section
+    // header always says "A2" explicitly, so excluding the bare form is safe.
+    if (normalizedText === 'hemoglobin' || normalizedText === 'hemoglobin hb') return null;
+
     const results = fuse.search(normalizedText);
     if (results.length > 0 && results[0].score <= 0.4) {
       return results[0].item.id;

@@ -44,17 +44,15 @@ class OcrProvider {
       logger.warn(`Local PyMuPDF extraction failed or python3/fitz not found. Falling back to OCR. Error: ${error.message}`);
     }
 
-    // Fall back to OCR space or Mock OCR
+    // Fall back to OCR space (real mode) or Mock OCR (explicit mock/dev mode only).
+    // A real OCR failure (timeout, quota, bad scan) must NOT silently become mock
+    // canned text — that would let a "completed" report actually contain someone
+    // else's placeholder lab values with nothing marking it as fake. Let it throw
+    // so the caller can mark the report as genuinely failed and ask the user to retry.
     if (this.useMock) {
       return await ocrMockService.process(filePath);
-    } else {
-      try {
-        return await ocrSpaceService.process(filePath);
-      } catch (error) {
-        logger.error(`Real OCR failed, falling back to MOCK mode. Error: ${error.message}`);
-        return await ocrMockService.process(filePath);
-      }
     }
+    return await ocrSpaceService.process(filePath);
   }
 }
 

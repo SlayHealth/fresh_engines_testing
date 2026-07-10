@@ -155,10 +155,11 @@ async function mockExtract(req, res, next) {
       }
     };
 
-    // Insert mock report into DB so /analyze can find it
+    // Insert mock report into DB, explicitly flagged so it's never mistaken for a real
+    // uploaded/OCR'd report by downstream matching logic.
     await db.query(`
-      INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json) 
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO reports (id, file_name, processing_status, confidence_score, extracted_json, is_mock)
+      VALUES ($1, $2, $3, $4, $5, TRUE)
     `, [reportId, 'mock_report.pdf', 'completed', 0.96, JSON.stringify(extractedData)]);
 
     res.json({

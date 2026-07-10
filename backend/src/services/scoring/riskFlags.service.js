@@ -199,6 +199,57 @@ function generateRiskFlags(findings, sex, age) {
     });
   }
 
+  // 6. ECG findings
+  const ecgData = findings.ECG;
+  if (ecgData?.rhythm === 'atrial_fibrillation') {
+    flags.push({
+      flag_id: 'ECG_AFIB',
+      flag_label: 'Atrial Fibrillation on ECG',
+      organ: 'heart',
+      severity: 'high',
+      fertility_relevance: 'moderate',
+      clinical_note: 'Non-sinus rhythm detected — requires clinical correlation and likely anticoagulation risk assessment.',
+      recommended_action: 'Cardiology consultation before family planning'
+    });
+  } else if (ecgData?.rhythm === 'other') {
+    flags.push({
+      flag_id: 'ECG_ARRHYTHMIA',
+      flag_label: 'Non-sinus rhythm on ECG',
+      organ: 'heart',
+      severity: 'moderate',
+      fertility_relevance: 'low',
+      clinical_note: 'An arrhythmia other than sinus rhythm was noted on ECG.',
+      recommended_action: 'Cardiology consultation for clarification'
+    });
+  }
+
+  if (typeof ecgData?.qtc_ms === 'number') {
+    const prolongedThreshold = sex === 'Female' ? 460 : 450;
+    if (ecgData.qtc_ms > prolongedThreshold) {
+      flags.push({
+        flag_id: 'ECG_QTC_PROLONGED',
+        flag_label: `Prolonged QTc Interval (${ecgData.qtc_ms}ms)`,
+        organ: 'heart',
+        severity: ecgData.qtc_ms > 500 ? 'high' : 'moderate',
+        fertility_relevance: 'low',
+        clinical_note: 'A prolonged QTc raises risk with certain medications and, in severe cases, arrhythmia risk.',
+        recommended_action: 'Cardiology review, especially before starting any QT-prolonging medication'
+      });
+    }
+  }
+
+  if (ecgData?.lvh_voltage_criteria === true) {
+    flags.push({
+      flag_id: 'ECG_LVH_VOLTAGE',
+      flag_label: 'Possible LVH Voltage Criteria on ECG',
+      organ: 'heart',
+      severity: 'low',
+      fertility_relevance: 'low',
+      clinical_note: 'Often a benign/normal variant in younger adults, but worth clinical correlation as the report itself notes.',
+      recommended_action: 'Mention to a physician; an echocardiogram can confirm whether true structural LVH is present'
+    });
+  }
+
   return flags;
 }
 

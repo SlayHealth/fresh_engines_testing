@@ -143,11 +143,183 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
   ]
 };
 
-export function getTrustMessage(name, category, index) {
+// Per-question messages, keyed by the exact `title` string shown on screen for
+// that step. Categories above are themed but generic — every question in
+// "About You" shared the same pool regardless of whether it was asking about
+// Gender or Waist. This is the actual point of the whisper: it should read
+// like it's responding to *this* question, not just "this section." Falls
+// back to the category pool (and then general) for any title not listed here.
+export const TRUST_MESSAGES_BY_QUESTION = {
+  // --- About ---
+  "What's their name?": [
+    "{name}, just so we can personalize their side of the experience too.",
+    "One quick detail, {name} — the rest of their questions will feel more personal with this."
+  ],
+  'Gender': [
+    "{name}, we ask this to route the right reference ranges and risk models to your reports.",
+    "This one's simple, {name} — it just tells us which clinical benchmarks apply to what you upload."
+  ],
+  'Date of Birth': [
+    "{name}, your exact age shapes everything from fertility windows to which risk factors we flag.",
+    "This isn't just a number, {name} — age is one of the biggest levers in how we read your results."
+  ],
+  'City': [
+    "{name}, your city helps us account for regional health patterns — nothing more.",
+    "Just context, {name} — where you live can matter for things like local health baselines."
+  ],
+  'Height': [
+    "{name}, height feeds directly into your BMI and a few other calculated markers.",
+    "One quick measurement, {name} — this pairs with your weight to complete the picture."
+  ],
+  'Weight': [
+    "{name}, this pairs with your height to calculate BMI — a genuinely useful health marker.",
+    "Your honest current weight, {name}, keeps every downstream calculation accurate."
+  ],
+  'Waist': [
+    "{name}, waist measurement is one of the better predictors of metabolic risk — worth getting right.",
+    "This one number, {name}, often tells us more about health risk than weight alone."
+  ],
+  'How did you meet?': [
+    "{name}, this is just context for your story — no health data here, promise.",
+    "Just curious how this began, {name} — purely for the narrative, not the score."
+  ],
+  'Which platform?': [
+    "{name}, just filling in the detail you already mentioned — nothing more to it.",
+    "Quick follow-up, {name}, so your story reads accurately later."
+  ],
+  'Relationship Status': [
+    "{name}, this helps us tailor the tone of your report to where you actually are.",
+    "Knowing this, {name}, keeps the rest of the experience relevant to your situation."
+  ],
+
+  // --- Lifestyle ---
+  'Physical Activity Level': [
+    "{name}, activity level is one of the strongest predictors of long-term cardiovascular health.",
+    "Be honest here, {name} — this single habit ripples into almost every health outcome we track."
+  ],
+  'Daily Steps': [
+    "{name}, a rough daily average is all we need — no need to check your phone for the exact count.",
+    "This adds real texture to your activity picture, {name}, beyond just 'active' or 'not.'"
+  ],
+  'Occupation & Work Style': [
+    "{name}, sedentary desk work and physically demanding jobs carry very different health profiles.",
+    "Your work style, {name}, quietly shapes stress levels, activity, and even sleep patterns."
+  ],
+  'Alcohol Drinking Habits': [
+    "{name}, drinking habits matter for liver markers and a few other things we'll be checking.",
+    "No judgment here, {name} — just an honest read on frequency helps us interpret your reports correctly."
+  ],
+  'Smoking Habits': [
+    "{name}, this affects cardiovascular and respiratory risk more than almost anything else we ask.",
+    "Whatever the honest answer is, {name}, it meaningfully changes how we read certain markers."
+  ],
+  'Tobacco Consumption': [
+    "{name}, smokeless tobacco carries its own distinct risk profile worth capturing separately.",
+    "This one's often missed, {name}, but it matters just as much as smoking for a few key markers."
+  ],
+  'Sleep Cycle Patterns': [
+    "{name}, sleep quality touches almost every system in the body — it's a bigger deal than it sounds.",
+    "Your real sleep pattern, {name}, not the ideal one — that's what actually helps us here."
+  ],
+  'Menstrual Cycle Status': [
+    "{name}, cycle regularity is a genuinely useful signal for hormonal and fertility health.",
+    "Totally optional, {name}, but if you know it, it adds real value to your picture."
+  ],
+
+  // --- Mental Wellbeing (titles match MENTAL_HEALTH_QUESTIONS in mentalHealthQuestions.js) ---
+  'Daily energy & motivation': [
+    "{name}, your typical energy level says a lot about emotional resilience day to day.",
+    "Think 'most days,' {name}, not your best day or your worst one."
+  ],
+  'Composure under pressure': [
+    "{name}, how you hold up under stress is a real predictor of relationship steadiness.",
+    "There's no wrong answer, {name} — just how it honestly feels most of the time."
+  ],
+  'Coping reserve & adaptability': [
+    "{name}, life throws curveballs — this is about how much shock absorption you naturally have.",
+    "Adaptability like this, {name}, often matters more than any single crisis-response story."
+  ],
+  'Intellectual curiosity & flexibility': [
+    "{name}, this is about comfort with new ideas, not intelligence — there's a difference.",
+    "Whether you love novelty or prefer the familiar, {name}, both are valid answers here."
+  ],
+  'Planning, reliability & organization': [
+    "{name}, this is one of the classic compatibility friction points — worth answering honestly.",
+    "Spontaneous or scheduled, {name}, neither is 'better' — just different rhythms to match."
+  ],
+  'Social energy & engagement': [
+    "{name}, introvert or extrovert, this shapes a lot of how daily life together will feel.",
+    "However social you naturally are, {name}, that's the useful answer, not the 'aspirational' one."
+  ],
+  'Cooperation & empathetic alignment': [
+    "{name}, this is about how you naturally move toward consensus versus your own position.",
+    "Neither extreme is wrong here, {name} — we're just mapping your natural style."
+  ],
+  'Emotional regulation & steady temperament': [
+    "{name}, emotional steadiness under friction is one of the strongest markers of relationship longevity.",
+    "This one matters more than people think, {name} — mood stability shapes everyday life together."
+  ],
+  'Bonding & relationship attachment style': [
+    "{name}, attachment style is one of the most researched predictors of relationship compatibility.",
+    "There's no 'best' style here, {name} — just the one that's actually true for you."
+  ],
+  'Verbal expression & deeper sharing': [
+    "{name}, how openly you share feelings shapes intimacy more than almost anything else.",
+    "Whatever your natural comfort level is, {name}, that's exactly what's useful to know here."
+  ],
+  'Disagreement & conflict management': [
+    "{name}, how you handle disagreement — not whether you avoid it — is what really predicts outcomes.",
+    "Every couple argues, {name}; this is about your honest style when it happens."
+  ],
+  'Honesty & relationship trust': [
+    "{name}, baseline trust patterns tend to carry over from relationship to relationship.",
+    "This reflects your general trust style, {name}, not judgment on any one person."
+  ],
+  'Long-term partnership mindset': [
+    "{name}, this is about where your head's at on long-term commitment right now.",
+    "Wherever you honestly stand, {name}, that's the useful data point — not where you 'should' be."
+  ],
+  'Empathy & responsiveness': [
+    "{name}, this is about showing up for a partner when they're struggling — a big one for lasting bonds.",
+    "However naturally supportive you are, {name}, that's worth capturing accurately."
+  ],
+  'Career priorities & relocation': [
+    "{name}, career alignment quietly determines a lot of major life decisions down the line.",
+    "This helps flag potential friction early, {name}, while it's still easy to talk about."
+  ],
+  'Savings, budgets & financial views': [
+    "{name}, money habits are one of the top sources of relationship friction — worth surfacing early.",
+    "No judgment on spending style here, {name} — just an honest read on how you approach money."
+  ],
+  'Daily routines & social pacing': [
+    "{name}, day-to-day rhythm compatibility matters more than people expect once you're living together.",
+    "This is about pacing, {name} — early bird or night owl, homebody or social butterfly."
+  ],
+  'Extended family boundaries & living': [
+    "{name}, in-law dynamics are one of the most common flashpoints in Indian marriages — worth mapping early.",
+    "Whatever your honest boundary preference is, {name}, that's exactly the useful signal here."
+  ],
+  'Children timeline & parenting styles': [
+    "{name}, alignment on timeline and philosophy here prevents a lot of future friction.",
+    "It's fine to be undecided, {name} — an honest 'still figuring it out' is a valid answer."
+  ],
+  'Alcohol & lifestyle substance habits': [
+    "{name}, this is about lifestyle impact, not judgment — just an honest frequency read.",
+    "Whatever's true day-to-day, {name}, that's the useful answer, not the minimized one."
+  ],
+  'Anger control under intense stress': [
+    "{name}, this is one of the more important markers for long-term relationship safety.",
+    "Under real pressure, not your calmest day, {name} — that's the honest read we need here."
+  ]
+};
+
+export function getTrustMessage(name, category, index, title) {
   if (!name) return null;
   const firstName = name.trim().split(/\s+/)[0];
   if (!firstName) return null;
-  const pool = TRUST_MESSAGES_BY_CATEGORY[category] || TRUST_MESSAGES_BY_CATEGORY.general;
+  const pool = (title && TRUST_MESSAGES_BY_QUESTION[title])
+    || TRUST_MESSAGES_BY_CATEGORY[category]
+    || TRUST_MESSAGES_BY_CATEGORY.general;
   const template = pool[((index % pool.length) + pool.length) % pool.length];
   return template.replace(/{name}/g, firstName);
 }

@@ -357,8 +357,8 @@ function generatePDFReportStream(matchData) {
   const mental = analysis.mentalResult || {};
   const details = analysis.details || {};
 
-  let partnerAName = safeText(details.male_manual_data?.name || chronic.partner_A?.name, 'Sachin');
-  let partnerBName = safeText(details.female_manual_data?.name || chronic.partner_B?.name, 'Swati');
+  let partnerAName = safeText(details.male_manual_data?.name || chronic.partner_A?.name, 'Partner A');
+  let partnerBName = safeText(details.female_manual_data?.name || chronic.partner_B?.name, 'Partner B');
 
   const dateStr = new Date(matchData.created_at || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 

@@ -4,112 +4,9 @@ const logger = require('../utils/logger');
 const pdfReportService = require('../services/pdfReport.service');
 const reportGenerationService = require('../services/compatibility/reportGeneration.service');
 const aiPresentationService = require('../services/compatibility/aiPresentation.service');
-const ontologyMapper = require('../services/parser/ontologyMapper.service');
+const radiologyLookupService = require('../services/radiology/radiologyLookup.service');
 const fs = require('fs');
 const path = require('path');
-
-/**
- * Perform a mock compatibility analysis between a male and female report.
- */
-async function analyzeCompatibility(req, res, next) {
-  try {
-    const { male_report_id, female_report_id, male_manual_data, female_manual_data } = req.body;
-
-    if (!male_report_id || !female_report_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'Both male_report_id and female_report_id are required'
-      });
-    }
-
-    // Fetch both reports from DB (including raw_text for gender fallback resolution)
-    const maleReportRes = await db.query("SELECT extracted_json, raw_text FROM reports WHERE id = $1", [male_report_id]);
-    const femaleReportRes = await db.query("SELECT extracted_json, raw_text FROM reports WHERE id = $1", [female_report_id]);
-    const maleReport = maleReportRes.rows[0];
-    const femaleReport = femaleReportRes.rows[0];
-
-    if (!maleReport || !maleReport.extracted_json) {
-      return res.status(404).json({ success: false, error: 'Male report not found or processing not completed' });
-    }
-    if (!femaleReport || !femaleReport.extracted_json) {
-      return res.status(404).json({ success: false, error: 'Female report not found or processing not completed' });
-    }
-
-    let parsedMaleData = JSON.parse(maleReport.extracted_json);
-    let parsedFemaleData = JSON.parse(femaleReport.extracted_json);
-
-    // Dynamic biological gender check to automatically rectify cross-gender swapped requests
-    const resolvedMaleGender = ontologyMapper.resolveGenderRole(parsedMaleData, maleReport.raw_text);
-    const resolvedFemaleGender = ontologyMapper.resolveGenderRole(parsedFemaleData, femaleReport.raw_text);
-
-    let actualMaleReportId = male_report_id;
-    let actualFemaleReportId = female_report_id;
-    let actualMaleData = parsedMaleData;
-    let actualFemaleData = parsedFemaleData;
-    let actualMaleManual = male_manual_data;
-    let actualFemaleManual = female_manual_data;
-
-    if (resolvedMaleGender === 'female' || resolvedFemaleGender === 'male') {
-      logger.warn('[analyzeCompatibility] Swapping reports: biological gender check detected inverted roles.');
-      actualMaleReportId = female_report_id;
-      actualFemaleReportId = male_report_id;
-      actualMaleData = parsedFemaleData;
-      actualFemaleData = parsedMaleData;
-      actualMaleManual = female_manual_data;
-      actualFemaleManual = male_manual_data;
-    }
-
-    if (actualMaleManual) {
-      actualMaleData.manual_data = actualMaleManual;
-      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(actualMaleData), actualMaleReportId]);
-    }
-
-    if (actualFemaleManual) {
-      actualFemaleData.manual_data = actualFemaleManual;
-      await db.query("UPDATE reports SET extracted_json = $1 WHERE id = $2", [JSON.stringify(actualFemaleData), actualFemaleReportId]);
-    }
-
-
-    // Placeholder logic: generate a mock score
-    // TODO: implement actual medical ontology comparison logic
-    const compatibility_score = 0.85; 
-    const matchId = uuidv4();
-    
-    const analysisResult = {
-      score: compatibility_score,
-      flags: [
-        { severity: 'low', message: 'Blood groups are fully compatible.' },
-        { severity: 'medium', message: 'Both have slightly elevated Hemoglobin, but no thalassemic overlap detected.' }
-      ],
-      details: {
-        male_data: actualMaleData,
-        female_data: actualFemaleData,
-        male_manual_data: actualMaleManual || {},
-        female_manual_data: actualFemaleManual || {}
-      }
-    };
-
-    // Save to matches table
-    await db.query(`
-      INSERT INTO matches (id, male_report_id, female_report_id, status, compatibility_score, analysis_json)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `, [matchId, actualMaleReportId, actualFemaleReportId, 'completed', compatibility_score, JSON.stringify(analysisResult)]);
-
-    logger.info(`Compatibility analysis completed for match ${matchId}`);
-
-
-    return res.json({
-      success: true,
-      match_id: matchId,
-      compatibility_score,
-      analysis: analysisResult
-    });
-
-  } catch (error) {
-    logger.error(`Failed to analyze compatibility: ${error.message}`);
-    next(error);
-  }
-}
 
 async function saveMatch(req, res, next) {
   try {
@@ -160,7 +57,7 @@ async function listMatches(req, res, next) {
       }
       return {
         id: row.id,
-        score: Math.round((row.compatibility_score || 0.85) * 100),
+        score: typeof row.compatibility_score === 'number' ? Math.round(row.compatibility_score * 100) : null,
         createdAt: row.created_at,
         analysis, // Pass the full payload back for restoration
         user: {
@@ -179,48 +76,7 @@ async function listMatches(req, res, next) {
   }
 }
 
-async function fetchRadiologyReport(slayId, name) {
-  if (!slayId && !name) return null;
-  
-  // 1. Try radiology_reports
-  let res = await db.query(
-    'SELECT * FROM radiology_reports WHERE (patient_slay_id = $1 OR LOWER(patient_slay_id) = LOWER($2)) ORDER BY created_at DESC LIMIT 1',
-    [slayId, name]
-  );
-  if (res.rows[0]) {
-    const row = res.rows[0];
-    return {
-      findings_json: typeof row.findings_json === 'string' ? JSON.parse(row.findings_json) : row.findings_json,
-      scores_json: typeof row.scores_json === 'string' ? JSON.parse(row.scores_json) : row.scores_json,
-      risk_flags_json: typeof row.risk_flags_json === 'string' ? JSON.parse(row.risk_flags_json) : row.risk_flags_json,
-      modalities_detected: row.modalities_detected,
-      created_at: row.created_at
-    };
-  }
-
-  // 2. Fallback to usg_reports
-  res = await db.query(
-    'SELECT * FROM usg_reports WHERE (patient_slay_id = $1 OR LOWER(patient_slay_id) = LOWER($2)) ORDER BY created_at DESC LIMIT 1',
-    [slayId, name]
-  );
-  if (res.rows[0]) {
-    const row = res.rows[0];
-    const extracted = typeof row.extracted_json === 'string' ? JSON.parse(row.extracted_json) : row.extracted_json;
-    const analyzed = typeof row.analyzed_results === 'string' ? JSON.parse(row.analyzed_results) : row.analyzed_results;
-    return {
-      findings_json: { USG_ABDOMEN: extracted?.findings || {} },
-      scores_json: {
-        organ_scores: analyzed?.scores || {},
-        radiology_nuptia_contribution: analyzed?.nuptia_score_usg_contribution || null,
-        modalities_scored: ['USG_ABDOMEN']
-      },
-      risk_flags_json: analyzed?.risk_flags || [],
-      modalities_detected: ['USG_ABDOMEN'],
-      created_at: row.created_at
-    };
-  }
-  return null;
-}
+const fetchRadiologyReport = radiologyLookupService.fetchRadiologyByIdentity;
 
 async function generatePDFReport(req, res, next) {
   try {
@@ -251,14 +107,6 @@ async function generatePDFReport(req, res, next) {
     let partnerAName = details.male_manual_data?.name || chronic.partner_A?.name || 'Partner A';
     let partnerBName = details.female_manual_data?.name || chronic.partner_B?.name || 'Partner B';
     
-    if (partnerAName.toLowerCase().includes('swati') && partnerBName.toLowerCase().includes('sachin')) {
-      partnerAName = 'Sachin';
-      partnerBName = 'Swati';
-    } else if (partnerAName.toLowerCase().includes('sachin') && partnerBName.toLowerCase().includes('swati')) {
-      partnerAName = 'Sachin';
-      partnerBName = 'Swati';
-    }
-
     const malePathology = chronic.details?.male_data || null;
     const femalePathology = chronic.details?.female_data || null;
     const maleSlayId = malePathology?.patient?.patient_slay_id || partnerAName;
@@ -329,14 +177,6 @@ async function getMatchRadiology(req, res, next) {
     let partnerAName = details.male_manual_data?.name || chronic.partner_A?.name || 'Partner A';
     let partnerBName = details.female_manual_data?.name || chronic.partner_B?.name || 'Partner B';
     
-    if (partnerAName.toLowerCase().includes('swati') && partnerBName.toLowerCase().includes('sachin')) {
-      partnerAName = 'Sachin';
-      partnerBName = 'Swati';
-    } else if (partnerAName.toLowerCase().includes('sachin') && partnerBName.toLowerCase().includes('swati')) {
-      partnerAName = 'Sachin';
-      partnerBName = 'Swati';
-    }
-
     const malePathology = chronic.details?.male_data || null;
     const femalePathology = chronic.details?.female_data || null;
     const maleSlayId = malePathology?.patient?.patient_slay_id || partnerAName;
@@ -469,12 +309,6 @@ async function generateAIPDFReport(req, res, next) {
     let partnerAName = details.male_manual_data?.name || chronic.partner_A?.name || 'Partner A';
     let partnerBName = details.female_manual_data?.name || chronic.partner_B?.name || 'Partner B';
 
-    if (partnerAName.toLowerCase().includes('swati') && partnerBName.toLowerCase().includes('sachin')) {
-      partnerAName = 'Sachin'; partnerBName = 'Swati';
-    } else if (partnerAName.toLowerCase().includes('sachin') && partnerBName.toLowerCase().includes('swati')) {
-      partnerAName = 'Sachin'; partnerBName = 'Swati';
-    }
-
     // Fetch radiology
     const malePathology = chronic.details?.male_data || null;
     const femalePathology = chronic.details?.female_data || null;
@@ -544,7 +378,6 @@ async function generateAIPDFReport(req, res, next) {
 }
 
 module.exports = {
-  analyzeCompatibility,
   saveMatch,
   listMatches,
   generatePDFReport,

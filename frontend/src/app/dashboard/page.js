@@ -80,7 +80,7 @@ export default function DashboardPage() {
   const healthProfileCategories = [
     {
       key: 'about', label: 'About You', desc: 'Basics, body & relationship context', icon: UserRound,
-      progress: aboutProgress(selfAdapter, prospectForm)
+      progress: aboutProgress(selfAdapter, prospectForm), required: true
     },
     {
       key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,

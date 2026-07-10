@@ -264,64 +264,69 @@ Generate the Apple Health-style presentation JSON layout. Ensure:
       }
     },
     relationship_snapshot: {
-      score: Math.round(chronicResult?.calculations?.coupleIndex || 85),
-      status: 'Good',
-      description: 'Clinical analysis completed. Please review individual parameters.',
-      color: 'yellow'
+      score: chronicResult?.calculations?.coupleIndex != null ? Math.round(chronicResult.calculations.coupleIndex) : null,
+      status: chronicResult?.calculations?.coupleIndex != null ? 'Good' : 'Pending',
+      description: chronicResult?.calculations?.coupleIndex != null
+        ? 'Clinical analysis completed. Please review individual parameters.'
+        : 'Written summary unavailable — see your detailed clinical results below.',
+      color: chronicResult?.calculations?.coupleIndex != null ? 'yellow' : 'gray'
     },
-    couple_synthesis: 'Your profiles align well overall. Your fertility markers are strong, and your everyday habits support a healthy start together, with a couple of areas to watch to optimize long-term health.',
+    couple_synthesis: "We couldn't generate a written summary right now — your detailed clinical results are shown below.",
     strengths: [
-      { title: 'Clinical Review Complete', description: 'All uploaded reports have been processed and analysed.' },
-      { title: 'Engine Analysis Passed', description: 'Cardiometabolic and fertility engines completed calculations.' },
-      { title: 'Biological Profiles Verified', description: 'Partner pathology data was extracted and cross-referenced.' }
+      { title: 'Clinical Review Complete', description: 'All uploaded reports have been processed and analysed.' }
     ],
     opportunities: [
       { title: 'Consult Your Doctor', description: 'Review detailed lab parameters with a qualified physician.', severity: 'medium' }
     ],
     family_planning: {
-      stars: 4,
-      rating: 'Very Good',
-      annualChance: (() => { const p = mfrResult?.p_12m_current; if (!p) return 85; return Math.min(100, Math.round(p <= 1 ? p * 100 : p)); })(),
-      monthsToConceive: mfrResult?.time_to_conceive || '~5 months',
+      stars: null,
+      rating: mfrResult?.state || 'Pending',
+      annualChance: (() => { const p = mfrResult?.p_12m_current; if (p == null) return null; return Math.min(100, Math.round(p <= 1 ? p * 100 : p)); })(),
+      monthsToConceive: mfrResult?.time_to_conceive || null,
       details: {
-        femaleAge: mfrResult?.details?.female_age || 28,
-        maleAge: mfrResult?.details?.male_age || 30,
-        ovarianReserve: mfrResult?.details?.female_ovarian_reserve || 'Normal',
-        semenQuality: mfrResult?.details?.male_semen_quality || 'Normal'
+        femaleAge: mfrResult?.details?.female_age ?? null,
+        maleAge: mfrResult?.details?.male_age ?? null,
+        ovarianReserve: mfrResult?.details?.female_ovarian_reserve || 'Unknown',
+        semenQuality: mfrResult?.details?.male_semen_quality || 'Unknown'
       }
     },
+    // NOTE: this whole object is only ever used if the AI call fails or returns malformed
+    // JSON — it must never assert a specific health status ("Normal"/"green"/"All clear")
+    // for data it hasn't actually seen. The real computed values still exist in
+    // `clinicalData`/the deterministic presentation; this is just filler copy for the
+    // narrative layer, pointing the reader at the real numbers instead of inventing a claim.
     body_health: {
-      sugar:    { male_status: 'green', female_status: 'green', male_value: 'Normal', female_value: 'Normal', headline: 'In a healthy place — both of you', narrative: 'Your day-to-day sugar levels look steady. Nothing to change here.', clinical_footnote: 'In your report: HbA1c 5.3% for both — comfortably in the healthy range.', badge: 'Healthy', next_action: 'All clear — maintain your current habits.' },
-      heart:    { male_status: 'green', female_status: 'green', male_value: 'Normal', female_value: 'Normal', headline: 'Your hearts are in good shape', narrative: 'Your cholesterol numbers support a healthy heart. Keep doing what you are doing.', clinical_footnote: 'In your report: LDL cholesterol levels are within the healthy range.', badge: 'Healthy', next_action: 'All clear — maintain your current habits.' },
-      liver:    { male_status: 'green', female_status: 'green', male_value: 'Normal', female_value: 'Normal', headline: 'Liver function is healthy', narrative: 'Your liver enzymes indicate standard detoxification pathways are performing optimally.', clinical_footnote: 'In your report: ALT and AST enzymes are well within standard ranges.', badge: 'Healthy', next_action: 'All clear — maintain your current habits.' },
-      kidney:   { male_status: 'green', female_status: 'green', male_value: 'Normal', female_value: 'Normal', headline: 'Kidneys filtering beautifully', narrative: 'Your filtration rates show both of you have excellent kidney function.', clinical_footnote: 'In your report: Creatinine and BUN levels are completely normal.', badge: 'Healthy', next_action: 'All clear — maintain your current habits.' },
-      hormones: { male_status: 'green', female_status: 'green', male_value: 'Normal', female_value: 'Normal', headline: 'Hormones are nicely balanced', narrative: 'Thyroid and basic reproductive baseline markers indicate normal balance.', clinical_footnote: 'In your report: Hormone profiles are in optimal baseline ranges.', badge: 'Healthy', next_action: 'All clear — maintain your current habits.' },
-      vitamins: { male_status: 'yellow', female_status: 'yellow', male_value: 'Review Needed', female_value: 'Review Needed', headline: 'Vitamins need a quick look', narrative: 'A couple of key micronutrients show borderline or lower levels.', clinical_footnote: 'In your report: Vitamin D or iron reserves are below the target range.', badge: 'Worth a look', next_action: 'Consider a micronutrient panel with your doctor within the next 60 days.' }
+      sugar:    { male_status: 'gray', female_status: 'gray', male_value: 'See report', female_value: 'See report', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual lab values below.", clinical_footnote: 'Refer to the detailed parameter values in your report.', badge: 'See details', next_action: 'Review the raw values below.' },
+      heart:    { male_status: 'gray', female_status: 'gray', male_value: 'See report', female_value: 'See report', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual lab values below.", clinical_footnote: 'Refer to the detailed parameter values in your report.', badge: 'See details', next_action: 'Review the raw values below.' },
+      liver:    { male_status: 'gray', female_status: 'gray', male_value: 'See report', female_value: 'See report', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual lab values below.", clinical_footnote: 'Refer to the detailed parameter values in your report.', badge: 'See details', next_action: 'Review the raw values below.' },
+      kidney:   { male_status: 'gray', female_status: 'gray', male_value: 'See report', female_value: 'See report', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual lab values below.", clinical_footnote: 'Refer to the detailed parameter values in your report.', badge: 'See details', next_action: 'Review the raw values below.' },
+      hormones: { male_status: 'gray', female_status: 'gray', male_value: 'See report', female_value: 'See report', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual lab values below.", clinical_footnote: 'Refer to the detailed parameter values in your report.', badge: 'See details', next_action: 'Review the raw values below.' },
+      vitamins: { male_status: 'gray', female_status: 'gray', male_value: 'See report', female_value: 'See report', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual lab values below.", clinical_footnote: 'Refer to the detailed parameter values in your report.', badge: 'See details', next_action: 'Review the raw values below.' }
     },
     lifestyle: {
-      communication: { status: 'green', value: 'Aligned', description: 'Communication styles appear compatible.' },
-      conflict:      { status: 'green', value: 'Constructive', description: 'Conflict resolution patterns are healthy.' },
-      stress:        { status: 'yellow', value: 'Moderate', description: 'Stress coping could benefit from shared routines.' },
-      habits:        { status: 'green', value: 'Healthy', description: 'Daily habits and lifestyle appear aligned.' }
+      communication: { status: 'gray', value: 'Unavailable', description: 'Summary unavailable for this section.' },
+      conflict:      { status: 'gray', value: 'Unavailable', description: 'Summary unavailable for this section.' },
+      stress:        { status: 'gray', value: 'Unavailable', description: 'Summary unavailable for this section.' },
+      habits:        { status: 'gray', value: 'Unavailable', description: 'Summary unavailable for this section.' }
     },
     improvement_plan: {
-      sleep: 'Align bedtimes to within 30 minutes to improve rest synchrony.',
-      diet: 'Add whole foods and reduce processed sugar intake together.',
-      exercise: 'Begin a shared exercise routine of 3 sessions per week.',
-      retests: 'Schedule a combined retest panel in 90 days.',
-      expectedScoreImprovement: 6
+      sleep: 'Personalized recommendations are temporarily unavailable — check back shortly.',
+      diet: 'Personalized recommendations are temporarily unavailable — check back shortly.',
+      exercise: 'Personalized recommendations are temporarily unavailable — check back shortly.',
+      retests: 'Personalized recommendations are temporarily unavailable — check back shortly.',
+      expectedScoreImprovement: null
     },
     carrier_pair_risk: {
-      thalassemia: { male_status: 'green', female_status: 'green', headline: 'Do you both carry the same thing?', narrative: 'No common mutations or carrier indicators were detected for thalassemia.', clinical_footnote: 'In your report: Thalassemia screening is negative for both.', badge: 'All clear' },
-      hemoglobin_variant: { male_status: 'green', female_status: 'green', headline: 'Hemoglobin variant check', narrative: 'No abnormal variants or traits were found in your hemoglobin analysis.', clinical_footnote: 'In your report: Hemoglobin HPLC screening is normal for both.', badge: 'All clear' },
+      thalassemia: { male_status: 'gray', female_status: 'gray', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual screening values below.", clinical_footnote: 'Refer to the detailed genetic screening values in your report.', badge: 'See details' },
+      hemoglobin_variant: { male_status: 'gray', female_status: 'gray', headline: 'Summary unavailable', narrative: "We couldn't generate a written summary for this section — see your actual screening values below.", clinical_footnote: 'Refer to the detailed genetic screening values in your report.', badge: 'See details' },
       genetic_note: 'Premarital carrier screening checks if both partners carry traits for the same genetic condition, which could affect future children.'
     },
     sti_gate: {
       triggered: false,
-      headline: 'The important screens came back clear',
-      narrative: 'Both of you tested negative for the standard premarital infectious disease screens.',
-      clinical_footnote: 'In your report: HIV, Syphilis, and Hepatitis B/C are non-reactive.',
-      badge: 'All clear',
+      headline: 'Summary unavailable',
+      narrative: "We couldn't generate a written summary for this section — see your actual screening values below.",
+      clinical_footnote: 'Refer to the detailed screening values in your report.',
+      badge: 'See details',
       findings: []
     },
     report_assets: {

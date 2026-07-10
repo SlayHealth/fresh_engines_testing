@@ -7,11 +7,42 @@ const scaleTo100 = (val) => Math.max(0, Math.min(100, (parseFloat(val) - 1) * 25
 // Helper to get average
 const average = (arr) => arr.reduce((p, c) => p + c, 0) / arr.length;
 
+// All 21 questions the mental-health survey asks. Every answer below has an
+// `|| 4` (or `|| 'Secure'`/`|| 'Low'`) fallback purely so the *math* doesn't throw
+// on a missing key — that fallback must never be reached for a real submission.
+// This list is how we tell "a real, fully-answered survey" apart from "an empty or
+// partial one that would otherwise silently score as if everyone answered
+// positively across the board".
+const REQUIRED_MENTAL_FIELDS = [
+  'emotional_wellbeing', 'stress_worry', 'life_stress_capacity',
+  'personality_openness', 'personality_conscientiousness', 'personality_extraversion', 'personality_agreeableness', 'personality_stability',
+  'attachment_style',
+  'readiness_communication', 'readiness_conflict', 'readiness_trust', 'readiness_commitment', 'readiness_support',
+  'career_alignment', 'financial_alignment', 'lifestyle_alignment',
+  'family_expectations', 'parenting_alignment',
+  'substance_concern', 'anger_regulation'
+];
+
+function isMentalQuestionnaireComplete(answers) {
+  if (!answers || typeof answers !== 'object') return false;
+  return REQUIRED_MENTAL_FIELDS.every((field) => {
+    const val = answers[field];
+    return val !== undefined && val !== null && val !== '';
+  });
+}
+
 /**
  * Pure(ish) scoring function — takes both partners' raw questionnaire answers
  * and returns the full mentalResult payload. No req/res/DB coupling beyond an
  * optional cacheKey for the LLM narrative call, so this can be called directly
  * from other backend flows (e.g. the async invite-link match pipeline).
+ *
+ * Callers are responsible for only invoking this with a fully-answered
+ * questionnaire for both partners (see isMentalQuestionnaireComplete) — this
+ * function itself still computes a result from whatever it's given (so a
+ * malformed/partial call fails loudly downstream rather than here), but every
+ * per-field `|| 4` default below exists only as a math safety net, never as a
+ * legitimate substitute for a real answer.
  */
 async function computeMentalResult(partner_A_answers, partner_B_answers, { cacheKey } = {}) {
   const pA = partner_A_answers || {};
@@ -318,10 +349,10 @@ async function analyzeMental(req, res, next) {
   try {
     const { partner_A_answers, partner_B_answers, match_id } = req.body;
 
-    if (!partner_A_answers || !partner_B_answers) {
+    if (!isMentalQuestionnaireComplete(partner_A_answers) || !isMentalQuestionnaireComplete(partner_B_answers)) {
       return res.status(400).json({
         success: false,
-        error: 'Questionnaire responses for both partners are required.'
+        error: 'Complete questionnaire responses (all 21 questions) for both partners are required.'
       });
     }
 
@@ -349,9 +380,11 @@ async function analyzeMental(req, res, next) {
         // matches.compatibility_score is the existing 0-1 fraction already computed by
         // compileMatchReport — chronicResult itself has no such field (it lives at
         // chronicResult.calculations.coupleIndex on a 0-100 scale, a different shape).
-        const baseScore = matchRow.compatibility_score != null ? parseFloat(matchRow.compatibility_score) : 0.85;
+        // If there's no existing base score, there's nothing real to blend the mental
+        // score into — use the mental score alone rather than inventing an 0.85 baseline.
+        const baseScore = matchRow.compatibility_score != null ? parseFloat(matchRow.compatibility_score) : null;
         const mentalScoreScaled = mentalResult.overall_readiness.score / 100;
-        const adjustedScore = parseFloat((baseScore * 0.7 + mentalScoreScaled * 0.3).toFixed(2));
+        const adjustedScore = parseFloat((baseScore !== null ? (baseScore * 0.7 + mentalScoreScaled * 0.3) : mentalScoreScaled).toFixed(2));
 
         await db.query(
           'UPDATE matches SET analysis_json = $1, compatibility_score = $2 WHERE id = $3',
@@ -374,5 +407,6 @@ async function analyzeMental(req, res, next) {
 
 module.exports = {
   analyzeMental,
-  computeMentalResult
+  computeMentalResult,
+  isMentalQuestionnaireComplete
 };

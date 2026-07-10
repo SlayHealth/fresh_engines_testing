@@ -113,10 +113,18 @@ async function generateStructuredInsight(messages, fallbackObj, options = {}) {
     { role: "system", content: "You MUST respond with ONLY a valid JSON object. Do not include markdown formatting like ```json or any conversational text." }
   ];
 
-  // We don't pass the cacheKey down to generateInsight here because we want to cache 
+  // Tags a returned fallback so callers (and anything rendering it to a user) can tell
+  // "this is a real AI-generated result" apart from "the AI call failed/was malformed
+  // and this is safe static filler" — previously indistinguishable, which let fallback
+  // content (sometimes containing specific clinical-sounding claims) pass as real output.
+  const asFallback = (obj) => (obj && typeof obj === 'object' && !Array.isArray(obj))
+    ? { ...obj, _llm_fallback: true }
+    : obj;
+
+  // We don't pass the cacheKey down to generateInsight here because we want to cache
   // the parsed JSON object directly in generateStructuredInsight instead of the raw text string.
   const rawText = await generateInsight(jsonMessages, null, { ...options, cacheKey: null });
-  if (!rawText) return fallbackObj;
+  if (!rawText) return asFallback(fallbackObj);
 
   try {
     // Strip markdown blocks if the LLM accidentally included them
@@ -126,7 +134,7 @@ async function generateStructuredInsight(messages, fallbackObj, options = {}) {
     // Set JSON Cache (TTL: 30 days)
     if (redis && options.cacheKey) {
       try {
-        redis.setex(options.cacheKey, 2592000, parsedObj).catch(e => 
+        redis.setex(options.cacheKey, 2592000, parsedObj).catch(e =>
           console.error(`[LLM Service] Redis JSON set error for ${options.cacheKey}:`, e.message)
         );
       } catch (err) {
@@ -137,7 +145,7 @@ async function generateStructuredInsight(messages, fallbackObj, options = {}) {
     return parsedObj;
   } catch (e) {
     console.error("[LLM Service] Failed to parse JSON response:", rawText);
-    return fallbackObj;
+    return asFallback(fallbackObj);
   }
 }
 
