@@ -563,24 +563,21 @@ async function submitQuestionnaire(req, res, next) {
       weight,
       waist,
       activity_level,
-      daily_steps,
-      occupation_style,
       drinking_habits,
       smoking_habits,
-      tobacco_habits,
       sleep_cycle
     } = req.body;
 
     await db.query(
-      `UPDATE users 
+      `UPDATE users
        SET dob = $1, city = $2, height = $3, weight = $4, waist = $5,
-           activity_level = $6, daily_steps = $7, occupation_style = $8,
-           drinking_habits = $9, smoking_habits = $10, tobacco_habits = $11, sleep_cycle = $12
-       WHERE id = $13`,
+           activity_level = $6,
+           drinking_habits = $7, smoking_habits = $8, sleep_cycle = $9
+       WHERE id = $10`,
       [
         dob, city, parseFloat(height), parseFloat(weight), parseFloat(waist),
-        activity_level, daily_steps, occupation_style,
-        drinking_habits, smoking_habits, tobacco_habits, sleep_cycle,
+        activity_level,
+        drinking_habits, smoking_habits, sleep_cycle,
         invite.prospect_user_id
       ]
     );
@@ -704,13 +701,16 @@ async function submitQuestionnaire(req, res, next) {
       );
     }
 
-    // Merge prospect's mental-health answers (if any) into whatever the inviter already stored
+    // Merge prospect's mental-health answers (if any) into whatever the inviter already stored.
+    // invite.mental_answers_json comes back from `pg` already parsed (it's a JSONB column, not
+    // TEXT) — re-running JSON.parse on it threw on every couple where the inviter had already
+    // answered, silently discarding the prospect's real submission via the catch below.
     let mentalAnswersJson = invite.mental_answers_json;
     if (req.body.mentalAnswers) {
       try {
         const prospectMentalAnswers = JSON.parse(req.body.mentalAnswers);
         if (prospectMentalAnswers && Object.keys(prospectMentalAnswers).length > 0) {
-          const existing = invite.mental_answers_json ? JSON.parse(invite.mental_answers_json) : {};
+          const existing = invite.mental_answers_json || {};
           mentalAnswersJson = JSON.stringify({ ...existing, prospect: prospectMentalAnswers });
         }
       } catch (e) {
