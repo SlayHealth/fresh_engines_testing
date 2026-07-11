@@ -267,32 +267,36 @@ async function updateProfile(req, res, next) {
       return res.status(403).json({ success: false, error: 'Forbidden: You cannot modify another user\'s profile' });
     }
 
-    const { 
-      name, gender, dob, city, 
-      activity_level, daily_steps, occupation_style, 
-      drinking_habits, smoking_habits, tobacco_habits, sleep_cycle,
-      height, weight, waist
-    } = req.body;
+    // Partial update: only columns actually present in the request body are written.
+    // This used to unconditionally SET every column (missing ones falling back to
+    // `field || null`), so any caller sending a partial payload — e.g. login.js's
+    // completeSignup(), which only sends { id, name } — silently wiped every other
+    // saved profile field (gender/dob/city/lifestyle/body metrics) back to null.
+    const numericFields = new Set(['height', 'weight', 'waist']);
+    const allowedFields = ['name', 'gender', 'dob', 'city', 'activity_level', 'drinking_habits', 'smoking_habits', 'sleep_cycle', 'height', 'weight', 'waist'];
 
-    logger.info(`[Auth][CID: ${correlationId}] Updating profile for user ID: ${targetUserId}`);
+    const setClauses = [];
+    const values = [];
+    allowedFields.forEach((field) => {
+      if (req.body[field] === undefined) return;
+      let value = req.body[field];
+      if (numericFields.has(field)) {
+        value = value === '' || value === null ? null : parseFloat(value);
+      }
+      values.push(value);
+      setClauses.push(`${field} = $${values.length}`);
+    });
 
+    if (setClauses.length === 0) {
+      return res.status(400).json({ success: false, error: 'No profile fields provided to update' });
+    }
+
+    logger.info(`[Auth][CID: ${correlationId}] Updating profile for user ID: ${targetUserId} (fields: ${allowedFields.filter((f) => req.body[f] !== undefined).join(', ')})`);
+
+    values.push(targetUserId);
     const result = await db.query(
-      `UPDATE users
-       SET name = $1, gender = $2, dob = $3, city = $4,
-           activity_level = $5, daily_steps = $6, occupation_style = $7,
-           drinking_habits = $8, smoking_habits = $9, tobacco_habits = $10, sleep_cycle = $11,
-           height = $12, weight = $13, waist = $14
-       WHERE id = $15
-       RETURNING *`,
-      [
-        name || null, gender || null, dob || null, city || null,
-        activity_level || null, daily_steps || null, occupation_style || null,
-        drinking_habits || null, smoking_habits || null, tobacco_habits || null, sleep_cycle || null,
-        height ? parseFloat(height) : null,
-        weight ? parseFloat(weight) : null,
-        waist ? parseFloat(waist) : null,
-        targetUserId
-      ]
+      `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
     );
 
     if (result.rows.length === 0) {
