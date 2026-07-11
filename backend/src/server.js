@@ -12,6 +12,7 @@ const chatRoutes = require('./routes/chat.routes');
 const authRoutes = require('./routes/auth.routes');
 const mentalRoutes = require('./routes/mental.routes');
 const inviteRoutes = require('./routes/invite.routes');
+const adminRoutes = require('./routes/admin.routes');
 const { healthCheck } = require('./controllers/pathology.controller');
 const { initDB, cleanupOldReports } = require('./services/storage/postgres.service');
 const logger = require('./utils/logger');
@@ -75,6 +76,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/mental', mentalRoutes);
 app.use('/api/invite', inviteRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Global Error Handler (must be after routes)
 app.use(errorHandler);

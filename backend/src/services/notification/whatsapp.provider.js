@@ -1,6 +1,7 @@
 const axios = require('axios');
 const NotificationProvider = require('./notification.provider');
 const logger = require('../../utils/logger');
+const messageLog = require('./whatsappMessageLog.service');
 
 class WhatsAppProvider extends NotificationProvider {
   constructor() {
@@ -79,7 +80,23 @@ class WhatsAppProvider extends NotificationProvider {
       });
 
       if (response.data && (response.data.messages || response.data.success)) {
-        logger.info(`[WhatsAppProvider][CID: ${correlationId}] OTP sent successfully to ${to}. Message ID: ${response.data.messages ? response.data.messages[0].id : 'N/A'}`);
+        const waMessageId = response.data.messages ? response.data.messages[0].id : null;
+        logger.info(`[WhatsAppProvider][CID: ${correlationId}] OTP sent successfully to ${to}. Message ID: ${waMessageId || 'N/A'}`);
+        // The live OTP itself must not linger in a readable log table (even admin-only)
+        // beyond its 5-minute validity window, so it's redacted from both the summary
+        // text and the stored copy of the request payload.
+        const redactedPayload = JSON.parse(JSON.stringify(payload));
+        redactedPayload.template.components.forEach((c) => {
+          c.parameters?.forEach((p) => { if (p.type === 'text') p.text = '[redacted]'; });
+        });
+        await messageLog.logOutbound({
+          to,
+          messageType: 'template',
+          templateName: this.templateName,
+          bodyText: 'OTP authentication code (redacted)',
+          waMessageId,
+          rawPayload: redactedPayload
+        });
         return true;
       } else {
         throw new Error(`Unexpected API response: ${JSON.stringify(response.data)}`);

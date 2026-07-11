@@ -17,6 +17,7 @@ const chronicController = require('./chronic.controller');
 const mfrController = require('./mfr.controller');
 const { computeMentalResult, isMentalQuestionnaireComplete } = require('./mental.controller');
 const ontologyMapper = require('../services/parser/ontologyMapper.service');
+const whatsappMessageLog = require('../services/notification/whatsappMessageLog.service');
 
 function calculateAge(dobString) {
   if (!dobString) return 30;
@@ -842,12 +843,15 @@ async function handleWhatsAppWebhook(req, res, next) {
 
     // Webhook post handler
     if (body.object === 'whatsapp_business_account') {
-      if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.statuses) {
-        const statusObj = body.entry[0].changes[0].value.statuses[0];
+      const value = body.entry?.[0]?.changes?.[0]?.value;
+
+      if (value?.statuses) {
+        const statusObj = value.statuses[0];
         const msgId = statusObj.id;
         const wsStatus = statusObj.status; // 'sent', 'delivered', 'read', 'failed'
 
         logger.info(`WhatsApp Webhook event: msgId=${msgId}, status=${wsStatus}`);
+        await whatsappMessageLog.updateStatusByWaMessageId(msgId, wsStatus);
 
         // Find invite matching this message ID
         const inviteRes = await db.query('SELECT * FROM prospect_invites WHERE whatsapp_message_id = $1', [msgId]);
@@ -869,6 +873,28 @@ async function handleWhatsAppWebhook(req, res, next) {
             broadcastInviteUpdate(invite.user_id, invite.id, newStatus);
           }
         }
+      }
+
+      // Real incoming replies from users — previously received by this webhook and
+      // silently dropped (only `statuses` was ever handled), so nothing sent to the
+      // business number was ever visible anywhere. Logged as-is; nothing here acts on
+      // the content, this is purely for the admin message viewer.
+      if (value?.messages) {
+        const msg = value.messages[0];
+        let bodyText = null;
+        if (msg.type === 'text') bodyText = msg.text?.body;
+        else if (msg.type === 'button') bodyText = msg.button?.text;
+        else if (msg.type === 'interactive') bodyText = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title;
+        else bodyText = `[${msg.type} message]`;
+
+        logger.info(`WhatsApp inbound message from ${msg.from}: ${bodyText}`);
+        await whatsappMessageLog.logInbound({
+          from: msg.from,
+          messageType: msg.type,
+          bodyText,
+          waMessageId: msg.id,
+          rawPayload: msg
+        });
       }
     }
 
