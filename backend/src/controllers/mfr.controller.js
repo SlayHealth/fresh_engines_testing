@@ -99,14 +99,25 @@ function classifyOvarianReserve(amh, afc, age) {
 }
 
 // Semen analysis classification (WHO 2021 Limits)
+// Callers compute these via parseFloat(findExtractedParam(...)?.value) — when a
+// parameter is genuinely absent from the report, that expression evaluates to NaN,
+// not undefined (parseFloat(undefined) === NaN). Every check below previously tested
+// only `!== undefined && !== null`, which NaN passes, and then compared NaN against a
+// threshold (e.g. `NaN < 16`), which is always false in JS — so a completely absent
+// semen analysis silently fell through every single check as "not abnormal" and
+// landed on the default 'Normal' category, fabricating a clean result from zero real
+// data. classifyOvarianReserve's helper functions already guard against exactly this
+// with isNaN() checks; this is the same fix applied here.
+const isRealNumber = (x) => typeof x === 'number' && !isNaN(x);
+
 function classifySemen(volume, concentration, totalCount, totalMotility, progressive, vitality, morphology, ph) {
-  if (volume === undefined && concentration === undefined && totalMotility === undefined) return null;
+  if (!isRealNumber(volume) && !isRealNumber(concentration) && !isRealNumber(totalCount) && !isRealNumber(totalMotility)) return null;
 
   const abnormalFields = [];
   let belowCount = 0;
 
   // Concentration
-  if (concentration !== undefined && concentration !== null) {
+  if (isRealNumber(concentration)) {
     if (concentration === 0) return { category: 'Severe Deficit', details: 'Azoospermia' };
     if (concentration < 16) {
       belowCount++;
@@ -115,7 +126,7 @@ function classifySemen(volume, concentration, totalCount, totalMotility, progres
   }
 
   // Total Count
-  if (totalCount !== undefined && totalCount !== null) {
+  if (isRealNumber(totalCount)) {
     if (totalCount === 0) return { category: 'Severe Deficit', details: 'Azoospermia' };
     if (totalCount < 39) {
       belowCount++;
@@ -124,43 +135,43 @@ function classifySemen(volume, concentration, totalCount, totalMotility, progres
   }
 
   // Volume
-  if (volume !== undefined && volume !== null && volume < 1.4) {
+  if (isRealNumber(volume) && volume < 1.4) {
     belowCount++;
     abnormalFields.push('volume');
   }
 
   // Total Motility
-  if (totalMotility !== undefined && totalMotility !== null && totalMotility < 42) {
+  if (isRealNumber(totalMotility) && totalMotility < 42) {
     belowCount++;
     abnormalFields.push('total motility');
   }
 
   // Progressive Motility
-  if (progressive !== undefined && progressive !== null && progressive < 30) {
+  if (isRealNumber(progressive) && progressive < 30) {
     belowCount++;
     abnormalFields.push('progressive motility');
   }
 
   // Vitality
-  if (vitality !== undefined && vitality !== null && vitality < 54) {
+  if (isRealNumber(vitality) && vitality < 54) {
     belowCount++;
     abnormalFields.push('vitality');
   }
 
   // Morphology
-  if (morphology !== undefined && morphology !== null && morphology < 4) {
+  if (isRealNumber(morphology) && morphology < 4) {
     belowCount++;
     abnormalFields.push('morphology');
   }
 
   // pH
-  if (ph !== undefined && ph !== null && ph < 7.2) {
+  if (isRealNumber(ph) && ph < 7.2) {
     belowCount++;
     abnormalFields.push('pH');
   }
 
   let category = 'Normal';
-  if (belowCount >= 3 || (concentration !== undefined && concentration < 5)) {
+  if (belowCount >= 3 || (isRealNumber(concentration) && concentration < 5)) {
     category = 'Severe Deficit';
   } else if (belowCount === 2) {
     category = 'Moderate Deficit';
@@ -228,15 +239,20 @@ async function analyzeMfr(req, res, next) {
     // Extract Male Inputs
     const mAge = parseFloat(male_manual_data.age) || 30;
 
-    // Auto-detect Semen markers from report
+    // Auto-detect Semen markers from report — canonical names must match the real
+    // ontology exactly (see ontologyMapper.service.js); several of these previously
+    // used guessed names ('total_sperm_count', 'total_motility', 'progressive_motility',
+    // 'vitality', 'morphology', 'ph') that don't match what the extractor actually
+    // produces, so those fields always silently read as undefined from a real report
+    // — only sperm_concentration and semen_volume happened to already be correct.
     const semVol = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'semen_volume')?.value) : undefined;
     const semConc = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'sperm_concentration')?.value) : undefined;
-    const semCount = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'total_sperm_count')?.value) : undefined;
-    const semMot = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'total_motility')?.value) : undefined;
-    const semProg = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'progressive_motility')?.value) : undefined;
-    const semVit = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'vitality')?.value) : undefined;
-    const semMorph = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'morphology')?.value) : undefined;
-    const semPh = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'ph')?.value) : undefined;
+    const semCount = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'total_sperm_count_per_ejaculate')?.value) : undefined;
+    const semMot = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'total_sperm_motility')?.value) : undefined;
+    const semProg = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'progressive_motility_pr')?.value) : undefined;
+    const semVit = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'sperm_vitality_viability')?.value) : undefined;
+    const semMorph = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'sperm_morphology_normal_forms')?.value) : undefined;
+    const semPh = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'semen_ph')?.value) : undefined;
 
     const calculatedSemen = classifySemen(semVol, semConc, semCount, semMot, semProg, semVit, semMorph, semPh);
     const semenQuality = male_manual_data.semenQuality || calculatedSemen?.category || 'Normal';
@@ -425,10 +441,22 @@ async function analyzeMfr(req, res, next) {
       }
     }
 
-    // Absolute Barriers
-    const gate = barriers.b_tubal || barriers.b_azoo || barriers.b_uterus || 
-                 male_manual_data.scrotalFinding === 'Obstruction / CBAVD' || 
-                 physicalBlock || geneticBlock;
+    // Absolute Barriers. calculatedSemen (server-computed directly from the pathology
+    // PDF, above) is included here as its own independent trigger — previously the
+    // azoospermia gate only fired from the client-supplied barriers.b_azoo flag, so
+    // any caller that didn't perfectly replicate the client's own detection logic
+    // (or simply didn't send it) would silently lose this specific hard gate even
+    // though the server already knows the real answer from the same report.
+    // Likewise, a "Very Low" ovarian reserve classification (already an age-banded
+    // clinical judgment from classifyOvarianReserve, not a raw number) previously
+    // only applied a flat -20 point continuous adjustment — clinically this reads
+    // closer to a specialist-referral case than "plan together with a slightly lower
+    // score," so it's promoted to a hard gate here too.
+    const serverDetectedAzoospermia = calculatedSemen?.details === 'Azoospermia';
+    const severeOvarianReserve = calculatedReserve === 'Very Low' || ovarianReserve === 'Very Low';
+    const gate = barriers.b_tubal || barriers.b_azoo || barriers.b_uterus ||
+                 male_manual_data.scrotalFinding === 'Obstruction / CBAVD' ||
+                 physicalBlock || geneticBlock || serverDetectedAzoospermia || severeOvarianReserve;
 
     // Shared Lifestyle
     const smokeVal = shared_lifestyle.smoke !== undefined ? parseFloat(shared_lifestyle.smoke) : 0;
@@ -591,5 +619,10 @@ Respond ONLY with JSON matching this schema: { "positive_findings": ["str1", "st
 }
 
 module.exports = {
-  analyzeMfr
+  analyzeMfr,
+  // Exposed so other consumers of AMH (e.g. reportSummary.service.js's hormones
+  // body-health card) can reuse this real, age-banded classification instead of
+  // maintaining their own separate, age-blind cutoff that could disagree with it for
+  // the same lab value.
+  classifyOvarianReserve
 };
