@@ -219,6 +219,29 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_matches_user_id ON matches(user_id);
     `);
 
+    // WhatsApp message log — the Cloud API has no "fetch message history" endpoint, so
+    // this is the only source of truth for the admin message viewer. Populated going
+    // forward only: outbound rows are written at send-time (WhatsAppProvider), inbound
+    // rows and status transitions arrive via the existing /webhook/whatsapp handler.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_messages (
+          id SERIAL PRIMARY KEY,
+          direction TEXT NOT NULL,
+          phone_number TEXT NOT NULL,
+          message_type TEXT,
+          template_name TEXT,
+          body_text TEXT,
+          status TEXT DEFAULT 'sent',
+          wa_message_id TEXT,
+          raw_payload JSONB,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_phone ON whatsapp_messages(phone_number);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_wa_id ON whatsapp_messages(wa_message_id);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_created_at ON whatsapp_messages(created_at DESC);
+    `);
+
     logger.info('Database schema successfully initialized.');
   } catch (error) {
     logger.error('Database schema initialization failed:', error);
