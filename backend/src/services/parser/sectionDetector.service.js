@@ -281,6 +281,8 @@ const sections = [
 ];
 
 const searchableSections = [];
+const exactAliasIndex = new Map();
+const normalizeAlias = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
 sections.forEach(sec => {
   sec.aliases.forEach(alias => {
     searchableSections.push({
@@ -288,6 +290,10 @@ sections.forEach(sec => {
       canonical_name: sec.name,
       alias: alias
     });
+    const normalizedAlias = normalizeAlias(alias);
+    if (!exactAliasIndex.has(normalizedAlias)) {
+      exactAliasIndex.set(normalizedAlias, sec.id);
+    }
   });
 });
 
@@ -300,7 +306,7 @@ const fuse = new Fuse(searchableSections, {
 class SectionDetectorService {
   detectSection(text) {
     if (!text || text.trim().length < 3) return null;
-    
+
     // Guard: The TSH parameter name contains "uTSH" / "utsh", whereas the section header does not.
     // This prevents the TSH parameter from being incorrectly detected as a section header.
     if (text.toLowerCase().includes('utsh')) return null;
@@ -314,6 +320,28 @@ class SectionDetectorService {
     // misattributed to the hemoglobin_a2 section as a result). The real HbA2 section
     // header always says "A2" explicitly, so excluding the bare form is safe.
     if (normalizedText === 'hemoglobin' || normalizedText === 'hemoglobin hb') return null;
+
+    // Guard: same collision, one row down — "Hemoglobin A (HbA)" is the normal/majority
+    // hemoglobin fraction reported on every HPLC/variant-analysis panel, and normalizes to
+    // "hemoglobin a hba" — one character away from (and fuzzy-matches) "hemoglobin a2".
+    // Confirmed on a real report: this silently swallowed the actual HbA2 row that
+    // followed, dropping the beta-thalassemia carrier-trait screen entirely. The real
+    // "Hemoglobin A2" header always includes the literal "2", so excluding the plain
+    // "HbA" form is safe.
+    if (normalizedText === 'hemoglobin a' || normalizedText === 'hemoglobin a hba') return null;
+
+    // Exact alias match first — zero false-positive risk, and covers every short
+    // abbreviation (esr, kft, lft, cbc, ...) without ever touching fuzzy search.
+    if (exactAliasIndex.has(normalizedText)) {
+      return exactAliasIndex.get(normalizedText);
+    }
+
+    // Fuzzy fallback is gated to longer strings only. Short tokens — bare numeric values
+    // like "2.4" (normalizes to "24"), stray 2-3 char fragments — too easily fuzzy-match
+    // an unrelated alias (confirmed: "2.4" matched "p24 combo" and corrupted the current
+    // section mid-panel). Any legitimate short section header is already caught above via
+    // exact match, so nothing real is lost by requiring more length here.
+    if (normalizedText.length < 4) return null;
 
     const results = fuse.search(normalizedText);
     if (results.length > 0 && results[0].score <= 0.4) {
