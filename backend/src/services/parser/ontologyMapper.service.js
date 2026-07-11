@@ -1481,6 +1481,42 @@ const parametersOntology = [
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
+  },
+  {
+    // Was entirely absent from the ontology, so a real AMH value on an uploaded report
+    // could never be read — mfr.controller.js's classifyOvarianReserve (a real,
+    // age-banded clinical model) and pdfReport(2).service.js both already look this
+    // parameter up by this exact canonical name via findExtractedParam, but always got
+    // `undefined` until now.
+    "canonical_name": "amh",
+    "section": "general",
+    "aliases": [
+      "amh",
+      "anti-mullerian hormone",
+      "anti mullerian hormone (amh)",
+      "anti-müllerian hormone",
+      "anti-müllerian hormone (amh)"
+    ],
+    "expected_units": ["ng/ml"],
+    "normal_range_type": "unknown"
+  },
+  {
+    // Matches the exact key reportSummary.service.js's Vitamin body-health card already
+    // reads (flatParams.vitamin_d_3_25_hydroxy) — was entirely absent from the ontology,
+    // so that card always fell back to "optimal" regardless of the couple's real value.
+    "canonical_name": "vitamin_d_3_25_hydroxy",
+    "section": "general",
+    "aliases": [
+      "vitamin d",
+      "vitamin d3",
+      "25-hydroxy vitamin d",
+      "25-oh vitamin d",
+      "vitamin d (25-hydroxy)",
+      "vitamin d3 (25-hydroxy)",
+      "vitamin d, 25-hydroxy"
+    ],
+    "expected_units": ["ng/ml"],
+    "normal_range_type": "unknown"
   }
 ];
 
