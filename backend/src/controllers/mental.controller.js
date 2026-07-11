@@ -1,4 +1,5 @@
 const { db } = require('../services/storage/postgres.service');
+const reportGenerationService = require('../services/compatibility/reportGeneration.service');
 const logger = require('../utils/logger');
 
 // Helper to scale 1-5 score to 0-100
@@ -362,7 +363,7 @@ async function analyzeMental(req, res, next) {
 
     // If match_id is provided, merge this mentalResult into the db matches record
     if (match_id) {
-      const matchRes = await db.query('SELECT analysis_json, compatibility_score FROM matches WHERE id = $1', [match_id]);
+      const matchRes = await db.query('SELECT analysis_json FROM matches WHERE id = $1', [match_id]);
       const matchRow = matchRes.rows[0];
       if (matchRow) {
         let existingAnalysis = {};
@@ -375,22 +376,31 @@ async function analyzeMental(req, res, next) {
         // Add/overwrite mentalResult
         existingAnalysis.mentalResult = mentalResult;
 
-        // Recalculate unified compatibility score if we want (e.g. blend in readiness score)
-        // Let's blend: 70% chronic/mfr + 30% mental readiness profile score
-        // matches.compatibility_score is the existing 0-1 fraction already computed by
-        // compileMatchReport — chronicResult itself has no such field (it lives at
-        // chronicResult.calculations.coupleIndex on a 0-100 scale, a different shape).
-        // If there's no existing base score, there's nothing real to blend the mental
-        // score into — use the mental score alone rather than inventing an 0.85 baseline.
-        const baseScore = matchRow.compatibility_score != null ? parseFloat(matchRow.compatibility_score) : null;
-        const mentalScoreScaled = mentalResult.overall_readiness.score / 100;
-        const adjustedScore = parseFloat((baseScore !== null ? (baseScore * 0.7 + mentalScoreScaled * 0.3) : mentalScoreScaled).toFixed(2));
+        // Recompute the overall composite score through the exact same gated path
+        // compileMatchReport used initially (chronic 35% / fertility 25% / mental 20% /
+        // radiology 10% / genetics 10%, with the STI safety gate re-applied) — not an
+        // ad hoc 70/30 blend against whatever the score happened to be before. That
+        // previous approach could silently ignore an active STI finding (it was never
+        // gate-checked here) and let matches.compatibility_score drift out of sync with
+        // presentation_json.relationship_snapshot.score, which nothing here used to
+        // update at all.
+        const existingDetails = existingAnalysis.details || {};
+        const { compatibilityScore, presentation } = await reportGenerationService.computeGatedComposite({
+          chronicResult: existingAnalysis.chronicResult,
+          mfrResult: existingAnalysis.mfrResult,
+          mentalResult,
+          maleManual: existingDetails.male_manual_data || {},
+          femaleManual: existingDetails.female_manual_data || {},
+          sharedLifestyle: existingDetails.shared_lifestyle || {}
+        });
+
+        existingAnalysis.score = compatibilityScore;
 
         await db.query(
-          'UPDATE matches SET analysis_json = $1, compatibility_score = $2 WHERE id = $3',
-          [JSON.stringify(existingAnalysis), adjustedScore, match_id]
+          'UPDATE matches SET analysis_json = $1, compatibility_score = $2, presentation_json = $3 WHERE id = $4',
+          [JSON.stringify(existingAnalysis), compatibilityScore, JSON.stringify(presentation), match_id]
         );
-        logger.info(`Updated match ${match_id} with Mental Wellbeing analysis. New Score: ${adjustedScore}`);
+        logger.info(`Updated match ${match_id} with Mental Wellbeing analysis. New Score: ${compatibilityScore}`);
       }
     }
 
