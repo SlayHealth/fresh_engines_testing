@@ -248,12 +248,24 @@ async function analyzeChronic(req, res, next) {
     const pA = currentOddsA / (1 + currentOddsA);
     const pB = currentOddsB / (1 + currentOddsB);
 
-    // The Gate: Routing for established disease
-    const gateOpen = partnerA.glucose === 'High' || partnerB.glucose === 'High';
+    // The Gate: routing for established disease. A partner whose HbA1c is already in
+    // the diagnosed-diabetic range (glucose === 'High') doesn't just have an elevated
+    // RISK of developing diabetes — they already have it. BIOMARKER_LRS.glucose.High
+    // is deliberately left neutral (1.0, same as Normal) above specifically because
+    // this gate applies a direct, real cap to that partner's own score below, instead
+    // of the LR trying (and failing) to represent "already diagnosed" as a risk
+    // multiplier. Previously this gate only swapped the status text to "Specialist
+    // conversation" while leaving gA/gB/coupleIndex computed as if glucose were
+    // perfectly normal — someone already diagnosed diabetic could still show a high
+    // protective score.
+    const DIABETIC_SCORE_CAP = 25;
+    const partnerADiabetic = partnerA.glucose === 'High';
+    const partnerBDiabetic = partnerB.glucose === 'High';
+    const gateOpen = partnerADiabetic || partnerBDiabetic;
 
     // Protect Scores & Couple OWA Index
-    const gA = 100 * (1 - pA);
-    const gB = 100 * (1 - pB);
+    const gA = partnerADiabetic ? Math.min(100 * (1 - pA), DIABETIC_SCORE_CAP) : 100 * (1 - pA);
+    const gB = partnerBDiabetic ? Math.min(100 * (1 - pB), DIABETIC_SCORE_CAP) : 100 * (1 - pB);
     const w = 0.6; // Convergence weight
     const coupleIndex = w * Math.min(gA, gB) + (1 - w) * Math.max(gA, gB);
 
@@ -272,19 +284,21 @@ async function analyzeChronic(req, res, next) {
       const pY_A = oddsY_A / (1 + oddsY_A);
       const pY_B = oddsY_B / (1 + oddsY_B);
       
-      const gY_A = 100 * (1 - pY_A);
-      const gY_B = 100 * (1 - pY_B);
+      const gY_A = partnerADiabetic ? Math.min(100 * (1 - pY_A), DIABETIC_SCORE_CAP) : 100 * (1 - pY_A);
+      const gY_B = partnerBDiabetic ? Math.min(100 * (1 - pY_B), DIABETIC_SCORE_CAP) : 100 * (1 - pY_B);
       const indexY_curr = w * Math.min(gY_A, gY_B) + (1 - w) * Math.max(gY_A, gY_B);
       currentLifestyleCurve.push(Math.round(indexY_curr));
 
-      // Optimized means lifestyle totalLR is 1.0
+      // Optimized means lifestyle totalLR is 1.0 — the diabetic cap still applies here
+      // too: an already-diagnosed partner doesn't stop being diagnosed just because
+      // this branch models an idealized lifestyle instead of their current one.
       const optOddsY_A = (ODDS_0 * idrsLrA * bioLrA) * ageDrift;
       const optOddsY_B = (ODDS_0 * idrsLrB * bioLrB) * ageDrift;
       const optPY_A = optOddsY_A / (1 + optOddsY_A);
       const optPY_B = optOddsY_B / (1 + optOddsY_B);
-      
-      const optGY_A = 100 * (1 - optPY_A);
-      const optGY_B = 100 * (1 - optPY_B);
+
+      const optGY_A = partnerADiabetic ? Math.min(100 * (1 - optPY_A), DIABETIC_SCORE_CAP) : 100 * (1 - optPY_A);
+      const optGY_B = partnerBDiabetic ? Math.min(100 * (1 - optPY_B), DIABETIC_SCORE_CAP) : 100 * (1 - optPY_B);
       const indexY_opt = w * Math.min(optGY_A, optGY_B) + (1 - w) * Math.max(optGY_A, optGY_B);
       optimizedLifestyleCurve.push(Math.round(indexY_opt));
     }
