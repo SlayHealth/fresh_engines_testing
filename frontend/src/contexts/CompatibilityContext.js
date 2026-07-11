@@ -450,16 +450,19 @@ export function CompatibilityProvider({ children }) {
   }, []);
 
   const fetchRecentMatches = async (userId) => {
-    if (!userId) return;
+    if (!userId) return [];
     setIsMatchesLoading(true);
     try {
       const res = await apiFetch(`${API_URL}/api/compatibility/matches?userId=${userId}`);
       if (res.ok) {
         const data = await res.json();
         setMatchesList(data);
+        return data;
       }
+      return [];
     } catch (err) {
       console.error('Failed to fetch matches list:', err);
+      return [];
     } finally {
       setIsMatchesLoading(false);
     }

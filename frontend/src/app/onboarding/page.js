@@ -106,7 +106,6 @@ export default function OnboardingPage() {
             userRelation: v,
             candidateName: v === 'Self' ? (onboardingForm.userName || '') : onboardingForm.candidateName
           })}
-          onAdvance={goNext}
         />
       )
     },
@@ -118,7 +117,6 @@ export default function OnboardingPage() {
           options={MARRIAGE_TIMELINES}
           value={onboardingForm.marriageTimeline}
           onChange={(v) => setOnboardingForm({ ...onboardingForm, marriageTimeline: v })}
-          onAdvance={goNext}
         />
       )
     }

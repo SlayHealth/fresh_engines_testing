@@ -106,7 +106,7 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen" style={{ background: 'var(--paper)' }}>
-      <div className="max-w-lg mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-lg mx-auto px-4 sm:px-6 pt-6 pb-24 lg:pb-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button

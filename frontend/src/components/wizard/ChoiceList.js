@@ -6,15 +6,12 @@ const cn = (...classes) => classes.filter(Boolean).join(' ');
 
 /**
  * Full-width single-select list for one-question-per-screen wizard steps.
- * Calls onChange immediately, then onAdvance (if provided) after a short
- * delay so the user sees their tap register before the step advances.
+ * Only selects a value — advancing to the next question is always a
+ * separate, explicit tap on the step's own Next button.
  */
-export default function ChoiceList({ options, value, onChange, onAdvance, advanceDelay = 180 }) {
+export default function ChoiceList({ options, value, onChange }) {
   const handlePick = (val) => {
     onChange(val);
-    if (onAdvance) {
-      setTimeout(onAdvance, advanceDelay);
-    }
   };
 
   return (

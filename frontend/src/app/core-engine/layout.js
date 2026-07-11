@@ -369,11 +369,11 @@ export default function CoreEngineLayout({ children }) {
           </div>
         </div>
 
-        {/* Floating counselor trigger */}
+        {/* Floating counselor trigger — desktop only; mobile uses the bottom nav's center Chat button instead */}
         <button
           onClick={() => setIsChatOpen(true)}
           disabled={chatsUsed >= 5}
-          className="fixed bottom-6 right-6 z-10 flex items-center gap-2 py-3 px-5 rounded-full bg-(--teal) hover:bg-(--teal-d) text-[#fff] border-none font-bold text-xs font-sans shadow-lg cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="hidden lg:flex fixed bottom-6 right-6 z-10 items-center gap-2 py-3 px-5 rounded-full bg-(--teal) hover:bg-(--teal-d) text-[#fff] border-none font-bold text-xs font-sans shadow-lg cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <MessageSquare size={14} />
           Consult AI Counselor ({Math.max(0, 5 - chatsUsed)} Left)

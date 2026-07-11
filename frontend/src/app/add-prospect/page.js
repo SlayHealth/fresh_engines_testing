@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, cloneElement, isValidElement, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RefreshCw, Check, Share2, UserRound, HeartPulse, Brain, FlaskConical, ScanLine, Dna } from 'lucide-react';
 import { useCompatibility, calculateAge, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
@@ -911,7 +911,7 @@ function AddProspectPageInner() {
   const choiceStep = (title, options, value, onChange, extra = {}) => ({
     title,
     subtitle: extra.subtitle,
-    content: <ChoiceList options={options} value={value} onChange={onChange} onAdvance={extra.advance || goNext} />,
+    content: <ChoiceList options={options} value={value} onChange={onChange} />,
     canAdvance: !!value
   });
 
@@ -946,17 +946,13 @@ function AddProspectPageInner() {
     canAdvance: !!(value && value.trim())
   });
 
-  // Rewires the last step of a category's array so both the Next button AND
-  // (for ChoiceList-backed steps) tap-to-auto-advance return to the hub
-  // instead of walking off the end of a now-category-scoped step list.
+  // Rewires the last step of a category's array so its Next button returns to
+  // the hub instead of walking off the end of a now-category-scoped step list.
   const finalizeSteps = (arr, advance) => {
     if (arr.length === 0) return arr;
     const lastIdx = arr.length - 1;
     const last = { ...arr[lastIdx] };
     last.onNext = advance;
-    if (isValidElement(last.content) && last.content.type === ChoiceList) {
-      last.content = cloneElement(last.content, { onAdvance: advance });
-    }
     return [...arr.slice(0, lastIdx), last];
   };
 
@@ -1062,7 +1058,6 @@ function AddProspectPageInner() {
             ]}
             value={optIn}
             onChange={setOptIn}
-            onAdvance={optIn === 'yes' ? goNext : advance}
           />
         </div>
       )
@@ -1192,7 +1187,7 @@ function AddProspectPageInner() {
   if (fillByProspect && activeInvite) {
     return (
       <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
-        <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-4 overflow-hidden">
+        <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 pt-4 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-4 overflow-hidden">
           <div className="flex items-center justify-between mb-4 shrink-0">
             <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Invite Status</span>
             <button
@@ -1324,7 +1319,7 @@ function AddProspectPageInner() {
 
   return (
     <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
-      <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-4 overflow-hidden">
+      <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 pt-4 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-4 overflow-hidden">
         <div className="flex items-center justify-between mb-4 shrink-0">
           <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>{headerTitle}</span>
           <button

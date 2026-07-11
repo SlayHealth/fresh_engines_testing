@@ -108,7 +108,31 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen" style={{ background: 'var(--paper)' }}>
-      <div className={`max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-7 ${styles.dashboard}`}>
+      {/* Ambient art — fixed to the viewport so it fills the full page width and
+          never scrolls out of view, instead of a flat page with content floating
+          in a box. Purely decorative, sits behind the content column. */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div
+          className="absolute inset-0 opacity-60"
+          style={{ backgroundImage: 'radial-gradient(rgba(20,22,26,0.05) 1px, transparent 1px)', backgroundSize: '26px 26px' }}
+        />
+        <div className="absolute -top-36 -left-44 w-[560px] h-[560px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(222,69,125,0.22), transparent 70%)' }} />
+        <div className="absolute top-1/3 -right-52 w-[640px] h-[640px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(24,204,150,0.22), transparent 70%)' }} />
+        <div className="absolute bottom-[-120px] left-1/4 w-[460px] h-[460px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(244,161,0,0.16), transparent 70%)' }} />
+
+        <svg className="hidden 2xl:block absolute left-12 top-28 w-36 opacity-40" height="560" viewBox="0 0 140 560" fill="none">
+          <path d="M70 0 C 15 55, 125 115, 70 175 S 15 295, 70 355 S 125 475, 70 560" stroke="var(--pink)" strokeWidth="1.5" strokeDasharray="1 9" strokeLinecap="round" />
+          <circle cx="70" cy="175" r="5" fill="var(--pink)" opacity="0.55" />
+          <circle cx="70" cy="355" r="5" fill="var(--teal)" opacity="0.55" />
+        </svg>
+        <svg className="hidden 2xl:block absolute right-12 top-52 w-36 opacity-40" height="500" viewBox="0 0 140 500" fill="none">
+          <path d="M70 0 C 125 55, 15 115, 70 175 S 125 295, 70 355 S 15 445, 70 500" stroke="var(--teal)" strokeWidth="1.5" strokeDasharray="1 9" strokeLinecap="round" />
+          <circle cx="70" cy="175" r="5" fill="var(--amber)" opacity="0.55" />
+          <circle cx="70" cy="355" r="5" fill="var(--pink)" opacity="0.55" />
+        </svg>
+      </div>
+
+      <div className={`relative max-w-5xl mx-auto px-4 sm:px-6 pt-5 sm:pt-7 pb-24 lg:pb-7 ${styles.dashboard}`}>
 
         {/* Identity bar */}
         <header className="flex items-center justify-between gap-3 pb-3">

@@ -90,7 +90,7 @@ export default function AdminWhatsAppPage() {
 
   return (
     <main className="min-h-screen" style={{ background: 'var(--paper)' }}>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-24 lg:pb-6">
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => router.push('/dashboard')}

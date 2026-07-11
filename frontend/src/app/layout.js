@@ -3,6 +3,7 @@ import "./globals.css";
 import { CompatibilityProvider } from "../contexts/CompatibilityContext";
 import { ToastContainer } from "../components/Toast";
 import { ConfirmDialogContainer } from "../components/ConfirmDialog";
+import MobileBottomNav from "../components/MobileBottomNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <CompatibilityProvider>
           {children}
+          <MobileBottomNav />
         </CompatibilityProvider>
         <ToastContainer />
         <ConfirmDialogContainer />

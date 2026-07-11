@@ -387,7 +387,7 @@ export default function ProspectOnboardingPage() {
     title,
     subtitle: extra.subtitle,
     category: extra.category,
-    content: <ChoiceList options={options} value={value} onChange={onChange} onAdvance={goNext} />,
+    content: <ChoiceList options={options} value={value} onChange={onChange} />,
     canAdvance: !!value
   });
 
@@ -528,7 +528,7 @@ export default function ProspectOnboardingPage() {
           </span>
           <span className="text-xs font-medium" style={{ color: 'var(--amber-d)' }}>21 quick questions</span>
         </div>
-        <ChoiceList options={MENTAL_OPT_IN_OPTIONS} value={mentalOptIn} onChange={setMentalOptIn} onAdvance={goNext} />
+        <ChoiceList options={MENTAL_OPT_IN_OPTIONS} value={mentalOptIn} onChange={setMentalOptIn} />
       </div>
     )
   }];
@@ -563,7 +563,7 @@ export default function ProspectOnboardingPage() {
 
   return (
     <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
-      <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 py-5 overflow-hidden">
+      <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 pt-5 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-5 overflow-hidden">
         <div className="flex items-center justify-center gap-2 mb-4 shrink-0">
           <Sparkles className="w-5 h-5" style={{ color: 'var(--pink)' }} />
           <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Premarital Onboarding Questionnaire</span>

@@ -394,25 +394,26 @@ export default function LoginPage() {
   } else if (authStep === 'relation') {
     title = 'Who are you in relation to the person getting married?';
     onBack = goBack;
-    nextDisabled = true;
+    onNext = goNext;
+    nextDisabled = !onboardingForm.userRelation;
     content = (
       <ChoiceList
         options={RELATIONS}
         value={onboardingForm.userRelation}
         onChange={(v) => setOnboardingForm({ ...onboardingForm, userRelation: v })}
-        onAdvance={goNext}
       />
     );
   } else if (authStep === 'eta') {
     title = 'What’s your ETA for marriage?';
     onBack = goBack;
-    nextDisabled = true;
+    onNext = completeSignup;
+    nextLabel = isAuthLoading ? 'Finishing…' : "Let's go";
+    nextDisabled = !onboardingForm.marriageTimeline || isAuthLoading;
     content = (
       <ChoiceList
         options={MARRIAGE_TIMELINES}
         value={onboardingForm.marriageTimeline}
         onChange={(v) => setOnboardingForm({ ...onboardingForm, marriageTimeline: v })}
-        onAdvance={completeSignup}
       />
     );
   } else if (authStep === 'otp') {
