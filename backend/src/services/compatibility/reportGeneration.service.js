@@ -5,6 +5,141 @@ const radiologyLookupService = require('../radiology/radiologyLookup.service');
 const logger = require('../../utils/logger');
 
 class ReportGenerationService {
+  // Fetch each partner's own radiology analysis by identity (radiology reports aren't
+  // linked by report ID — they're looked up the same way the PDF renderer does, by
+  // patient name/slay-id — a previous version of this queried radiology_reports using
+  // the *pathology* report ID, which is a different table's ID space and essentially
+  // never matched, silently dropping the whole radiology domain out of the score).
+  async _fetchRadiologyScore(maleManual, femaleManual) {
+    let hasRadiology = false;
+    let radScore = null;
+    try {
+      const [maleRad, femaleRad] = await Promise.all([
+        radiologyLookupService.fetchRadiologyByIdentity(null, maleManual?.name),
+        radiologyLookupService.fetchRadiologyByIdentity(null, femaleManual?.name)
+      ]);
+
+      const partnerScores = [maleRad, femaleRad]
+        .map((rad) => rad?.scores_json?.radiology_nuptia_contribution)
+        .filter((c) => typeof c === 'number');
+
+      if (partnerScores.length > 0) {
+        radScore = (partnerScores.reduce((sum, c) => sum + (c / 30) * 100, 0)) / partnerScores.length;
+        hasRadiology = true;
+      }
+    } catch (radErr) {
+      logger.warn(`Failed to fetch radiology score for compilation: ${radErr.message}`);
+    }
+    return { hasRadiology, radScore };
+  }
+
+  /**
+   * The single place the overall compatibility score gets computed. Both the initial
+   * match compile (compileMatchReport, below) and any later recompute — e.g. once
+   * mental-wellbeing answers arrive after the initial match already ran, see
+   * mental.controller.js's analyzeMental — call this same method, so the DB's
+   * `compatibility_score` column and `presentation_json.relationship_snapshot.score`
+   * can never again be computed independently, drift apart, or bypass the STI safety
+   * gate the way they previously could when each caller re-derived its own number.
+   */
+  async computeGatedComposite({
+    chronicResult,
+    mfrResult,
+    mentalResult,
+    maleManual = {},
+    femaleManual = {},
+    sharedLifestyle = {}
+  }) {
+    const { hasRadiology, radScore } = await this._fetchRadiologyScore(maleManual, femaleManual);
+
+    const maleData = chronicResult?.details?.male_data || {};
+    const femaleData = chronicResult?.details?.female_data || {};
+
+    const detailsForPresentation = {
+      male_data: maleData,
+      female_data: femaleData,
+      male_manual_data: maleManual,
+      female_manual_data: femaleManual,
+      shared_lifestyle: sharedLifestyle,
+      radiology_report_id: hasRadiology || null
+    };
+
+    // Genetics (thalassemia carrier-pair) contribution — computed once here, ahead of
+    // mapPresentation, so it can feed the weighted blend below instead of only being
+    // available after the presentation object already exists.
+    const carrierRisk = reportSummaryService.evaluateThalassemiaCarrierRisk(maleData, femaleData);
+    const hasGenetic = carrierRisk.thalassemia.covered;
+    // A carrier-pair risk only clinically matters for an autosomal recessive condition
+    // like thalassemia when BOTH partners carry the trait (that's what puts a child at
+    // real risk) — a single carrier alongside a non-carrier partner is a much smaller
+    // concern. Score accordingly rather than treating "either partner flagged" the same
+    // as "both partners flagged".
+    let genScore = 100;
+    if (hasGenetic) {
+      const maleRed = carrierRisk.thalassemia.male_status === 'red';
+      const femaleRed = carrierRisk.thalassemia.female_status === 'red';
+      if (maleRed && femaleRed) {
+        genScore = 50;
+      } else if (maleRed || femaleRed) {
+        genScore = 75;
+      }
+    }
+
+    // Weights: Chronic=35%, Fertility=25%, Mental=20%, Radiology=10%, Genetics=10%
+    let sumScores = 0;
+    let sumWeights = 0;
+
+    if (chronicResult?.calculations?.coupleIndex) {
+      sumScores += chronicResult.calculations.coupleIndex * 0.35;
+      sumWeights += 0.35;
+    }
+    if (mfrResult?.p_12m_current) {
+      // mfrResult.p_12m_current is already 0-100 scale (see mfr.controller.js) — don't re-multiply by 100.
+      sumScores += mfrResult.p_12m_current * 0.25;
+      sumWeights += 0.25;
+    }
+    if (mentalResult?.overall_readiness?.score) {
+      sumScores += mentalResult.overall_readiness.score * 0.20;
+      sumWeights += 0.20;
+    }
+    if (hasRadiology) {
+      sumScores += radScore * 0.10;
+      sumWeights += 0.10;
+    }
+    if (hasGenetic) {
+      sumScores += genScore * 0.10;
+      sumWeights += 0.10;
+    }
+
+    // If literally no domain produced a usable score, there is nothing real to
+    // report — leave it null (pending) rather than presenting a fabricated number.
+    const rawCrossDomainScore = sumWeights > 0 ? (sumScores / sumWeights) : null;
+
+    // STI safety gate applied directly to the real composite score — not just to a
+    // display-layer copy of it — so it's structurally impossible for a positive/reactive
+    // infectious-disease result to be diluted or bypassed anywhere downstream (the DB
+    // column, the report page, the PDF, and the match list all ultimately derive from
+    // this one gated value).
+    const stiGate = reportSummaryService.checkSTISafetyGate(detailsForPresentation);
+    const crossDomainScore = stiGate.triggered
+      ? Math.min(rawCrossDomainScore !== null ? rawCrossDomainScore : 50, 50)
+      : rawCrossDomainScore;
+
+    detailsForPresentation.compiled_compatibility_score = crossDomainScore;
+
+    const { presentation, assets } = reportSummaryService.mapPresentation(
+      chronicResult,
+      mfrResult,
+      mentalResult,
+      detailsForPresentation
+    );
+    presentation.report_assets = assets;
+
+    const compatibilityScore = crossDomainScore !== null ? crossDomainScore / 100 : null;
+
+    return { compatibilityScore, crossDomainScore, presentation, assets };
+  }
+
   /**
    * Orchestrates the entire match compilation flow: clinical calculations, presentation mapping, AI narratives, and DB saving.
    */
@@ -24,100 +159,14 @@ class ReportGenerationService {
     logger.info(`Orchestrator: Compiling report for match ${matchId}...`);
 
     try {
-      // Fetch each partner's own radiology analysis by identity (radiology reports
-      // aren't linked by report ID — they're looked up the same way the PDF renderer
-      // does, by patient name/slay-id — a previous version of this queried
-      // radiology_reports using the *pathology* report ID, which is a different
-      // table's ID space and essentially never matched, silently dropping the whole
-      // radiology domain out of the score).
-      let hasRadiology = false;
-      let radScore = null;
-      try {
-        const [maleRad, femaleRad] = await Promise.all([
-          radiologyLookupService.fetchRadiologyByIdentity(null, maleManual?.name),
-          radiologyLookupService.fetchRadiologyByIdentity(null, femaleManual?.name)
-        ]);
-
-        const partnerScores = [maleRad, femaleRad]
-          .map((rad) => rad?.scores_json?.radiology_nuptia_contribution)
-          .filter((c) => typeof c === 'number');
-
-        if (partnerScores.length > 0) {
-          radScore = (partnerScores.reduce((sum, c) => sum + (c / 30) * 100, 0)) / partnerScores.length;
-          hasRadiology = true;
-        }
-      } catch (radErr) {
-        logger.warn(`Failed to fetch radiology score for compilation: ${radErr.message}`);
-      }
-
-      // 1. Run deterministic Presentation & Summary mapping
-      const { presentation, assets } = reportSummaryService.mapPresentation(
+      const { compatibilityScore, presentation } = await this.computeGatedComposite({
         chronicResult,
         mfrResult,
         mentalResult,
-        {
-          male_data: chronicResult?.details?.male_data || {},
-          female_data: chronicResult?.details?.female_data || {},
-          male_manual_data: maleManual,
-          female_manual_data: femaleManual,
-          shared_lifestyle: sharedLifestyle,
-          radiology_report_id: hasRadiology || null
-        }
-      );
-
-      const hasGenetic = !!presentation.report_confidence?.domains?.genetic?.covered;
-      // A carrier-pair risk only clinically matters for an autosomal recessive condition
-      // like thalassemia when BOTH partners carry the trait (that's what puts a child at
-      // real risk) — a single carrier alongside a non-carrier partner is a much smaller
-      // concern. Score accordingly rather than treating "either partner flagged" the same
-      // as "both partners flagged".
-      let genScore = 100;
-      if (hasGenetic) {
-        const cpr = presentation.carrier_pair_risk || {};
-        const maleRed = cpr.thalassemia?.male_status === 'red';
-        const femaleRed = cpr.thalassemia?.female_status === 'red';
-        if (maleRed && femaleRed) {
-          genScore = 50;
-        } else if (maleRed || femaleRed) {
-          genScore = 75;
-        }
-      }
-
-      // Weights: Chronic=35%, Fertility=25%, Mental=20%, Radiology=10%, Genetics=10%
-      let sumScores = 0;
-      let sumWeights = 0;
-
-      if (chronicResult?.calculations?.coupleIndex) {
-        sumScores += chronicResult.calculations.coupleIndex * 0.35;
-        sumWeights += 0.35;
-      }
-      if (mfrResult?.p_12m_current) {
-        // mfrResult.p_12m_current is already 0-100 scale (see mfr.controller.js) — don't re-multiply by 100.
-        sumScores += mfrResult.p_12m_current * 0.25;
-        sumWeights += 0.25;
-      }
-      if (mentalResult?.overall_readiness?.score) {
-        sumScores += mentalResult.overall_readiness.score * 0.20;
-        sumWeights += 0.20;
-      }
-      if (hasRadiology) {
-        sumScores += radScore * 0.10;
-        sumWeights += 0.10;
-      }
-      if (hasGenetic) {
-        sumScores += genScore * 0.10;
-        sumWeights += 0.10;
-      }
-
-      // If literally no domain produced a usable score, there is nothing real to
-      // report — leave it null (pending) rather than presenting a fabricated number.
-      const crossDomainScore = sumWeights > 0 ? (sumScores / sumWeights) : null;
-      const compatibilityScore = crossDomainScore !== null ? crossDomainScore / 100 : null;
-
-      if (presentation && presentation.compatibility_score) {
-        presentation.compatibility_score.percentage = crossDomainScore !== null ? Math.round(crossDomainScore) : null;
-        presentation.compatibility_score.score = crossDomainScore !== null ? Math.round(crossDomainScore) : null;
-      }
+        maleManual,
+        femaleManual,
+        sharedLifestyle
+      });
 
       const analysisJson = {
         score: compatibilityScore,
@@ -135,8 +184,7 @@ class ReportGenerationService {
         }
       };
 
-      // Embed visual assets directly inside the presentation structure for easy transport
-      presentation.report_assets = assets;
+      // (visual assets are already embedded onto presentation.report_assets inside computeGatedComposite)
 
       // Add version metadata to the presentation structure
       presentation.versions = {

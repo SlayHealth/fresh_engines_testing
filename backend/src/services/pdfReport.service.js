@@ -384,10 +384,17 @@ function generatePDFReportStream(matchData) {
     if (typeof presentation === 'string') { try { presentation = JSON.parse(presentation); } catch (e) { presentation = {}; } }
   }
 
-  // Fallback checks for schema fields
-  const snapshot = presentation.relationship_snapshot || { score: 85, status: 'Good', color: 'green' };
-  const fp = presentation.family_planning || { stars: 4, rating: 'Very Good', annualChance: 85, monthsToConceive: '~5 months', details: {} };
-  const stiGate = presentation.sti_gate || { triggered: false, headline: 'The important screens came back clear', narrative: 'Standard screens are negative.', clinical_footnote: 'In your report: STD tests non-reactive.', badge: 'All clear', findings: [] };
+  // Fallback checks for schema fields. Only reached if mapPresentation threw or no
+  // presentation_json was ever persisted — in the normal path this data already came
+  // from the same gated computation compileMatchReport/analyzeMental use (see
+  // reportGeneration.service.js's computeGatedComposite). Previously these fallbacks
+  // fabricated a specific confident result (85/Good, 85% conception chance in ~5
+  // months, and — most seriously — a false "STD tests non-reactive" claim for a
+  // couple whose infectious-disease screening was never actually confirmed) instead
+  // of honestly reporting that this section couldn't be generated.
+  const snapshot = presentation.relationship_snapshot || { score: null, status: 'Pending', color: 'gray' };
+  const fp = presentation.family_planning || { stars: null, rating: 'Not yet assessed', annualChance: null, monthsToConceive: null, details: {} };
+  const stiGate = presentation.sti_gate || { triggered: false, headline: 'Infection screening unavailable', narrative: 'This report could not confirm infectious-disease screening results from the available data — this is not confirmation of a clear result.', clinical_footnote: 'Screening status unavailable.', badge: 'Not assessed', findings: [] };
   const bh = presentation.body_health || {};
   const cpr = presentation.carrier_pair_risk || {};
   const reportConfidence = presentation.report_confidence || {
@@ -504,7 +511,7 @@ function generatePDFReportStream(matchData) {
   const colWidth = (confW - 32) / 3;
   
   // Score
-  doc.fontSize(16).font('Times-Bold').fillColor(PALETTE.forestGreen).text(`${snapshot.score}`, 46, statColY);
+  doc.fontSize(16).font('Times-Bold').fillColor(PALETTE.forestGreen).text(snapshot.score !== null && snapshot.score !== undefined ? `${snapshot.score}` : 'N/A', 46, statColY);
   doc.fontSize(6).font('Helvetica-Bold').fillColor(PALETTE.textDim).text('COMPATIBILITY', 46, statColY + 18, { characterSpacing: 0.3 });
   
   // Overall Rating
@@ -526,7 +533,8 @@ function generatePDFReportStream(matchData) {
   const fertN = fp.rating === 'Excellent' || fp.rating === 'Very Good' 
     ? 'Both of you have healthy fertility signs for your age. If you decide to try, the timing is likely to be kind — most couples like you conceive within about five months.' 
     : 'Some parameters indicate family planning screening or tracking would benefit you two.';
-  const fertF = `The estimate: ~${fp.annualChance}% chance of conceiving within 12 months — a guide, not a promise. In your report: ovarian reserve is ${getOvarianReserveText(femalePathology, mfr, femaleM)} and semen quality is ${getSemenText(malePathology, mfr, maleM)}.`;
+  const fertChanceText = fp.annualChance !== null && fp.annualChance !== undefined ? `~${fp.annualChance}%` : 'not yet calculated';
+  const fertF = `The estimate: ${fertChanceText} chance of conceiving within 12 months — a guide, not a promise. In your report: ovarian reserve is ${getOvarianReserveText(femalePathology, mfr, femaleM)} and semen quality is ${getSemenText(malePathology, mfr, maleM)}.`;
   const fertB = fp.rating === 'Excellent' || fp.rating === 'Very Good' ? 'Strong' : 'Worth a look';
   
   const c1H = drawNarrativeCard(doc, 30, findingsStartY, confW, 'Starting a family', fertH, fertN, fertF, fertB, 'Frt');
@@ -645,7 +653,7 @@ function generatePDFReportStream(matchData) {
     { label: 'Kidney Function', mText: bh.kidney?.male_value || 'Normal', fText: bh.kidney?.female_value || 'Normal', mStatus: bh.kidney?.male_status || 'green', fStatus: bh.kidney?.female_status || 'green', showBar: false },
     { label: 'Hormonal Baseline', mText: bh.hormones?.male_value || 'Normal', fText: bh.hormones?.female_value || 'Normal', mStatus: bh.hormones?.male_status || 'green', fStatus: bh.hormones?.female_status || 'green', showBar: false },
     { label: 'Vitamins & Micronutrients', mText: bh.vitamins?.male_value || 'Normal', fText: bh.vitamins?.female_value || 'Normal', mStatus: bh.vitamins?.male_status || 'green', fStatus: bh.vitamins?.female_status || 'green', showBar: false },
-    { label: '12-Month Conception Probability', mText: '—', fText: `~${fp.annualChance}%`, mBar: 0, fBar: fp.annualChance / 100, color: PALETTE.gold, showBar: true }
+    { label: '12-Month Conception Probability', mText: '—', fText: fp.annualChance !== null && fp.annualChance !== undefined ? `~${fp.annualChance}%` : 'Not yet assessed', mBar: 0, fBar: (fp.annualChance || 0) / 100, color: PALETTE.gold, showBar: true }
   ];
 
   let cmpY = cmpHdrY + 25;
@@ -799,19 +807,25 @@ function generatePDFReportStream(matchData) {
   doc.fontSize(9.5).font('Times-Bold').fillColor(PALETTE.forestGreen).text('Genetic Carrier-Pair Overlap', 30, panelY);
   panelY += 14;
   
-  const hasGen = cpr.thalassemia?.male_status !== 'green' || cpr.thalassemia?.female_status !== 'green' || cpr.hemoglobin_variant?.male_status !== 'green' || cpr.hemoglobin_variant?.female_status !== 'green';
-  
+  // A genuinely missing status (undefined, when carrier_pair_risk wasn't computed at
+  // all) previously satisfied `!== 'green'` just as a real 'red'/'yellow' finding
+  // would, which both mis-triggered this "overlap observed" card for a couple with no
+  // data at all, and then crashed below calling .toUpperCase() on the missing status.
+  const isRealNonGreen = (status) => !!status && status !== 'green';
+  const hasGen = isRealNonGreen(cpr.thalassemia?.male_status) || isRealNonGreen(cpr.thalassemia?.female_status) ||
+                 isRealNonGreen(cpr.hemoglobin_variant?.male_status) || isRealNonGreen(cpr.hemoglobin_variant?.female_status);
+
   if (hasGen) {
     const genH = 68;
     drawRoundedCard(doc, 30, panelY, confW, genH, 8);
     drawCardAccentBorder(doc, 30, panelY, genH, PALETTE.gold);
-    
+
     let riskStr = [];
-    if (cpr.thalassemia?.male_status !== 'green' || cpr.thalassemia?.female_status !== 'green') {
-      riskStr.push(`Thalassemia: Male status is ${cpr.thalassemia.male_status.toUpperCase()} | Female is ${cpr.thalassemia.female_status.toUpperCase()}. ${cpr.thalassemia.summary || ''}`);
+    if (isRealNonGreen(cpr.thalassemia?.male_status) || isRealNonGreen(cpr.thalassemia?.female_status)) {
+      riskStr.push(`Thalassemia: Male status is ${(cpr.thalassemia.male_status || 'unknown').toUpperCase()} | Female is ${(cpr.thalassemia.female_status || 'unknown').toUpperCase()}. ${cpr.thalassemia.summary || ''}`);
     }
-    if (cpr.hemoglobin_variant?.male_status !== 'green' || cpr.hemoglobin_variant?.female_status !== 'green') {
-      riskStr.push(`Hb Variant: Male is ${cpr.hemoglobin_variant.male_status.toUpperCase()} | Female is ${cpr.hemoglobin_variant.female_status.toUpperCase()}. ${cpr.hemoglobin_variant.summary || ''}`);
+    if (isRealNonGreen(cpr.hemoglobin_variant?.male_status) || isRealNonGreen(cpr.hemoglobin_variant?.female_status)) {
+      riskStr.push(`Hb Variant: Male is ${(cpr.hemoglobin_variant.male_status || 'unknown').toUpperCase()} | Female is ${(cpr.hemoglobin_variant.female_status || 'unknown').toUpperCase()}. ${cpr.hemoglobin_variant.summary || ''}`);
     }
     
     doc.fontSize(8.5).font('Helvetica-Bold').fillColor(PALETTE.text).text('CARRIER TRAIT OVERLAP OBSERVED', 42, panelY + 10);
@@ -871,7 +885,15 @@ function generatePDFReportStream(matchData) {
   
   doc.fontSize(8.5).font('Helvetica-Bold').fillColor(PALETTE.gold).text('PSYCHOLOGICAL HARMONY ANALYSIS', 30, p5CardY);
   p5CardY += 12;
-  const relSummary = mental?.summary || 'Personality indices indicate optimal compatibility. Behavioral profiles demonstrate low relational stress, robust emotional support patterns, and highly compatible conflict styles.';
+  // mental.controller.js's computeMentalResult never actually produces a top-level
+  // `summary` field (its real shape is overall_readiness/pillar_scores/couple_analysis)
+  // — so `mental?.summary` was always undefined and this hardcoded, specific-sounding
+  // "optimal compatibility" claim rendered for every couple regardless of whether they
+  // even completed the Mental Wellbeing questionnaire. Build a real sentence from the
+  // actual result shape instead, or say plainly that it wasn't completed.
+  const relSummary = mental?.overall_readiness?.label
+    ? `${mental.overall_readiness.label} — ${mental.overall_readiness.score}/100 alignment. ${(mental.couple_analysis?.strengths || []).slice(0, 2).join(' ')}`.trim()
+    : 'Mental Wellbeing questionnaire not completed — this section could not be generated.';
   doc.fontSize(8).font('Helvetica').fillColor(PALETTE.textMuted).text(cleanPDFText(relSummary), 30, p5CardY, { width: confW, lineGap: 3 });
   
   // 90-Day Roadmap Section

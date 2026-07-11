@@ -1,39 +1,11 @@
 const logger = require('../../utils/logger');
+const { classifyOvarianReserve } = require('../../controllers/mfr.controller');
 
 /**
- * Helper to flatten pathology parameters for easy access
- */
-function getFlatParams(details) {
-  const params = {};
-  if (!details) return params;
-
-  // Helper function to extract params recursively
-  function extract(obj) {
-    if (!obj || typeof obj !== 'object') return;
-    for (const key of Object.keys(obj)) {
-      const field = obj[key];
-      if (field && typeof field === 'object' && field.value !== undefined) {
-        const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        params[normKey] = parseFloat(field.value) || field.value;
-      } else if (field && typeof field === 'object') {
-        extract(field);
-      }
-    }
-  }
-
-  // Extract from raw/extracted pathology data
-  extract(details.male_data);
-  extract(details.female_data);
-  extract(details.male_manual_data);
-  extract(details.female_manual_data);
-
-  return params;
-}
-
-/**
- * Finds a single named parameter within one partner's extracted pathology data
- * (kept separate per-partner, unlike getFlatParams which merges both partners
- * into one dict and would let one partner's value silently overwrite the other's).
+ * Finds a single named parameter within one partner's extracted pathology data.
+ * Deliberately kept per-partner (never merged into one shared dict) — a couple where,
+ * say, only the male partner has elevated LDL must not have that value silently
+ * overwritten or averaged away by the female partner's own separate reading.
  */
 function findPartnerParam(partnerData, canonicalName) {
   if (!partnerData || typeof partnerData !== 'object') return null;
@@ -44,6 +16,29 @@ function findPartnerParam(partnerData, canonicalName) {
     }
   }
   return null;
+}
+
+/** Numeric convenience wrapper around findPartnerParam — null (not NaN/0) when absent,
+ * so callers can tell "genuinely not tested" apart from "tested and came back zero". */
+function getPartnerNumeric(partnerData, canonicalName) {
+  const val = parseFloat(findPartnerParam(partnerData, canonicalName)?.value);
+  return isNaN(val) ? null : val;
+}
+
+/**
+ * HbA1c (%) is the standard sugar marker. If it's missing but estimated average
+ * glucose (mg/dL) was reported instead, convert it back to an HbA1c-equivalent via the
+ * standard ADA relationship (HbA1c% = (eAG + 46.7) / 28.7) rather than comparing the
+ * two different units directly — mixing them (e.g. via Math.max on the raw numbers,
+ * the previous approach) compares a value typically 4-14 against one typically
+ * 70-300, so the mg/dL figure would always "win" and falsely trip the elevated-sugar
+ * threshold whenever eAG was present at all, regardless of its actual value.
+ */
+function getPartnerHba1c(partnerData) {
+  const direct = getPartnerNumeric(partnerData, 'hba1c');
+  if (direct !== null) return direct;
+  const eag = getPartnerNumeric(partnerData, 'estimated_average_glucose_eag');
+  return eag !== null ? (eag + 46.7) / 28.7 : null;
 }
 
 /**
@@ -218,7 +213,6 @@ class ReportSummaryService {
   mapPresentation(chronicResult, mfrResult, mentalResult, details = {}) {
     logger.info('Mapping clinical results to deterministic presentation layout...');
 
-    const flatParams = getFlatParams(details);
     const detailsFlat = details || {};
     const hasRadiology = !!(detailsFlat.male_manual_data?.uterineLining || detailsFlat.female_manual_data?.uterineLining || detailsFlat.radiology_report_id || detailsFlat.maleRadiology || detailsFlat.femaleRadiology);
     const carrierRisk = evaluateThalassemiaCarrierRisk(detailsFlat.male_data, detailsFlat.female_data);
@@ -226,6 +220,35 @@ class ReportSummaryService {
     const hasMental = !!(
       mentalResult || detailsFlat.male_manual_data?.communication || detailsFlat.female_manual_data?.communication
     );
+
+    // Per-partner lab values for the body-health cards below (real canonical names,
+    // read independently per partner — see getPartnerNumeric's doc comment for why).
+    const maleData = detailsFlat.male_data;
+    const femaleData = detailsFlat.female_data;
+    const maleHba1c = getPartnerHba1c(maleData);
+    const femaleHba1c = getPartnerHba1c(femaleData);
+    const maleLdl = getPartnerNumeric(maleData, 'low_density_lipoprotein_cholesterol_ldl_c');
+    const femaleLdl = getPartnerNumeric(femaleData, 'low_density_lipoprotein_cholesterol_ldl_c');
+    const maleAlt = getPartnerNumeric(maleData, 'alanine_aminotransferase_sgpt_alt');
+    const femaleAlt = getPartnerNumeric(femaleData, 'alanine_aminotransferase_sgpt_alt');
+    const maleCreatinine = getPartnerNumeric(maleData, 'serum_creatinine');
+    const femaleCreatinine = getPartnerNumeric(femaleData, 'serum_creatinine');
+    const maleBun = getPartnerNumeric(maleData, 'blood_urea_nitrogen_bun');
+    const femaleBun = getPartnerNumeric(femaleData, 'blood_urea_nitrogen_bun');
+    const maleTsh = getPartnerNumeric(maleData, 'thyroid_stimulating_hormone_tsh_utsh');
+    const femaleTsh = getPartnerNumeric(femaleData, 'thyroid_stimulating_hormone_tsh_utsh');
+    const femaleAmh = getPartnerNumeric(femaleData, 'amh');
+    const femaleAge = mfrResult?.details?.female_age;
+    // Reuse the real, age-banded ovarian-reserve model from the fertility engine
+    // instead of a second, age-blind AMH cutoff that could disagree with it for the
+    // exact same value — only call it when a real age is available, since the
+    // function's own age-band branching silently falls through to its oldest (40+)
+    // band for an undefined age.
+    const femaleReserveClass = (femaleAmh !== null && typeof femaleAge === 'number')
+      ? classifyOvarianReserve(femaleAmh, undefined, femaleAge)
+      : null;
+    const maleVitD = getPartnerNumeric(maleData, 'vitamin_d_3_25_hydroxy');
+    const femaleVitD = getPartnerNumeric(femaleData, 'vitamin_d_3_25_hydroxy');
 
     // 1. Confidence Level
     let overallConfidence = 58;
@@ -319,35 +342,54 @@ class ReportSummaryService {
     const strengths = [];
     const opportunities = [];
 
-    // Evaluate Sugar
-    const maxHba1c = Math.max(flatParams.hba1c || 0, flatParams.estimated_average_glucose || 0);
-    if (maxHba1c > 0 && maxHba1c < 5.7) {
-      strengths.push({ title: 'Optimal Sugar Regulation', description: 'Both of you have HbA1c levels well inside the healthy range.' });
-    } else if (maxHba1c >= 5.7) {
-      opportunities.push({ title: 'Elevated Sugar Baseline', description: 'Early glucose monitoring and sugar moderation is advised for you two.' });
+    // Evaluate Sugar (HbA1c, real per-partner values — see getPartnerHba1c for why
+    // eAG is converted rather than compared against HbA1c directly)
+    const hba1cValues = [maleHba1c, femaleHba1c].filter((v) => v !== null);
+    if (hba1cValues.length > 0) {
+      const maxHba1c = Math.max(...hba1cValues);
+      if (maxHba1c < 5.7) {
+        strengths.push({ title: 'Optimal Sugar Regulation', description: 'Both of you have HbA1c levels well inside the healthy range.' });
+      } else {
+        opportunities.push({ title: 'Elevated Sugar Baseline', description: 'Early glucose monitoring and sugar moderation is advised for you two.' });
+      }
     }
 
-    // Evaluate Cholesterol
-    const maxLdl = flatParams.ldl || 0;
-    if (maxLdl > 0 && maxLdl < 100) {
-      strengths.push({ title: 'Healthy Lipids Baseline', description: 'Excellent cardiovascular and cholesterol parameters for both of you.' });
-    } else if (maxLdl >= 100) {
-      opportunities.push({ title: 'Lipid Management Needed', description: 'Slightly elevated LDL cholesterol; active tracking is recommended.' });
+    // Evaluate Cholesterol (LDL, aligned to the same ATP-III bands chronic.controller.js
+    // already uses — Borderline 130-159, High >=160 — instead of an unrelated >=100
+    // cutoff that would disagree with the chronic engine's own read of the same value)
+    const ldlValues = [maleLdl, femaleLdl].filter((v) => v !== null);
+    if (ldlValues.length > 0) {
+      const maxLdl = Math.max(...ldlValues);
+      if (maxLdl < 130) {
+        strengths.push({ title: 'Healthy Lipids Baseline', description: 'Excellent cardiovascular and cholesterol parameters for both of you.' });
+      } else {
+        opportunities.push({ title: 'Lipid Management Needed', description: 'Slightly elevated LDL cholesterol; active tracking is recommended.' });
+      }
     }
 
-    // Evaluate Ovarian Reserve
-    const ovarianReserve = mfrResult?.details?.female_ovarian_reserve || 'Normal';
+    // Evaluate Ovarian Reserve — mfrResult.details.female_ovarian_reserve is NOT itself
+    // a reliable signal that real data exists: mfr.controller.js needs *some* baseline
+    // for its own conception-probability math, so that field defaults internally to
+    // 'Normal' the moment mfrResult exists at all, even when no AMH/AFC was ever found
+    // and no manual value was ever entered. detected_reserve_from_pathology is the
+    // honest "did we actually find this in a report" signal; a manual override is also
+    // genuine real data. Only trust 'Normal' as an actual strength when one of those
+    // two real sources backs it — otherwise this silently claimed "Strong Ovarian
+    // Reserve" for every couple regardless of whether fertility was assessed at all.
+    const hasRealOvarianData = !!(mfrResult?.details?.detected_reserve_from_pathology) || !!(detailsFlat.female_manual_data?.ovarianReserve);
+    const ovarianReserve = hasRealOvarianData ? (mfrResult?.details?.female_ovarian_reserve || null) : null;
     if (ovarianReserve === 'Normal' || ovarianReserve === 'High for age') {
       strengths.push({ title: 'Strong Ovarian Reserve', description: 'Her ovarian reserve markers indicate standard egg counts for age.' });
-    } else {
+    } else if (ovarianReserve) {
       opportunities.push({ title: 'Low Ovarian Indicators', description: 'Her biological egg reserve is slightly below baseline.' });
     }
 
-    // Evaluate Semen
-    const semenQuality = mfrResult?.details?.male_semen_quality || 'Normal';
+    // Evaluate Semen — same honesty principle as ovarian reserve above.
+    const hasRealSemenData = !!(mfrResult?.details?.detected_semen_from_pathology) || !!(detailsFlat.male_manual_data?.semenQuality);
+    const semenQuality = hasRealSemenData ? (mfrResult?.details?.male_semen_quality || null) : null;
     if (semenQuality === 'Normal') {
       strengths.push({ title: 'Healthy Sperm Parameters', description: 'His semen analysis shows optimal sperm count and motility.' });
-    } else {
+    } else if (semenQuality) {
       opportunities.push({ title: 'Semen Analysis Deficit', description: 'His sperm motility or count is slightly below reference ranges.' });
     }
 
@@ -385,163 +427,229 @@ class ReportSummaryService {
       opportunities.push({ title: 'Hydration & Micros', description: 'Maintain optimal hydration levels and electrolyte balance.' });
     }
 
-    // Family Planning
-    const rawP12 = mfrResult?.p_12m_current ?? mfrResult?.calculations?.p_12m_current ?? 0.85;
-    const p12 = rawP12 > 1 ? rawP12 / 100 : rawP12;
-    
-    let FPStars = 5;
-    let FPRating = 'Excellent';
-    if (p12 < 0.3) {
-      FPStars = 2;
-      FPRating = 'Requires Guidance';
-    } else if (p12 < 0.5) {
-      FPStars = 3;
-      FPRating = 'Fair';
-    } else if (p12 < 0.8) {
-      FPStars = 4;
-      FPRating = 'Very Good';
+    // Family Planning — if the fertility engine hasn't actually produced a score
+    // (mfrResult missing or incomplete), there is nothing real to report. Previously
+    // this silently fell back to a fabricated 85% conception chance, a "~5 months"
+    // timeline, and default ages 28/30 — all presented as if genuinely computed for
+    // this specific couple.
+    const rawP12 = mfrResult?.p_12m_current ?? mfrResult?.calculations?.p_12m_current;
+    const hasFertilityScore = typeof rawP12 === 'number';
+    const p12 = hasFertilityScore ? (rawP12 > 1 ? rawP12 / 100 : rawP12) : null;
+
+    let FPStars = null;
+    let FPRating = 'Not yet assessed';
+    if (hasFertilityScore) {
+      FPStars = 5;
+      FPRating = 'Excellent';
+      if (p12 < 0.3) {
+        FPStars = 2;
+        FPRating = 'Requires Guidance';
+      } else if (p12 < 0.5) {
+        FPStars = 3;
+        FPRating = 'Fair';
+      } else if (p12 < 0.8) {
+        FPStars = 4;
+        FPRating = 'Very Good';
+      }
     }
 
     const familyPlanning = {
       stars: FPStars,
       rating: FPRating,
-      annualChance: Math.round(p12 * 100),
-      monthsToConceive: mfrResult?.time_to_conceive || '~5 months',
+      annualChance: hasFertilityScore ? Math.round(p12 * 100) : null,
+      monthsToConceive: mfrResult?.time_to_conceive || null,
       details: {
-        femaleAge: mfrResult?.details?.female_age || 28,
-        ovarianReserve: ovarianReserve,
-        maleAge: mfrResult?.details?.male_age || 30,
-        semenQuality: semenQuality
+        femaleAge: mfrResult?.details?.female_age ?? null,
+        ovarianReserve: ovarianReserve || 'Not assessed',
+        maleAge: mfrResult?.details?.male_age ?? null,
+        semenQuality: semenQuality || 'Not assessed'
       }
     };
 
-    // Body Health System Cards
-    const maxCreatinine = flatParams.serum_creatinine || 0;
-    const maxBun = flatParams.blood_urea_nitrogen || flatParams.bun || 0;
-    let kidneyStatus = 'green';
-    let kidneyHeadline = 'Kidneys filtering beautifully';
-    let kidneyNarrative = 'Your filtration rates show both of you have excellent kidney function.';
-    let kidneyFootnote = 'In your report: Creatinine and BUN levels are completely normal.';
-    let kidneyNext = 'All clear — maintain your current habits.';
-    
-    if (maxCreatinine > 1.2 || maxBun > 25) {
-      kidneyStatus = (maxCreatinine > 2.0 || maxBun > 50) ? 'red' : 'yellow';
-      kidneyHeadline = 'Kidney function needs attention';
-      kidneyNarrative = 'Kidney filtration shows elevated biomarkers. Increased hydration is advised.';
-      kidneyFootnote = `In your report: BUN: ${maxBun || 'N/A'}, Creatinine: ${maxCreatinine || 'N/A'}`;
-      kidneyNext = 'Increase daily fluid intake to 3L and consult a physician.';
-    }
+    // Body Health System Cards — each partner scored independently from their own real
+    // lab values (not merged into one shared reading), and marked 'gray' rather than
+    // silently defaulting to "healthy" when a value was never actually tested.
+    const classifyLevel = (val, borderline, high) => {
+      if (val === null) return 'gray';
+      if (high !== undefined && val >= high) return 'red';
+      if (val >= borderline) return 'yellow';
+      return 'green';
+    };
+    const classifyKidney = (creatinine, bun) => {
+      if (creatinine === null && bun === null) return 'gray';
+      const cr = creatinine ?? 0;
+      const bunVal = bun ?? 0;
+      if (cr > 2.0 || bunVal > 50) return 'red';
+      if (cr > 1.2 || bunVal > 25) return 'yellow';
+      return 'green';
+    };
+    const classifyHormonesFor = (tsh, reserveClass) => {
+      if (tsh === null && reserveClass === null) return 'gray';
+      const tshAbnormal = tsh !== null && (tsh < 0.35 || tsh > 5.0);
+      const reserveAbnormal = reserveClass === 'Low' || reserveClass === 'Very Low';
+      return (tshAbnormal || reserveAbnormal) ? 'yellow' : 'green';
+    };
+    const classifyVitaminD = (val) => {
+      if (val === null) return 'gray';
+      return val < 30 ? 'yellow' : 'green';
+    };
 
-    const sugarStatus = (flatParams.hba1c && flatParams.hba1c >= 5.7) ? 'yellow' : 'green';
-    const heartStatus = (flatParams.ldl && flatParams.ldl >= 100) ? 'yellow' : 'green';
-    const liverStatus = (flatParams.sgpt_alt && flatParams.sgpt_alt > 40) ? 'yellow' : 'green';
-    const hormonesStatus = (flatParams.amh && flatParams.amh < 1.5) ? 'yellow' : 'green';
-    const vitaminsStatus = (flatParams.vitamin_d_3_25_hydroxy && flatParams.vitamin_d_3_25_hydroxy < 30) ? 'yellow' : 'green';
+    const sugarStatusM = classifyLevel(maleHba1c, 5.7, 6.5);
+    const sugarStatusF = classifyLevel(femaleHba1c, 5.7, 6.5);
+    const heartStatusM = classifyLevel(maleLdl, 130, 160);
+    const heartStatusF = classifyLevel(femaleLdl, 130, 160);
+    const liverStatusM = classifyLevel(maleAlt, 40);
+    const liverStatusF = classifyLevel(femaleAlt, 40);
+    const kidneyStatusM = classifyKidney(maleCreatinine, maleBun);
+    const kidneyStatusF = classifyKidney(femaleCreatinine, femaleBun);
+    const hormonesStatusM = classifyHormonesFor(maleTsh, null);
+    const hormonesStatusF = classifyHormonesFor(femaleTsh, femaleReserveClass);
+    const vitaminsStatusM = classifyVitaminD(maleVitD);
+    const vitaminsStatusF = classifyVitaminD(femaleVitD);
+
+    const anyAbnormal = (m, f) => m === 'yellow' || m === 'red' || f === 'yellow' || f === 'red';
+    const bothUntested = (m, f) => m === 'gray' && f === 'gray';
 
     const getBadge = (mStatus, fStatus, domain) => {
-      if (mStatus === 'yellow' || mStatus === 'red' || fStatus === 'yellow' || fStatus === 'red') {
-        return 'Worth a look';
-      }
+      if (bothUntested(mStatus, fStatus)) return 'Not assessed';
+      if (anyAbnormal(mStatus, fStatus)) return 'Worth a look';
       if (domain === 'fertility') return 'Strong';
       if (domain === 'infections') return 'All clear';
       if (domain === 'lifestyle') return 'Well matched';
       return 'Healthy';
     };
 
+    const fmtVal = (val, unit) => (val === null ? 'Not tested' : `${val}${unit}`);
+
     const bodyHealth = {
       sugar: {
-        male_status: sugarStatus,
-        female_status: sugarStatus,
-        male_value: flatParams.hba1c ? `${flatParams.hba1c}%` : 'Normal',
-        female_value: flatParams.hba1c ? `${flatParams.hba1c}%` : 'Normal',
-        headline: sugarStatus === 'yellow' ? 'Sugar levels are borderline' : 'In a healthy place — both of you',
-        narrative: sugarStatus === 'yellow' 
-          ? 'HbA1c shows borderline sugar metabolism levels. Moderation in carbs is recommended.'
-          : 'Your day-to-day sugar levels look steady. Nothing to change here.',
-        clinical_footnote: `In your report: HbA1c average blood sugar levels are ${flatParams.hba1c ? `${flatParams.hba1c}%` : 'normal'}.`,
-        badge: getBadge(sugarStatus, sugarStatus, 'sugar'),
-        next_action: sugarStatus === 'yellow'
+        male_status: sugarStatusM,
+        female_status: sugarStatusF,
+        male_value: fmtVal(maleHba1c !== null ? Math.round(maleHba1c * 10) / 10 : null, '%'),
+        female_value: fmtVal(femaleHba1c !== null ? Math.round(femaleHba1c * 10) / 10 : null, '%'),
+        headline: anyAbnormal(sugarStatusM, sugarStatusF) ? 'Sugar levels are borderline' : bothUntested(sugarStatusM, sugarStatusF) ? 'Sugar levels not yet tested' : 'In a healthy place — both of you',
+        narrative: anyAbnormal(sugarStatusM, sugarStatusF)
+          ? 'HbA1c shows borderline sugar metabolism levels for at least one of you. Moderation in carbs is recommended.'
+          : bothUntested(sugarStatusM, sugarStatusF)
+            ? 'Neither report included an HbA1c or blood glucose value, so this could not be assessed.'
+            : 'Your day-to-day sugar levels look steady. Nothing to change here.',
+        clinical_footnote: `In your report: HbA1c is ${fmtVal(maleHba1c !== null ? Math.round(maleHba1c * 10) / 10 : null, '%')} (male), ${fmtVal(femaleHba1c !== null ? Math.round(femaleHba1c * 10) / 10 : null, '%')} (female).`,
+        badge: getBadge(sugarStatusM, sugarStatusF, 'sugar'),
+        next_action: anyAbnormal(sugarStatusM, sugarStatusF)
           ? 'Reduce processed carb intake and retest in 3 months.'
-          : 'All clear — maintain your current habits.'
+          : bothUntested(sugarStatusM, sugarStatusF) ? 'Get an HbA1c test done for both of you.' : 'All clear — maintain your current habits.'
       },
       heart: {
-        male_status: heartStatus,
-        female_status: heartStatus,
-        male_value: flatParams.ldl ? `${flatParams.ldl} mg/dL` : 'Excellent',
-        female_value: flatParams.ldl ? `${flatParams.ldl} mg/dL` : 'Excellent',
-        headline: heartStatus === 'yellow' ? 'Cholesterol needs a look' : 'Your hearts are in good shape',
-        narrative: heartStatus === 'yellow'
-          ? 'LDL cholesterol is slightly above target thresholds. Consider diet adjustments.'
-          : 'Your cholesterol numbers support a healthy heart for both of you. Keep doing what you\'re doing.',
-        clinical_footnote: `In your report: LDL cholesterol is ${flatParams.ldl ? `${flatParams.ldl} mg/dL` : 'normal'}.`,
-        badge: getBadge(heartStatus, heartStatus, 'heart'),
-        next_action: heartStatus === 'yellow'
+        male_status: heartStatusM,
+        female_status: heartStatusF,
+        male_value: fmtVal(maleLdl, ' mg/dL'),
+        female_value: fmtVal(femaleLdl, ' mg/dL'),
+        headline: anyAbnormal(heartStatusM, heartStatusF) ? 'Cholesterol needs a look' : bothUntested(heartStatusM, heartStatusF) ? 'Cholesterol not yet tested' : 'Your hearts are in good shape',
+        narrative: anyAbnormal(heartStatusM, heartStatusF)
+          ? 'LDL cholesterol is slightly above target thresholds for at least one of you. Consider diet adjustments.'
+          : bothUntested(heartStatusM, heartStatusF)
+            ? 'Neither report included an LDL cholesterol value, so this could not be assessed.'
+            : 'Your cholesterol numbers support a healthy heart for both of you. Keep doing what you\'re doing.',
+        clinical_footnote: `In your report: LDL cholesterol is ${fmtVal(maleLdl, ' mg/dL')} (male), ${fmtVal(femaleLdl, ' mg/dL')} (female).`,
+        badge: getBadge(heartStatusM, heartStatusF, 'heart'),
+        next_action: anyAbnormal(heartStatusM, heartStatusF)
           ? 'Include healthy fats (nuts, olive oil) and track in 6 months.'
-          : 'All clear — maintain your current habits.'
+          : bothUntested(heartStatusM, heartStatusF) ? 'Get a lipid profile done for both of you.' : 'All clear — maintain your current habits.'
       },
       liver: {
-        male_status: liverStatus,
-        female_status: liverStatus,
-        male_value: flatParams.sgpt_alt ? `${flatParams.sgpt_alt} U/L` : 'Healthy',
-        female_value: flatParams.sgpt_alt ? `${flatParams.sgpt_alt} U/L` : 'Healthy',
-        headline: liverStatus === 'yellow' ? 'Liver enzymes mildly elevated' : 'Liver function is healthy',
-        narrative: liverStatus === 'yellow'
-          ? 'Slightly elevated ALT suggests mild fatty liver indicators.'
-          : 'ALT/AST enzymes indicate standard liver detox pathways.',
-        clinical_footnote: `In your report: ALT enzyme level is ${flatParams.sgpt_alt ? `${flatParams.sgpt_alt} U/L` : 'normal'}.`,
-        badge: getBadge(liverStatus, liverStatus, 'liver'),
-        next_action: liverStatus === 'yellow'
+        male_status: liverStatusM,
+        female_status: liverStatusF,
+        male_value: fmtVal(maleAlt, ' U/L'),
+        female_value: fmtVal(femaleAlt, ' U/L'),
+        headline: anyAbnormal(liverStatusM, liverStatusF) ? 'Liver enzymes mildly elevated' : bothUntested(liverStatusM, liverStatusF) ? 'Liver enzymes not yet tested' : 'Liver function is healthy',
+        narrative: anyAbnormal(liverStatusM, liverStatusF)
+          ? 'Slightly elevated ALT suggests mild fatty liver indicators for at least one of you.'
+          : bothUntested(liverStatusM, liverStatusF)
+            ? 'Neither report included an ALT (SGPT) value, so this could not be assessed.'
+            : 'ALT enzymes indicate standard liver detox pathways.',
+        clinical_footnote: `In your report: ALT enzyme level is ${fmtVal(maleAlt, ' U/L')} (male), ${fmtVal(femaleAlt, ' U/L')} (female).`,
+        badge: getBadge(liverStatusM, liverStatusF, 'liver'),
+        next_action: anyAbnormal(liverStatusM, liverStatusF)
           ? 'Minimize refined sugar consumption and retest in 6 months.'
-          : 'All clear — maintain your current habits.'
+          : bothUntested(liverStatusM, liverStatusF) ? 'Get a liver function test done for both of you.' : 'All clear — maintain your current habits.'
       },
       kidney: {
-        male_status: kidneyStatus,
-        female_status: kidneyStatus,
-        male_value: flatParams.serum_creatinine ? `${flatParams.serum_creatinine} mg/dL` : 'Healthy',
-        female_value: flatParams.serum_creatinine ? `${flatParams.serum_creatinine} mg/dL` : 'Healthy',
-        headline: kidneyHeadline,
-        narrative: kidneyNarrative,
-        clinical_footnote: kidneyFootnote,
-        badge: getBadge(kidneyStatus, kidneyStatus, 'kidney'),
-        next_action: kidneyNext
+        male_status: kidneyStatusM,
+        female_status: kidneyStatusF,
+        male_value: fmtVal(maleCreatinine, ' mg/dL'),
+        female_value: fmtVal(femaleCreatinine, ' mg/dL'),
+        headline: anyAbnormal(kidneyStatusM, kidneyStatusF) ? 'Kidney function needs attention' : bothUntested(kidneyStatusM, kidneyStatusF) ? 'Kidney function not yet tested' : 'Kidneys filtering beautifully',
+        narrative: anyAbnormal(kidneyStatusM, kidneyStatusF)
+          ? 'Kidney filtration shows elevated biomarkers for at least one of you. Increased hydration is advised.'
+          : bothUntested(kidneyStatusM, kidneyStatusF)
+            ? 'Neither report included creatinine or BUN values, so this could not be assessed.'
+            : 'Your filtration rates show both of you have excellent kidney function.',
+        clinical_footnote: `In your report: Creatinine is ${fmtVal(maleCreatinine, ' mg/dL')} (male), ${fmtVal(femaleCreatinine, ' mg/dL')} (female); BUN is ${fmtVal(maleBun, ' mg/dL')} (male), ${fmtVal(femaleBun, ' mg/dL')} (female).`,
+        badge: getBadge(kidneyStatusM, kidneyStatusF, 'kidney'),
+        next_action: anyAbnormal(kidneyStatusM, kidneyStatusF)
+          ? 'Increase daily fluid intake to 3L and consult a physician.'
+          : bothUntested(kidneyStatusM, kidneyStatusF) ? 'Get a kidney function test (creatinine/BUN) done for both of you.' : 'All clear — maintain your current habits.'
       },
       hormones: {
-        male_status: hormonesStatus,
-        female_status: hormonesStatus,
-        male_value: flatParams.amh ? `${flatParams.amh} ng/mL` : 'Normal',
-        female_value: flatParams.amh ? `${flatParams.amh} ng/mL` : 'Normal',
-        headline: hormonesStatus === 'yellow' ? 'Hormone balance check' : 'Hormones are nicely balanced',
-        narrative: hormonesStatus === 'yellow'
-          ? 'Ovarian reserve hormone (AMH) is slightly low for age.'
-          : 'Thyroid (TSH) and reserve hormones (AMH) are balanced.',
-        clinical_footnote: `In your report: AMH hormone is ${flatParams.amh ? `${flatParams.amh} ng/mL` : 'normal'}.`,
-        badge: getBadge(hormonesStatus, hormonesStatus, 'hormones'),
-        next_action: hormonesStatus === 'yellow'
-          ? 'Consult an endocrinologist for ovulation timing.'
-          : 'All clear — maintain your current habits.'
+        male_status: hormonesStatusM,
+        female_status: hormonesStatusF,
+        male_value: fmtVal(maleTsh, ' mIU/L TSH'),
+        female_value: femaleAmh !== null ? `${femaleAmh} ng/mL AMH` : fmtVal(femaleTsh, ' mIU/L TSH'),
+        headline: anyAbnormal(hormonesStatusM, hormonesStatusF) ? 'Hormone balance check' : bothUntested(hormonesStatusM, hormonesStatusF) ? 'Hormones not yet tested' : 'Hormones are nicely balanced',
+        narrative: anyAbnormal(hormonesStatusM, hormonesStatusF)
+          ? (femaleReserveClass === 'Low' || femaleReserveClass === 'Very Low'
+            ? `Her ovarian reserve hormone (AMH) reads ${femaleReserveClass.toLowerCase()} for her age.`
+            : 'Thyroid (TSH) levels are outside the typical range for at least one of you.')
+          : bothUntested(hormonesStatusM, hormonesStatusF)
+            ? 'Neither report included a thyroid (TSH) or AMH value, so this could not be assessed.'
+            : 'Thyroid (TSH) and, where tested, reserve hormones (AMH) are balanced.',
+        clinical_footnote: `In your report: TSH is ${fmtVal(maleTsh, ' mIU/L')} (male), ${fmtVal(femaleTsh, ' mIU/L')} (female); AMH is ${fmtVal(femaleAmh, ' ng/mL')} (female).`,
+        badge: getBadge(hormonesStatusM, hormonesStatusF, 'hormones'),
+        next_action: anyAbnormal(hormonesStatusM, hormonesStatusF)
+          ? 'Consult an endocrinologist for ovulation timing / thyroid follow-up.'
+          : bothUntested(hormonesStatusM, hormonesStatusF) ? 'Get a thyroid panel (and AMH, for her) done.' : 'All clear — maintain your current habits.'
       },
       vitamins: {
-        male_status: vitaminsStatus,
-        female_status: vitaminsStatus,
-        male_value: flatParams.vitamin_d_3_25_hydroxy ? `${flatParams.vitamin_d_3_25_hydroxy} ng/mL` : 'Optimal',
-        female_value: flatParams.vitamin_d_3_25_hydroxy ? `${flatParams.vitamin_d_3_25_hydroxy} ng/mL` : 'Optimal',
-        headline: vitaminsStatus === 'yellow' ? 'Vitamins need a quick look' : 'Vitamins are optimal',
-        narrative: vitaminsStatus === 'yellow'
-          ? 'Vitamin D levels indicate borderline or deficient state. Supplementation helps.'
-          : 'Sufficient Vitamin D and B12 nutrient values.',
-        clinical_footnote: `In your report: Vitamin D is ${flatParams.vitamin_d_3_25_hydroxy ? `${flatParams.vitamin_d_3_25_hydroxy} ng/mL` : 'optimal'}.`,
-        badge: getBadge(vitaminsStatus, vitaminsStatus, 'vitamins'),
-        next_action: vitaminsStatus === 'yellow'
+        male_status: vitaminsStatusM,
+        female_status: vitaminsStatusF,
+        male_value: fmtVal(maleVitD, ' ng/mL'),
+        female_value: fmtVal(femaleVitD, ' ng/mL'),
+        headline: anyAbnormal(vitaminsStatusM, vitaminsStatusF) ? 'Vitamins need a quick look' : bothUntested(vitaminsStatusM, vitaminsStatusF) ? 'Vitamin D not yet tested' : 'Vitamins are optimal',
+        narrative: anyAbnormal(vitaminsStatusM, vitaminsStatusF)
+          ? 'Vitamin D levels indicate a borderline or deficient state for at least one of you. Supplementation helps.'
+          : bothUntested(vitaminsStatusM, vitaminsStatusF)
+            ? 'Neither report included a Vitamin D value, so this could not be assessed.'
+            : 'Sufficient Vitamin D values for both of you.',
+        clinical_footnote: `In your report: Vitamin D is ${fmtVal(maleVitD, ' ng/mL')} (male), ${fmtVal(femaleVitD, ' ng/mL')} (female).`,
+        badge: getBadge(vitaminsStatusM, vitaminsStatusF, 'vitamins'),
+        next_action: anyAbnormal(vitaminsStatusM, vitaminsStatusF)
           ? 'Supplement 60K IU weekly for 8 weeks.'
-          : 'All clear — maintain your current habits.'
+          : bothUntested(vitaminsStatusM, vitaminsStatusF) ? 'Get a Vitamin D test done for both of you.' : 'All clear — maintain your current habits.'
       }
     };
 
-    // Lifestyle & Emotional
+    // Lifestyle & Emotional — communication/conflict/stress now driven by the real
+    // mental-compatibility pillar scores (marriageReadiness covers communication;
+    // riskFactors covers anger regulation/substance habits, the closest real proxy
+    // for conflict; emotionalHealth covers stress/coping) instead of three identical
+    // hardcoded values ("Balanced"/"Moderate Risk"/"Healthy Baseline") shown to every
+    // couple regardless of whether they even completed the Mental Wellbeing section.
+    const pillarAvg = (pillar) => (pillar && typeof pillar.A === 'number' && typeof pillar.B === 'number') ? Math.round((pillar.A + pillar.B) / 2) : null;
+    const pillarStatus = (score) => score === null ? 'gray' : (score >= 70 ? 'green' : score >= 45 ? 'yellow' : 'red');
+    const pillarCard = (score, assessedDescription) => ({
+      status: pillarStatus(score),
+      value: score !== null ? `${score}/100` : 'Not assessed',
+      description: score !== null ? assessedDescription : 'Complete the Mental Wellbeing questionnaire to unlock this.'
+    });
+
+    const communicationScore = pillarAvg(mentalResult?.pillar_scores?.marriageReadiness);
+    const conflictScore = pillarAvg(mentalResult?.pillar_scores?.riskFactors);
+    const stressScore = pillarAvg(mentalResult?.pillar_scores?.emotionalHealth);
+
     const lifestyle = {
-      communication: { status: 'green', value: 'Balanced', description: 'Constructive dialogue indicators.' },
-      conflict: { status: 'yellow', value: 'Moderate Risk', description: 'Minor style variances present.' },
-      stress: { status: 'green', value: 'Healthy Baseline', description: 'Stress management patterns align.' },
+      communication: pillarCard(communicationScore, 'Based on your marriage-readiness questionnaire answers.'),
+      conflict: pillarCard(conflictScore, 'Based on your composure & substance-habits questionnaire answers.'),
+      stress: pillarCard(stressScore, 'Based on your emotional-health questionnaire answers.'),
       habits: {
         status: activity === 'Sedentary' ? 'yellow' : 'green',
         value: activity,
@@ -584,6 +692,24 @@ class ReportSummaryService {
       }
     };
 
+    // A single fixed, reassuring synthesis line previously showed for every couple
+    // regardless of outcome — including alongside an active STI alert or an
+    // "Action Advised" status, which could read as a jarring, contradictory
+    // reassurance right next to a serious finding. Branch it on the same status the
+    // rest of the report already uses instead.
+    let coupleSynthesis;
+    if (stiTriggered) {
+      coupleSynthesis = 'An active infectious-disease marker was detected — please read the alert above first. The rest of this summary should be considered alongside that finding, not instead of it.';
+    } else if (coupleStatus === 'Action Advised') {
+      coupleSynthesis = 'A few clinical markers in this report are significant enough to warrant a specialist conversation before moving forward — see the flagged items below for specifics.';
+    } else if (coupleStatus === 'Good') {
+      coupleSynthesis = 'Your compatibility metrics are solid overall, with a few areas worth discussing together — see the opportunities below.';
+    } else if (coupleStatus === 'Pending') {
+      coupleSynthesis = 'Your compatibility snapshot is still being finalized — check back once more of your health profile is complete.';
+    } else {
+      coupleSynthesis = 'Your compatibility metrics are very encouraging. Your fertility baselines are standard for age, and your everyday lifestyles align well, with a couple of areas to watch to raise your alignment.';
+    }
+
     const presentation = {
       report_confidence: reportConfidence,
       relationship_snapshot: {
@@ -592,7 +718,7 @@ class ReportSummaryService {
         description: coupleStatusDescription,
         color: coupleStatusColor
       },
-      couple_synthesis: 'Your compatibility metrics are very encouraging. Your fertility baselines are standard for age, and your everyday lifestyles align well, with a couple of areas to watch to raise your alignment.',
+      couple_synthesis: coupleSynthesis,
       strengths: strengths.slice(0, 3),
       opportunities: [...stiOpportunities, ...opportunities].slice(0, Math.max(3, stiOpportunities.length)),
       sti_gate: {
@@ -626,3 +752,9 @@ class ReportSummaryService {
 }
 
 module.exports = new ReportSummaryService();
+// Exposed so reportGeneration.service.js (and anywhere else recomputing the overall
+// composite score, e.g. mental.controller.js's post-hoc recompute) can apply the exact
+// same genetics-scoring and STI-gate logic BEFORE calling mapPresentation, instead of
+// only being able to apply it to the presentation layer after the fact.
+module.exports.checkSTISafetyGate = checkSTISafetyGate;
+module.exports.evaluateThalassemiaCarrierRisk = evaluateThalassemiaCarrierRisk;
