@@ -11,13 +11,30 @@ function calculateRadiologyNuptiaContribution(aggregatedRecord, patientSex, pati
   let totalWeightedScore = 0;
   let totalWeight = 0;
 
-  // USG Abdomen
+  // USG Abdomen (a full abdomen scan already covers the same bladder/reproductive
+  // organs a standalone pelvis scan would, via the same compositeAbdominalScore call
+  // below — so USG_PELVIS is only scored as its own modality when there's no abdomen
+  // scan to fall back to, rather than double-counting the same organs under two
+  // different weights.)
   if (unified.USG_ABDOMEN || unified.USG_ABDOMEN_PELVIS) {
     const usgData = unified.USG_ABDOMEN || unified.USG_ABDOMEN_PELVIS;
     const usgScore = compositeAbdominalScore(usgData, patientSex, patientAge);
     const weight = schemaRegistry.getWeight('USG_ABDOMEN');
     scores.USG_ABDOMEN = usgScore;
     totalWeightedScore += usgScore * weight;
+    totalWeight += weight;
+  } else if (unified.USG_PELVIS) {
+    // USG_PELVIS was previously classified, scored for risk flags, and given a weight
+    // in schemaRegistry — but never actually read here, so a patient whose only scan
+    // was a standalone pelvis ultrasound got risk flags but zero score contribution
+    // and never appeared in modalities_scored. compositeAbdominalScore already
+    // degrades gracefully for the abdomen-only organs (liver/gallbladder/pancreas/
+    // spleen/kidneys) a pelvis scan doesn't cover — those are genuinely out of scope
+    // for this modality, not missing data, so scoring them as unremarkable is correct.
+    const pelvisScore = compositeAbdominalScore(unified.USG_PELVIS, patientSex, patientAge);
+    const weight = schemaRegistry.getWeight('USG_PELVIS');
+    scores.USG_PELVIS = pelvisScore;
+    totalWeightedScore += pelvisScore * weight;
     totalWeight += weight;
   }
 

@@ -29,7 +29,17 @@ function generateRiskFlags(findings, sex, age) {
     }
 
     // Fatty Liver
-    if (abdomenData.liver?.fatty_grade === 2) {
+    if (abdomenData.liver?.fatty_grade === 3) {
+      flags.push({
+        flag_id: 'FATTY_LIVER_3',
+        flag_label: 'Grade III Fatty Liver',
+        organ: 'liver',
+        severity: 'high',
+        fertility_relevance: age < 30 ? 'moderate' : 'low',
+        clinical_note: 'Severe fat accumulation.',
+        recommended_action: 'Physician consultation and lifestyle/diet changes.'
+      });
+    } else if (abdomenData.liver?.fatty_grade === 2) {
       flags.push({
         flag_id: 'FATTY_LIVER_2',
         flag_label: 'Grade II Fatty Liver',
@@ -51,8 +61,23 @@ function generateRiskFlags(findings, sex, age) {
       });
     }
 
-    // Prostate BPH
-    if (abdomenData.prostate?.grade === 'Grade_I') {
+    // Prostate BPH — the LLM extractor isn't constrained to an exact enum for this
+    // field (unlike most other categorical fields in the radiology schemas), so it can
+    // legitimately return "II", "Grade II", "Grade_II", "grade 2", etc. for the same
+    // finding. Normalize (strip "grade"/underscores/spaces, uppercase, convert a
+    // numeral to a roman numeral) before comparing instead of matching a handful of
+    // literal strings, which previously missed plain "II"/"III" entirely and could
+    // silently drop the single highest-severity prostate flag this system supports.
+    const normalizedGrade = (abdomenData.prostate?.grade || '')
+      .toString()
+      .toUpperCase()
+      .replace(/GRADE/g, '')
+      .replace(/[_\s]/g, '')
+      .replace(/^1$/, 'I')
+      .replace(/^2$/, 'II')
+      .replace(/^3$/, 'III');
+
+    if (normalizedGrade === 'I') {
       flags.push({
         flag_id: 'BPH_I',
         flag_label: 'Prostatomegaly Grade I',
@@ -62,10 +87,10 @@ function generateRiskFlags(findings, sex, age) {
         clinical_note: 'Mild enlargement.',
         recommended_action: 'Urology follow-up.'
       });
-    } else if (['Grade_II', 'Grade_III', 'Grade II', 'Grade III'].includes(abdomenData.prostate?.grade)) {
+    } else if (normalizedGrade === 'II' || normalizedGrade === 'III') {
       flags.push({
         flag_id: 'BPH_SEVERE',
-        flag_label: 'Prostatomegaly Grade ' + abdomenData.prostate.grade,
+        flag_label: 'Prostatomegaly Grade ' + normalizedGrade,
         organ: 'prostate',
         severity: 'high',
         fertility_relevance: 'high',
@@ -188,9 +213,16 @@ function generateRiskFlags(findings, sex, age) {
   // 5. DEXA findings
   const dexaData = findings.DEXA;
   if (dexaData?.lowest_t_score_value < -1.0) {
+    // Derive the WHO classification locally from the T-score itself (same bands as
+    // dexa.score.js) rather than trusting the LLM-extracted overall_who_classification
+    // field directly — that field isn't schema-constrained to be non-null, and this
+    // line previously called .toUpperCase() on it unguarded. A partial/malformed
+    // extraction that populated lowest_t_score_value but omitted the classification
+    // would throw here and crash the entire risk-flag generation for the request.
+    const classification = dexaData.lowest_t_score_value < -2.5 ? 'Osteoporosis' : 'Osteopenia';
     flags.push({
       flag_id: 'DEXA_OSTEOPENIA',
-      flag_label: `${dexaData.overall_who_classification.toUpperCase()} — Lowest T-score: ${dexaData.lowest_t_score_value} (${dexaData.lowest_t_score_site})`,
+      flag_label: `${classification.toUpperCase()} — Lowest T-score: ${dexaData.lowest_t_score_value} (${dexaData.lowest_t_score_site})`,
       organ: 'bone',
       severity: dexaData.lowest_t_score_value < -2.5 ? 'high' : 'moderate',
       fertility_relevance: 'low',
