@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Sparkles, LogOut, Activity, MessageSquare, Plus, Clock,
+  Sparkles, Settings, Activity, MessageSquare, Plus, Clock,
   Calendar, Heart, ChevronRight, Pencil,
   UserRound, HeartPulse, Brain, FlaskConical, ScanLine, Dna
 } from 'lucide-react';
@@ -25,7 +25,6 @@ export default function DashboardPage() {
     fetchRecentMatches,
     restoreMatchSession,
     handleResetQuota,
-    handleLogout,
     chronicResult,
     mfrResult,
     setOnboardingStep,
@@ -97,7 +96,7 @@ export default function DashboardPage() {
     },
     {
       key: 'radiology', label: 'Radiology Reports', desc: 'Scans for you', icon: ScanLine,
-      progress: 0, locked: true, price: '₹999', boostPct: 12,
+      progress: 0, locked: true, price: '₹999',
       suggestedTests: SUGGESTED_RADIOLOGY_TESTS
     },
     {
@@ -113,7 +112,10 @@ export default function DashboardPage() {
 
         {/* Identity bar */}
         <header className="flex items-center justify-between gap-3 pb-3">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            onClick={() => router.push('/profile')}
+            className="flex items-center gap-2.5 min-w-0 text-left rounded-xl transition-colors duration-150 hover:bg-black/5 -m-1.5 p-1.5"
+          >
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center text-white font-serif font-semibold text-sm shrink-0"
               style={{ background: 'var(--pink)' }}
@@ -128,14 +130,14 @@ export default function DashboardPage() {
                 {user.phone_number}
               </p>
             </div>
-          </div>
+          </button>
           <button
-            onClick={() => { handleLogout(); router.push('/'); }}
+            onClick={() => router.push('/profile')}
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-full transition-colors duration-150 hover:bg-black/5 shrink-0"
             style={{ color: 'var(--muted)' }}
           >
-            <LogOut className="w-3.5 h-3.5" />
-            Logout
+            <Settings className="w-3.5 h-3.5" />
+            Profile
           </button>
         </header>
 

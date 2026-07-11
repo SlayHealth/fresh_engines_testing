@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, ChevronDown, Lock, ArrowRight } from 'lucide-react';
+import { Check, ChevronDown, Lock, ArrowRight, Gauge } from 'lucide-react';
+import { CONFIDENCE_WEIGHTS, computeConfidence } from '../../utils/healthProfileProgress';
 
 function ProgressRing({ progress, size = 44, locked, done }) {
   const stroke = 4;
@@ -43,7 +44,8 @@ function ProgressRing({ progress, size = 44, locked, done }) {
 }
 
 function CategoryCard({ category, onEnter, onUnlock }) {
-  const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, boostPct, suggestedTests, required } = category;
+  const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, suggestedTests, required } = category;
+  const weight = CONFIDENCE_WEIGHTS[category.key];
   const [showSuggested, setShowSuggested] = useState(false);
   const done = progress >= 100;
   // Subtle nudge toward the one card that's effectively mandatory (basics like
@@ -78,6 +80,14 @@ function CategoryCard({ category, onEnter, onUnlock }) {
                 Coming soon
               </span>
             )}
+            {!comingSoon && !!weight && (
+              <span
+                className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
+                style={{ background: done ? 'var(--soft-teal)' : 'var(--soft-amber)', color: done ? 'var(--teal-d)' : 'var(--amber-d)' }}
+              >
+                +{weight}% confidence
+              </span>
+            )}
           </div>
           <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--muted)' }}>{desc}</p>
         </div>
@@ -95,7 +105,6 @@ function CategoryCard({ category, onEnter, onUnlock }) {
           >
             <div>
               <p className="text-xs font-bold" style={{ color: 'var(--amber-d)' }}>{price}</p>
-              {boostPct && <p className="text-[11px]" style={{ color: 'var(--amber-d)' }}>+{boostPct}% engine confidence</p>}
             </div>
             <span className="text-xs font-bold px-3 py-1.5 rounded-full text-white shrink-0" style={{ background: 'var(--amber)' }}>
               Unlock
@@ -141,8 +150,10 @@ export default function CategoryHub({
   onPrimary,
   primaryDisabled,
   primaryHint,
-  embedded = false
+  embedded = false,
+  confidenceLabel = 'Engine Confidence'
 }) {
+  const confidence = computeConfidence(categories);
   return (
     <div className={embedded ? '' : 'flex-1 flex flex-col overflow-hidden'}>
       {(heading || subheading) && (
@@ -151,6 +162,25 @@ export default function CategoryHub({
           {subheading && <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{subheading}</p>}
         </div>
       )}
+
+      <div className="rounded-2xl p-4 mb-4 shrink-0 border border-(--teal)/25" style={{ background: 'var(--soft-teal)' }}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--teal-d)' }}>
+            <Gauge className="w-3.5 h-3.5" />
+            {confidenceLabel}
+          </span>
+          <span className="text-sm font-extrabold" style={{ color: 'var(--teal-d)' }}>{confidence}%</span>
+        </div>
+        <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.6)' }}>
+          <div
+            className="h-full rounded-full transition-[width] duration-500 ease-out"
+            style={{ width: `${confidence}%`, background: 'var(--teal)' }}
+          />
+        </div>
+        <p className="text-[11px] mt-2" style={{ color: 'var(--teal-d)' }}>
+          Fill in each section below to raise your engine's confidence in the analysis.
+        </p>
+      </div>
 
       <div className={embedded ? 'space-y-3' : 'flex-1 overflow-y-auto space-y-3 pb-2'}>
         {categories.map((cat) => (

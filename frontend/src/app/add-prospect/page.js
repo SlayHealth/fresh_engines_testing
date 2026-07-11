@@ -102,7 +102,6 @@ function AddProspectPageInner() {
     runsUsed,
     isMatching,
     matchesList,
-    handleLogout,
     onboardingForm,
     setOnboardingForm,
     prospectForm,
@@ -156,16 +155,6 @@ function AddProspectPageInner() {
       // Storage full/unavailable — draft persistence is best-effort only.
     }
   }, [userRadiology, prospectRadiology]);
-
-  const logoutAndClearDraft = () => {
-    try {
-      localStorage.removeItem(radiologyDraftKey());
-    } catch (e) {
-      // localStorage unavailable — nothing to clean up
-    }
-    cachedRadiologyDraft = undefined;
-    handleLogout();
-  };
 
   // Refs
   const userFileInputRef = useRef(null);
@@ -1135,7 +1124,7 @@ function AddProspectPageInner() {
         key: 'radiology', label: 'Radiology Reports', desc: `Scans for ${label}`, icon: ScanLine,
         progress: isSelfTurn ? (userRadiology ? 100 : 0) : (prospectRadiology ? 100 : 0),
         locked: !radiologyUnlocked,
-        price: '₹999', boostPct: 12,
+        price: '₹999',
         suggestedTests: SUGGESTED_RADIOLOGY_TESTS
       },
       {
@@ -1207,11 +1196,11 @@ function AddProspectPageInner() {
           <div className="flex items-center justify-between mb-4 shrink-0">
             <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Invite Status</span>
             <button
-              onClick={() => { logoutAndClearDraft(); router.push('/'); }}
+              onClick={() => router.push('/profile')}
               className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
               style={{ color: 'var(--muted)' }}
             >
-              Logout
+              Profile
             </button>
           </div>
           <div className="flex-1 overflow-y-auto rounded-2xl border p-5" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
@@ -1309,6 +1298,7 @@ function AddProspectPageInner() {
         categories={buildCategories(activePerson)}
         onEnter={enterCategory}
         onUnlock={(key) => { if (key === 'radiology') setRadiologyUnlocked(true); }}
+        confidenceLabel={activePerson === 'self' ? 'Your Confidence' : `${prospectForm.name || 'Prospect'}'s Confidence`}
         primaryLabel={
           activePerson === 'self'
             ? 'Continue'
@@ -1338,11 +1328,11 @@ function AddProspectPageInner() {
         <div className="flex items-center justify-between mb-4 shrink-0">
           <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>{headerTitle}</span>
           <button
-            onClick={() => { logoutAndClearDraft(); router.push('/'); }}
+            onClick={() => router.push('/profile')}
             className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
             style={{ color: 'var(--muted)' }}
           >
-            Logout
+            Profile
           </button>
         </div>
 

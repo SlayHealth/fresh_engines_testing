@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { 
-  Sparkles, LogOut, Activity, MessageSquare, HeartPulse, 
-  ShieldCheck, ArrowLeft, RotateCcw, Brain, Download, 
+import {
+  Sparkles, Settings, Activity, MessageSquare, HeartPulse,
+  ShieldCheck, ArrowLeft, RotateCcw, Brain, Download,
   LayoutDashboard, Heart, Dna, HelpCircle, Menu, X
 } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
@@ -27,8 +27,7 @@ export default function CoreEngineLayout({ children }) {
     runsUsed, 
     chatsUsed, 
     isUpgradingQuota, 
-    handleResetQuota, 
-    handleLogout,
+    handleResetQuota,
     chronicResult,
     mfrResult,
     mentalResult,
@@ -185,12 +184,12 @@ export default function CoreEngineLayout({ children }) {
               <HelpCircle size={14} className="text-slate-400" />
               Support
             </button>
-            <button 
-              onClick={() => { handleLogout(); router.push('/'); }}
+            <button
+              onClick={() => router.push('/profile')}
               className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
             >
-              <LogOut size={14} className="text-slate-400" />
-              Sign Out
+              <Settings size={14} className="text-slate-400" />
+              Profile
             </button>
           </div>
         </div>
@@ -254,12 +253,12 @@ export default function CoreEngineLayout({ children }) {
                   <HelpCircle size={14} className="text-slate-400" />
                   Support
                 </button>
-                <button 
-                  onClick={() => { handleLogout(); router.push('/'); }}
+                <button
+                  onClick={() => { setIsMobileMenuOpen(false); router.push('/profile'); }}
                   className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
                 >
-                  <LogOut size={14} className="text-slate-400" />
-                  Sign Out
+                  <Settings size={14} className="text-slate-400" />
+                  Profile
                 </button>
               </div>
             </div>
