@@ -16,15 +16,11 @@ import {
   LIFESTYLE_ACTIVITIES, LIFESTYLE_DRINKING,
   LIFESTYLE_SMOKING_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL, GENDERS
 } from '../../../constants/lifestyleOptions';
-import { MENTAL_HEALTH_QUESTIONS } from '../../../constants/mentalHealthQuestions';
+import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES } from '../../../constants/mentalHealthQuestions';
+import { estimateTimeLeft } from '../../../utils/estimateTime';
 
 const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
-
-const MENTAL_OPT_IN_OPTIONS = [
-  { val: 'yes', label: 'Yes, add it', desc: 'Premium — 21 quick questions' },
-  { val: 'skip', label: 'Not now', desc: 'Skip — you can add this anytime later' }
-];
 
 export default function ProspectOnboardingPage() {
   const { token } = useParams();
@@ -58,8 +54,7 @@ export default function ProspectOnboardingPage() {
   const [sleepCycle, setSleepCycle] = useState('');
   const [menstrualCycle, setMenstrualCycle] = useState('');
 
-  // Optional mental health questionnaire
-  const [mentalOptIn, setMentalOptIn] = useState(null);
+  // Optional mental health questionnaire — entering this section is the opt-in
   const [mentalAnswers, setMentalAnswers] = useState({});
 
   // Upload Reports States
@@ -130,7 +125,6 @@ export default function ProspectOnboardingPage() {
         if (saved.smokingHabits) setSmokingHabits(saved.smokingHabits);
         if (saved.sleepCycle) setSleepCycle(saved.sleepCycle);
         if (saved.menstrualCycle) setMenstrualCycle(saved.menstrualCycle);
-        if (saved.mentalOptIn) setMentalOptIn(saved.mentalOptIn);
         if (saved.mentalAnswers) setMentalAnswers(saved.mentalAnswers);
         if (typeof saved.stepIndex === 'number') setStepIndex(saved.stepIndex);
       }
@@ -148,7 +142,7 @@ export default function ProspectOnboardingPage() {
       dob, city, gender, height, weight, waist,
       activityLevel, drinkingHabits,
       smokingHabits, sleepCycle, menstrualCycle,
-      mentalOptIn, mentalAnswers, stepIndex
+      mentalAnswers, stepIndex
     };
     try {
       localStorage.setItem(`slayhealth_invite_progress_${token}`, JSON.stringify(progress));
@@ -158,7 +152,7 @@ export default function ProspectOnboardingPage() {
   }, [
     token, isHydrated, submitSuccess, dob, city, gender, height, weight, waist,
     activityLevel, drinkingHabits, smokingHabits,
-    sleepCycle, menstrualCycle, mentalOptIn, mentalAnswers, stepIndex
+    sleepCycle, menstrualCycle, mentalAnswers, stepIndex
   ]);
 
   // Clear persisted progress once the questionnaire has been submitted
@@ -387,6 +381,8 @@ export default function ProspectOnboardingPage() {
     title,
     subtitle: extra.subtitle,
     category: extra.category,
+    section: extra.section,
+    kind: 'choice',
     content: <ChoiceList options={options} value={value} onChange={onChange} />,
     canAdvance: !!value
   });
@@ -395,6 +391,7 @@ export default function ProspectOnboardingPage() {
     title,
     subtitle: extra.subtitle,
     category: extra.category,
+    kind: 'field',
     content: (
       <input
         type={extra.type || 'text'}
@@ -414,6 +411,7 @@ export default function ProspectOnboardingPage() {
   const measurementStep = (title, measureType, value, onChange, category) => ({
     title,
     category,
+    kind: 'measurement',
     content: <MeasurementSlider type={measureType} value={value} onChange={onChange} />,
     canAdvance: true
   });
@@ -425,6 +423,7 @@ export default function ProspectOnboardingPage() {
     {
       title: 'City',
       category: 'about',
+      kind: 'city',
       content: <CityInput value={city} onChange={setCity} />,
       canAdvance: !!(city && city.trim())
     },
@@ -445,6 +444,7 @@ export default function ProspectOnboardingPage() {
     title: 'Upload your Pathology Report',
     subtitle: 'Required — PDF with your blood/pathology parameters',
     category: 'pathology',
+    kind: 'upload',
     canAdvance: !!pathologyFile || useMockPathology,
     content: (
       <div className="space-y-3">
@@ -481,6 +481,7 @@ export default function ProspectOnboardingPage() {
     title: 'Upload your Radiology Report',
     subtitle: 'Optional — USG, TVS, Echo, or DEXA scans',
     category: 'radiology',
+    kind: 'upload',
     canAdvance: true,
     onSkip: goNext,
     content: (
@@ -514,29 +515,24 @@ export default function ProspectOnboardingPage() {
     )
   });
 
-  // Optional mental health block — its last step carries the final Submit trigger
-  const mentalSteps = [{
-    title: 'Add Mental Health Compatibility?',
-    subtitle: 'Up to 20% deeper insight into long-term emotional & personality compatibility.',
-    category: 'mental',
-    canAdvance: !!mentalOptIn,
-    content: (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--soft-amber)' }}>
-          <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--amber)', color: '#fff' }}>
-            Premium
-          </span>
-          <span className="text-xs font-medium" style={{ color: 'var(--amber-d)' }}>21 quick questions</span>
-        </div>
-        <ChoiceList options={MENTAL_OPT_IN_OPTIONS} value={mentalOptIn} onChange={setMentalOptIn} />
-      </div>
-    )
-  }];
-  if (mentalOptIn === 'yes') {
-    MENTAL_HEALTH_QUESTIONS.forEach((q) => {
-      mentalSteps.push(choiceStep(q.title, q.options, mentalAnswers[q.id], (v) => setMentalAnswers({ ...mentalAnswers, [q.id]: v }), { subtitle: q.desc, category: 'mental' }));
+  // Optional mental health block — no separate opt-in screen; the first
+  // question itself offers a "Skip this section" out (straight to submit),
+  // and its last question carries the final Submit trigger.
+  const mentalSteps = MENTAL_HEALTH_QUESTIONS.map((q) => {
+    const cat = MENTAL_HEALTH_CATEGORIES[q.sectionIndex];
+    return choiceStep(q.title, q.options, mentalAnswers[q.id], (v) => setMentalAnswers({ ...mentalAnswers, [q.id]: v }), {
+      subtitle: q.desc,
+      category: 'mental',
+      section: {
+        label: cat.label, color: cat.color, soft: cat.soft,
+        index: q.sectionIndex, total: MENTAL_HEALTH_CATEGORIES.length,
+        position: q.sectionPosition, length: q.sectionLength,
+        allColors: MENTAL_HEALTH_CATEGORIES.map((c) => c.color)
+      }
     });
-  }
+  });
+  mentalSteps[0].onSkip = handleSubmit;
+  mentalSteps[0].skipLabel = isSubmitting ? 'Submitting…' : 'Skip this section';
   const lastMentalStep = mentalSteps[mentalSteps.length - 1];
   lastMentalStep.nextLabel = isSubmitting ? 'Submitting…' : 'Submit Health Details';
   lastMentalStep.nextVariant = 'pink';
@@ -560,6 +556,7 @@ export default function ProspectOnboardingPage() {
   // How many earlier steps share this step's category — keeps each section's
   // trust message starting fresh at index 0 instead of a raw flow-wide index.
   const trustSeed = steps.slice(0, clampedIndex).filter((s) => s.category === currentStep.category).length;
+  const timeLeftLabel = estimateTimeLeft(steps.slice(clampedIndex));
 
   return (
     <main className="h-dvh overflow-hidden flex flex-col wizard-bg">
@@ -582,6 +579,8 @@ export default function ProspectOnboardingPage() {
           userName={invite?.prospectName}
           trustCategory={currentStep.category}
           trustSeed={trustSeed}
+          sectionInfo={currentStep.section}
+          timeLeftLabel={timeLeftLabel}
         >
           {currentStep.content}
         </QuestionScreen>

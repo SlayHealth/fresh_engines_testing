@@ -492,16 +492,24 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
     // Only score mental compatibility when BOTH sides completed the full 21-question
     // survey — a partially-filled or missing side must not silently score as if
     // everyone answered positively across the board (same treatment as "didn't opt in").
+    // `invite.mental_answers_json` is JSONB — pg already returns it parsed, never a
+    // string; re-parsing it here (as an earlier version of this function did) throws
+    // on every couple where the inviter had already answered, discarding both sides
+    // silently via the catch below. Same bug class already fixed once in
+    // `submitQuestionnaire`'s merge step — fixed here too.
     let mentalResult = null;
     if (invite.mental_answers_json) {
       try {
-        const stored = JSON.parse(invite.mental_answers_json);
+        const stored = invite.mental_answers_json;
         if (isMentalQuestionnaireComplete(stored.inviter) && isMentalQuestionnaireComplete(stored.prospect)) {
           mentalResult = await computeMentalResult(stored.inviter, stored.prospect, {
             cacheKey: `mental_insights_${matchId}`
           });
+          // Data minimization: the score is retained in the match's own result;
+          // the raw per-question answers don't need to live on indefinitely.
+          await db.query('UPDATE prospect_invites SET mental_answers_json = NULL WHERE id = $1', [inviteId]);
         } else if (stored.inviter || stored.prospect) {
-          logger.warn(`[Background Match] Mental health answers present but incomplete for invite ${inviteId} — skipping mental scoring.`);
+          logger.warn(`[Background Match] Mental health answers present but incomplete for invite ${inviteId} — skipping mental scoring for now (kept so either side can still finish it later).`);
         }
       } catch (mentalErr) {
         logger.error(`[Background Match] Mental health scoring failed: ${mentalErr.message}`);
@@ -656,8 +664,8 @@ async function submitQuestionnaire(req, res, next) {
       );
 
       await db.query(
-        `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           radId,
           analyzed.patient_slay_id,
@@ -667,7 +675,8 @@ async function submitQuestionnaire(req, res, next) {
           JSON.stringify(analyzed.findings),
           JSON.stringify(analyzed.scores),
           JSON.stringify(analyzed.risk_flags),
-          analyzed.raw_ocr_text
+          analyzed.raw_ocr_text,
+          userId
         ]
       );
 
@@ -686,8 +695,8 @@ async function submitQuestionnaire(req, res, next) {
       };
 
       await db.query(
-        `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, is_mock)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)`,
+        `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, is_mock, user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, $10)`,
         [
           radId,
           invite.prospect_name,
@@ -697,7 +706,8 @@ async function submitQuestionnaire(req, res, next) {
           JSON.stringify(mockFindings),
           JSON.stringify({ organ_scores: { USG_ABDOMEN: 95.0 }, radiology_nuptia_contribution: 27.5 }),
           JSON.stringify([]),
-          'MOCK PREMARITAL PORTAL UPLOAD'
+          'MOCK PREMARITAL PORTAL UPLOAD',
+          userId
         ]
       );
     }

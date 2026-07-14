@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, ClipboardList, UserRound, BarChart3, MessageCircle, X, Calendar, ChevronRight, Plus } from 'lucide-react';
+import { X, Calendar, ChevronRight, Plus } from 'lucide-react';
+import Ico from './mobile/Ico';
 import { useCompatibility } from '../contexts/CompatibilityContext';
 import { toast } from './Toast';
 
@@ -95,6 +96,7 @@ export default function MobileBottomNav() {
     user,
     chronicResult,
     mfrResult,
+    matchesList,
     restoreMatchSession,
     fetchRecentMatches,
     setIsChatOpen
@@ -108,10 +110,19 @@ export default function MobileBottomNav() {
   // this naturally shows on every authenticated page — dashboard, questionnaire,
   // analysis, profile, admin — while still staying off login/onboarding/invite
   // links, where there either is no user yet or the name step isn't done.
-  if (!user?.name) return null;
+  // The Questionnaire flow (hub + every per-category step screen) owns the
+  // whole viewport — a floating nav bar here would sit on top of forms,
+  // uploads, and the primary action button.
+  if (!user?.name || pathname.startsWith('/add-prospect')) return null;
 
   const isActive = (target) => pathname === target || pathname.startsWith(`${target}/`);
   const hasActiveAnalysis = !!(chronicResult && mfrResult);
+  // The FAB treatment (elevated, colored) implies "there's something worth
+  // discussing" — that's only true once at least one compatibility check
+  // exists. Before that it renders as a plain tab, same as Home/Health/
+  // Analysis, so it still works (offers to start a first check) without
+  // visually promising a conversation that can't happen yet.
+  const hasCompletedAnalysis = hasActiveAnalysis || (matchesList && matchesList.length > 0);
 
   const openChat = async () => {
     // Already looking at a loaded analysis — jump straight into its chat,
@@ -141,6 +152,13 @@ export default function MobileBottomNav() {
   };
 
   const handleAnalysisTap = async () => {
+    // Disabled state: there's nothing to analyze yet — a match (and the
+    // required info behind it) has to exist first. Explain why instead of
+    // silently doing nothing or bouncing them off to a different screen.
+    if (!hasCompletedAnalysis) {
+      toast.info("Your analysis will show up here once you've completed a compatibility check — finish your details and add a prospect first.");
+      return;
+    }
     if (hasActiveAnalysis) {
       if (!pathname.startsWith('/core-engine')) router.push('/core-engine/story');
       return;
@@ -150,71 +168,44 @@ export default function MobileBottomNav() {
       restoreMatchSession(matches[0]);
       router.push('/core-engine/story');
     } else {
+      // hasCompletedAnalysis already implied matchesList had entries, but a
+      // match can vanish between renders (e.g. deleted elsewhere) — fall
+      // back to the same messaging rather than a dead click.
       toast.info('No compatibility analysis yet — start your first check.');
       router.push('/add-prospect');
     }
   };
 
-  const navBtnStyle = (active) => ({ color: active ? 'var(--pink)' : 'var(--muted)' });
-
   return (
     <>
-      <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch border-t"
-        style={{ background: 'var(--surface)', borderColor: 'var(--line)', paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <button
-          type="button"
-          onClick={() => router.push('/dashboard')}
-          className="flex flex-col items-center justify-center gap-1 flex-1 py-2.5 transition-colors duration-150"
-          style={navBtnStyle(isActive('/dashboard'))}
-        >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Home</span>
+      <nav className="mnav lg:hidden" aria-label="Primary">
+        <button type="button" className={`tab${isActive('/dashboard') ? ' on' : ''}`} onClick={() => router.push('/dashboard')}>
+          <Ico name="home" /><span>Home</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => router.push('/add-prospect?enter=about')}
-          className="flex flex-col items-center justify-center gap-1 flex-1 py-2.5 transition-colors duration-150"
-          style={navBtnStyle(false)}
-        >
-          <ClipboardList className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Questionnaire</span>
+        <button type="button" className={`tab${isActive('/add-prospect') ? ' on' : ''}`} onClick={() => router.push('/add-prospect')}>
+          <Ico name="clip" /><span>Health</span>
         </button>
-
-        {/* Elevated center Chat button — mobile-app style FAB embedded in the bar */}
-        <div className="flex-1 flex flex-col items-center justify-end relative">
-          <button
-            type="button"
-            onClick={openChat}
-            aria-label="Chat with AI Counselor"
-            className="absolute -top-5 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-lg transition-transform duration-150 active:scale-95"
-            style={{ background: 'var(--teal)', boxShadow: '0 6px 18px rgba(24,204,150,0.45)' }}
-          >
-            <MessageCircle className="w-6 h-6" />
+        {hasCompletedAnalysis ? (
+          <button type="button" className="tab fab" onClick={openChat} aria-label="Chat with AI assistant">
+            <span className="b"><Ico name="chat" /></span><span>Chat AI</span>
           </button>
-          <span className="text-[10px] font-semibold pb-2.5" style={{ color: 'var(--muted)' }}>Chat AI</span>
-        </div>
-
+        ) : (
+          <button type="button" className="tab" onClick={openChat} aria-label="Chat with AI assistant">
+            <Ico name="chat" /><span>Chat AI</span>
+          </button>
+        )}
+        {/* Deliberately NOT aria-disabled — that tells screen readers (and
+            Playwright) the control is inert, which would silently swallow
+            the one interaction that's supposed to explain why it's muted.
+            It stays a real, always-actionable button; only the label and
+            opacity communicate "not yet". */}
         <button
           type="button"
+          className={`tab${hasCompletedAnalysis && isActive('/core-engine') ? ' on' : ''}${hasCompletedAnalysis ? '' : ' disabled'}`}
           onClick={handleAnalysisTap}
-          className="flex flex-col items-center justify-center gap-1 flex-1 py-2.5 transition-colors duration-150"
-          style={navBtnStyle(isActive('/core-engine'))}
+          aria-label={hasCompletedAnalysis ? undefined : 'Analysis — locked until your first compatibility check is complete'}
         >
-          <BarChart3 className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Analysis</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => router.push('/profile')}
-          className="flex flex-col items-center justify-center gap-1 flex-1 py-2.5 transition-colors duration-150"
-          style={navBtnStyle(isActive('/profile'))}
-        >
-          <UserRound className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Profile</span>
+          <Ico name="chart" /><span>Analysis</span>
         </button>
       </nav>
 

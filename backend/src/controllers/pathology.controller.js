@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const ocrProvider = require('../services/ocr/ocrProvider');
 const parameterExtractor = require('../services/parser/parameterExtractor.service');
+const { computeTestCoverage } = require('../services/pathology/testCoverage.service');
 const logger = require('../utils/logger');
 const { db } = require('../services/storage/postgres.service');
 
@@ -107,7 +108,11 @@ async function extractPathology(req, res, next) {
         confidence_score: averageConfidence,
         raw_ocr_text: ocrPages.map(p => p.text).join('\n\n--- PAGE BREAK ---\n\n')
       },
-      sections: extractedData
+      sections: extractedData,
+      // Which named tests this specific upload actually contains vs. doesn't,
+      // and what each missing one means for the eventual report — not just a
+      // raw parameter count.
+      testCoverage: computeTestCoverage(extractedData)
     };
 
     logger.info(`Finished extraction for report ${reportId} in ${processingTime}ms`);
@@ -148,10 +153,12 @@ function healthCheck(req, res) {
 async function mockExtract(req, res, next) {
   try {
     const reportId = uuidv4();
+    // Real ontology canonical_names (see ontologyMapper.service.js) so this mock's
+    // testCoverage result is meaningful rather than showing every test missing.
     const extractedData = {
       cbc: {
-        hemoglobin: { value: 16.0, unit: 'g/dL', reference_range: '13.5-17.5', confidence: 0.98 },
-        total_rbc_count: { value: 4.5, unit: 'mill/uL', reference_range: '4.5-5.5', confidence: 0.94 }
+        hemoglobin_hb: { value: 16.0, unit: 'g/dL', reference_range: '13.5-17.5', confidence: 0.98 },
+        total_red_blood_cell_count_rbc: { value: 4.5, unit: 'mill/uL', reference_range: '4.5-5.5', confidence: 0.94 }
       }
     };
 
@@ -171,7 +178,8 @@ async function mockExtract(req, res, next) {
         confidence_score: 0.96,
         raw_ocr_text: "COMPLETE BLOOD COUNT\nHemoglobin (Hb)\t16.0\t13.5-17.5\tg/dL\nTotal RBC Count\t4.5\t4.5-5.5\tmill/uL\n\n--- PAGE BREAK ---\n\nMock page 2 text..."
       },
-      sections: extractedData
+      sections: extractedData,
+      testCoverage: computeTestCoverage(extractedData)
     });
   } catch (error) {
     next(error);

@@ -219,6 +219,17 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_matches_user_id ON matches(user_id);
     `);
 
+    // Nullable ownership stamp, going forward only — rows created before this shipped
+    // have no reliable identifier back to an account (only free-text extracted from
+    // the PDF itself) and stay unlinked. This is what makes real account-deletion of
+    // radiology/USG data possible for anything uploaded after this migration.
+    await pool.query(`
+      ALTER TABLE radiology_reports ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE;
+      ALTER TABLE usg_reports ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE;
+      CREATE INDEX IF NOT EXISTS idx_radiology_reports_user_id ON radiology_reports(user_id);
+      CREATE INDEX IF NOT EXISTS idx_usg_reports_user_id ON usg_reports(user_id);
+    `);
+
     // WhatsApp message log — the Cloud API has no "fetch message history" endpoint, so
     // this is the only source of truth for the admin message viewer. Populated going
     // forward only: outbound rows are written at send-time (WhatsAppProvider), inbound

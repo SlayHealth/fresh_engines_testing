@@ -47,6 +47,38 @@ function authenticateToken(req, res, next) {
   next();
 }
 
+/**
+ * Like authenticateToken, but also accepts a match-scoped `shareToken` query param
+ * as an alternative credential — used only by routes that mint their own signed,
+ * expiring share links (e.g. the PDF route). A valid shareToken bypasses the normal
+ * session check entirely (req.user is never set for that path) but only unlocks the
+ * one matchId it was minted for; it never grants access to any other route.
+ */
+function authenticateOrShareToken(req, res, next) {
+  const shareToken = req.query.shareToken;
+  if (!shareToken) {
+    return authenticateToken(req, res, next);
+  }
+
+  const correlationId = req.headers['x-correlation-id'] || uuidv4();
+  req.correlationId = correlationId;
+  res.setHeader('x-correlation-id', correlationId);
+
+  const decoded = jwtService.verifyShareToken(shareToken);
+  if (!decoded || decoded.matchId !== req.params.matchId) {
+    logger.warn(`[AuthMiddleware][CID: ${correlationId}] Invalid or expired share token for route ${req.originalUrl}`);
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Invalid or expired share link.'
+    });
+  }
+
+  req.viaShareLink = true;
+  logger.info(`[AuthMiddleware][CID: ${correlationId}] Match ${decoded.matchId} accessed via share link for route ${req.originalUrl}`);
+  next();
+}
+
 module.exports = {
-  authenticateToken
+  authenticateToken,
+  authenticateOrShareToken
 };

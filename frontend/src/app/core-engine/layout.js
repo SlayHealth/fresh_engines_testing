@@ -65,7 +65,6 @@ export default function CoreEngineLayout({ children }) {
     if (pathname.includes('/mfr')) return 'mfr';
     if (pathname.includes('/usg')) return 'usg';
     if (pathname.includes('/genomics')) return 'genomics';
-    if (pathname.includes('/mental')) return 'mental';
     return 'chronic';
   }, [pathname]);
 
@@ -99,7 +98,11 @@ export default function CoreEngineLayout({ children }) {
     { id: 'story', label: 'Partner Sync', icon: HeartPulse, action: () => handleTabClick('story') },
     { id: 'mfr', label: 'Fertility Timeline', icon: Heart, action: () => handleTabClick('mfr') },
     { id: 'chronic', label: 'Chronic Risk', icon: Activity, action: () => handleTabClick('chronic') },
-    { id: 'mental', label: 'Stress Resilience', icon: Brain, action: () => handleTabClick('mental') },
+    // Not a core-engine tab like the others — routes into the real Mental
+    // Wellbeing questionnaire (the same sub-hub the mobile "Add Mental
+    // Wellbeing" CTA uses), which merges into this active match on completion
+    // via the existing activeMatchId-aware advance logic in add-prospect.
+    { id: 'mental', label: 'Stress Resilience', icon: Brain, action: () => { setIsMobileMenuOpen(false); router.push('/add-prospect?enter=mental'); } },
     { id: 'usg', label: 'Organ Wellness', icon: ShieldCheck, action: () => handleTabClick('usg') },
     { id: 'genomics', label: 'Genetics Risk', icon: Dna, action: () => handleTabClick('genomics') },
   ];

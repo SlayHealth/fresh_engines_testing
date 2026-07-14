@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./mobile-shell.css";
 import { CompatibilityProvider } from "../contexts/CompatibilityContext";
 import { ToastContainer } from "../components/Toast";
 import { ConfirmDialogContainer } from "../components/ConfirmDialog";

@@ -3,13 +3,15 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Sparkles, Settings, Activity, MessageSquare, Plus, Clock,
+  Sparkles, Activity, MessageSquare, Plus, Clock,
   Calendar, Heart, ChevronRight, Pencil,
   UserRound, HeartPulse, Brain, FlaskConical, ScanLine, Dna
 } from 'lucide-react';
-import { useCompatibility, calculateAge, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
+import { useCompatibility, buildOnboardingFormFromUser } from '../../contexts/CompatibilityContext';
 import CategoryHub from '../../components/wizard/CategoryHub';
-import { aboutProgress, lifestyleProgress, mentalProgress } from '../../utils/healthProfileProgress';
+import useIsMobile from '../../hooks/useIsMobile';
+import MobileHomeView from './MobileHomeView';
+import { aboutProgress, aboutCounts, lifestyleProgress, lifestyleCounts, mentalProgress, mentalCounts } from '../../utils/healthProfileProgress';
 import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS, SUGGESTED_GENOMICS_TESTS } from '../../constants/suggestedTests';
 import styles from '../page.module.css';
 
@@ -32,7 +34,6 @@ export default function DashboardPage() {
     setOnboardingForm,
     prospectForm,
     userReport,
-    selfMentalOptIn,
     selfMentalAnswers
   } = useCompatibility();
 
@@ -60,15 +61,6 @@ export default function DashboardPage() {
     }
   }, [user]);
 
-  if (!user) return null;
-
-  const scansLeft = Math.max(0, 1 - runsUsed);
-  const chatsLeft = Math.max(0, 5 - chatsUsed);
-  const editProfile = () => {
-    setOnboardingForm(buildOnboardingFormFromUser(user));
-    router.push('/add-prospect?enter=about');
-  };
-
   const selfAdapter = {
     form: onboardingForm,
     nameField: 'candidateName', genderField: 'candidateGender', dobField: 'candidateDob', cityField: 'candidateCity',
@@ -76,22 +68,47 @@ export default function DashboardPage() {
     needsNameStep: !!(onboardingForm.userRelation && onboardingForm.userRelation !== 'Self')
   };
 
+  // Mental Wellbeing sits last (before Genomics) rather than beside About/
+  // Lifestyle/Pathology — it's deferred/optional, not part of the core "get
+  // your first match" path, and this ordering de-emphasizes it as such
+  // without hiding it (every category always renders, see below).
+  const selfAboutCounts = aboutCounts(selfAdapter, prospectForm);
+  const selfLifestyleCounts = lifestyleCounts(onboardingForm);
+  const rawSelfMentalCounts = mentalCounts(selfMentalAnswers);
+
+  // Pathology/mental answers live only in this tab's React state plus a
+  // device-local draft (see CompatibilityContext) — unlike About/Lifestyle,
+  // nothing rehydrates them from the backend on a fresh session, so a
+  // returning user (new device, cleared storage, or just a while later)
+  // would see "Start" here even with real data on file. A completed match
+  // is durable, server-side proof those steps happened — matches can't be
+  // created without both reports (see handleCompatibilityMatch's guard),
+  // and mentalResult is only ever non-null once mental was completed — so
+  // fall back to that evidence whenever the live session data is empty.
+  const hasPathologyEvidence = !!(matchesList && matchesList.length > 0);
+  const hasMentalEvidence = !!(matchesList && matchesList.some((m) => m?.analysis?.mentalResult));
+  const selfMentalCounts = hasMentalEvidence
+    ? { answered: rawSelfMentalCounts.total, total: rawSelfMentalCounts.total }
+    : rawSelfMentalCounts;
+
   const healthProfileCategories = [
     {
       key: 'about', label: 'About You', desc: 'Basics, body & relationship context', icon: UserRound,
-      progress: aboutProgress(selfAdapter, prospectForm), required: true
+      progress: aboutProgress(selfAdapter, prospectForm), answered: selfAboutCounts.answered, total: selfAboutCounts.total, required: true
     },
     {
       key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,
-      progress: lifestyleProgress(onboardingForm)
+      progress: lifestyleProgress(onboardingForm), answered: selfLifestyleCounts.answered, total: selfLifestyleCounts.total
     },
+    // Order mirrors the mockup (Mental sits third). It stays optional in behaviour —
+    // it never gates match creation — the position here is display only.
     {
       key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
-      progress: mentalProgress(selfMentalOptIn, selfMentalAnswers)
+      progress: hasMentalEvidence ? 100 : mentalProgress(selfMentalAnswers), answered: selfMentalCounts.answered, total: selfMentalCounts.total
     },
     {
       key: 'pathology', label: 'Pathology Reports', desc: 'Blood work for you', icon: FlaskConical,
-      progress: userReport ? 100 : 0,
+      progress: (userReport || hasPathologyEvidence) ? 100 : 0,
       suggestedTests: SUGGESTED_PATHOLOGY_TESTS
     },
     {
@@ -105,6 +122,43 @@ export default function DashboardPage() {
       suggestedTests: SUGGESTED_GENOMICS_TESTS
     }
   ];
+
+  const isMobile = useIsMobile();
+
+  if (!user) return null;
+
+  const scansLeft = Math.max(0, 1 - runsUsed);
+  const chatsLeft = Math.max(0, 5 - chatsUsed);
+  const editProfile = () => {
+    setOnboardingForm(buildOnboardingFormFromUser(user));
+    router.push('/add-prospect?enter=about');
+  };
+
+  const firstName = (user.name || 'there').trim().split(/\s+/)[0];
+  const greetHour = new Date().getHours();
+  const timeOfDay = greetHour < 12 ? 'Morning' : greetHour < 17 ? 'Afternoon' : greetHour < 21 ? 'Evening' : 'Night';
+
+  // Undetermined on first paint (no `matchMedia` server-side) — render nothing
+  // rather than flash one layout then swap, and never mount both trees at
+  // once (five pages' worth of double SVG/data-fetching is real cost).
+  if (isMobile === undefined) return null;
+
+  if (isMobile) {
+    return (
+      <MobileHomeView
+        user={user}
+        healthProfileCategories={healthProfileCategories}
+        matchesList={matchesList}
+        isMatchesLoading={isMatchesLoading}
+        scansLeft={scansLeft}
+        chatsLeft={chatsLeft}
+        chronicResult={chronicResult}
+        mfrResult={mfrResult}
+        restoreMatchSession={restoreMatchSession}
+        router={router}
+      />
+    );
+  }
 
   return (
     <main className="min-h-screen" style={{ background: 'var(--paper)' }}>
@@ -147,21 +201,13 @@ export default function DashboardPage() {
               {user.name ? user.name[0].toUpperCase() : 'U'}
             </div>
             <div className="min-w-0">
-              <p className="font-serif text-[15px] leading-tight font-semibold truncate" style={{ color: 'var(--ink)' }}>
-                {user.name || 'User'}
-              </p>
               <p className="text-[11px] leading-tight truncate" style={{ color: 'var(--muted)' }}>
-                {user.phone_number}
+                Good {timeOfDay}
+              </p>
+              <p className="font-serif text-[15px] leading-tight font-semibold truncate" style={{ color: 'var(--ink)' }}>
+                {firstName}
               </p>
             </div>
-          </button>
-          <button
-            onClick={() => router.push('/profile')}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-full transition-colors duration-150 hover:bg-black/5 shrink-0"
-            style={{ color: 'var(--muted)' }}
-          >
-            <Settings className="w-3.5 h-3.5" />
-            Profile
           </button>
         </header>
 
@@ -185,9 +231,11 @@ export default function DashboardPage() {
             {chatsLeft}/5 chats
           </span>
 
-          <span className="text-[11px]" style={{ color: 'var(--muted)' }}>
-            {calculateAge(user.dob)}y{user.gender ? ` · ${user.gender}` : ''}{user.city ? ` · ${user.city}` : ''}
-          </span>
+          {user.city && (
+            <span className="text-[11px]" style={{ color: 'var(--muted)' }}>
+              {user.city}
+            </span>
+          )}
 
           <button
             onClick={editProfile}
@@ -315,7 +363,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Health Profile — fill in your own data ahead of time, resumable per card */}
+        {/* Health Profile — fill in your own data ahead of time, resumable per card. */}
         <div className="mb-6">
           <h3 className="font-serif text-base font-semibold mb-1" style={{ color: 'var(--ink)' }}>Your Health Profile</h3>
           <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>Pick up right where you left off — each card saves as you go.</p>

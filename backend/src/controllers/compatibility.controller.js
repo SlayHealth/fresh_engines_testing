@@ -5,6 +5,7 @@ const pdfReportService = require('../services/pdfReport.service');
 const reportGenerationService = require('../services/compatibility/reportGeneration.service');
 const aiPresentationService = require('../services/compatibility/aiPresentation.service');
 const radiologyLookupService = require('../services/radiology/radiologyLookup.service');
+const jwtService = require('../services/auth/jwt.service');
 const fs = require('fs');
 const path = require('path');
 
@@ -55,9 +56,17 @@ async function listMatches(req, res, next) {
       } catch (e) {
         analysis = {};
       }
+      // presentation_json is JSONB — Postgres already returns it parsed, never a string.
+      const presentation = row.presentation_json || null;
       return {
         id: row.id,
         score: typeof row.compatibility_score === 'number' ? Math.round(row.compatibility_score * 100) : null,
+        // Real domain-coverage confidence (not the compatibility score) — the
+        // same number driving the Provisional/"reliable at 70%" state on the
+        // report itself, so a recent-match card can honestly reflect it.
+        confidence: typeof presentation?.report_confidence?.overall === 'number'
+          ? Math.round(presentation.report_confidence.overall)
+          : null,
         createdAt: row.created_at,
         analysis, // Pass the full payload back for restoration
         user: {
@@ -77,6 +86,31 @@ async function listMatches(req, res, next) {
 }
 
 const fetchRadiologyReport = radiologyLookupService.fetchRadiologyByIdentity;
+
+// POST /api/compatibility/matches/:matchId/share-link
+// Mints a short-lived (48h), match-scoped share token — never the caller's real
+// access token — so a PDF link can be safely handed to navigator.share()/copy-link
+// without leaking a credential that works against any other endpoint.
+async function createShareLink(req, res, next) {
+  try {
+    const { matchId } = req.params;
+    const result = await db.query('SELECT user_id FROM matches WHERE id = $1', [matchId]);
+    const match = result.rows[0];
+
+    if (!match) {
+      return res.status(404).json({ success: false, error: `Match session with ID ${matchId} not found` });
+    }
+    if (match.user_id !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'You do not have access to this match.' });
+    }
+
+    const shareToken = jwtService.generateShareToken(matchId);
+    res.json({ success: true, shareToken, expiresInHours: 48 });
+  } catch (error) {
+    logger.error(`Failed to create share link: ${error.message}`);
+    next(error);
+  }
+}
 
 async function generatePDFReport(req, res, next) {
   try {
@@ -380,6 +414,7 @@ async function generateAIPDFReport(req, res, next) {
 module.exports = {
   saveMatch,
   listMatches,
+  createShareLink,
   generatePDFReport,
   generateAIPDFReport,
   getMatchRadiology,

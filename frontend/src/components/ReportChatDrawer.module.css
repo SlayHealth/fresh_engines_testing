@@ -26,7 +26,7 @@
   bottom: 0;
   width: 100%;
   max-width: 440px;
-  background-color: #ffffff;
+  background-color: var(--surface);
   box-shadow: -8px 0 32px rgba(15, 23, 42, 0.08);
   z-index: 1001;
   display: flex;
@@ -40,8 +40,8 @@
 }
 
 .header {
-  padding: 18px 20px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: calc(env(safe-area-inset-top) + 14px) 20px 14px;
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -75,21 +75,22 @@
 .title {
   font-size: 16px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--ink);
   margin: 0;
   line-height: 1.2;
+  font-family: var(--font-serif);
 }
 
 .subtitle {
   font-size: 12px;
-  color: #64748b;
+  color: var(--muted);
   margin: 2px 0 0 0;
 }
 
 .closeButton {
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--muted);
   cursor: pointer;
   padding: 8px;
   border-radius: 50%;
@@ -100,8 +101,8 @@
 }
 
 .closeButton:hover {
-  background-color: #f1f5f9;
-  color: #0f172a;
+  background-color: var(--paper);
+  color: var(--ink);
 }
 
 .messageArea {
@@ -135,26 +136,26 @@
 }
 
 .bubble {
-  max-width: 80%;
-  padding: 12px 16px;
-  border-radius: 18px;
-  font-size: 14px;
-  line-height: 1.5;
+  max-width: 82%;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
   white-space: pre-wrap;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 2px rgba(10, 20, 16, 0.04), 0 6px 16px -10px rgba(10, 20, 16, 0.18);
 }
 
+/* Matches the mockup's .bub.me / .bub.ai */
 .bubbleUser {
-  background-color: var(--pink);
-  color: #ffffff;
-  border-bottom-right-radius: 4px;
+  background: linear-gradient(150deg, #0D7365, #083E37);
+  color: #EAF3F0;
+  border-radius: 18px 18px 6px 18px;
 }
 
 .bubbleAssistant {
-  background-color: #ffffff;
-  color: #334155;
-  border-bottom-left-radius: 4px;
-  border: 1px solid #e2e8f0;
+  background-color: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 18px 6px;
 }
 
 .typingIndicator {
@@ -191,15 +192,15 @@
 
 .suggestionsSection {
   padding: 12px 16px 4px 16px;
-  background-color: #fafafa;
-  border-top: 1px dashed #e2e8f0;
+  background-color: var(--paper);
+  border-top: 1px dashed var(--line);
 }
 
 .suggestionsTitle {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--muted);
   margin-bottom: 8px;
   letter-spacing: 0.05em;
 }
@@ -213,27 +214,26 @@
 }
 
 .suggestionChip {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 6px 12px;
+  background-color: var(--soft-teal);
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
   font-size: 12px;
-  color: #475569;
+  font-weight: 600;
+  color: var(--teal-d);
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
 }
 
 .suggestionChip:hover {
-  background-color: var(--soft-teal);
-  border-color: var(--teal);
-  color: var(--teal-d);
+  filter: brightness(0.97);
 }
 
 .inputArea {
-  padding: 16px 20px;
-  border-top: 1px solid #f1f5f9;
-  background-color: #ffffff;
+  padding: 16px 20px calc(env(safe-area-inset-bottom) + 16px);
+  border-top: 1px solid var(--line);
+  background-color: var(--surface);
   display: flex;
   gap: 12px;
   align-items: center;
@@ -241,14 +241,14 @@
 
 .input {
   flex: 1;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 20px;
   padding: 10px 16px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
-  color: #334155;
-  background-color: #ffffff;
+  color: var(--ink);
+  background-color: var(--surface);
 }
 
 .input:focus {
@@ -256,8 +256,8 @@
 }
 
 .input:disabled {
-  background-color: #f8fafc;
-  color: #94a3b8;
+  background-color: var(--paper);
+  color: var(--muted);
   cursor: not-allowed;
 }
 
@@ -284,8 +284,8 @@
 }
 
 .sendButton:disabled {
-  background-color: #e2e8f0;
-  color: #94a3b8;
+  background-color: var(--line);
+  color: var(--muted);
   cursor: not-allowed;
 }
 
@@ -294,7 +294,7 @@
   justify-content: center;
   align-items: center;
   height: 100%;
-  color: #64748b;
+  color: var(--muted);
   font-size: 14px;
 }
 

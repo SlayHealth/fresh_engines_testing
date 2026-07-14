@@ -8,6 +8,7 @@ export const SUGGESTED_PATHOLOGY_TESTS = [
   'Kidney Function Test (KFT)',
   'Hemoglobin HPLC',
   'Vitamin B12 (Cyanocobalamin) — Essential for DNA synthesis',
+  'Vitamin D (25-Hydroxy)',
   'Thyroid Test',
   'Lipid Profile Test',
   'Semen Analysis — Male',

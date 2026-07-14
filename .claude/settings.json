@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node verify_cleanup_check.js)",
+      "Bash(node verify_bell_tmp.js)",
+      "Bash(curl -s http://localhost:3001/api/invite/status -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwNTY5NWRjYS0xYzBmLTRhNjYtOTNkNi1kODZlZTI5MzMwNTQiLCJwaG9uZSI6IisxOTk5MDAwMjg0OSIsInR5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3ODM5MzU3MDMsImV4cCI6MTc4MzkzNjYwM30.mF1oQ51sPA2wdxOw_M3EfiIj3OO05evsTb-YmsOGxjw')",
+      "Bash(timeout 3 curl -sN http://localhost:3001/api/invite/stream?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwNTY5NWRjYS0xYzBmLTRhNjYtOTNkNi1kODZlZTI5MzMwNTQiLCJwaG9uZSI6IisxOTk5MDAwMjg0OSIsInR5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3ODM5MzU3MDMsImV4cCI6MTc4MzkzNjYwM30.mF1oQ51sPA2wdxOw_M3EfiIj3OO05evsTb-YmsOGxjw)",
+      "Bash(node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(node verify_bell_browser.js \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNDg3MmIzZS0xNjBmLTQ0NzctYWQyOS02YjYyOTUwZjIwOGEiLCJwaG9uZSI6IisxOTk5MDAwMjYwNSIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzgzOTM1OTUxLCJleHAiOjE3ODQ1NDA3NTF9.HL0O08ipq2XsFxHFdGIJVv6Zzxk_8wE1GXv0IGNYWzA\")",
+      "Bash(npx --no-install -y playwright@1.61.1 -- node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")",
+      "Bash(npm install *)",
+      "Read(//tmp/**)",
+      "Read(//private/tmp/**)",
+      "Bash(node verify_bell_browser.js \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNDg3MmIzZS0xNjBmLTQ0NzctYWQyOS02YjYyOTUwZjIwOGEiLCJwaG9uZSI6IisxOTk5MDAwMjYwNSIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzgzOTM1OTUxLCJleHAiOjE3ODQ1NDA3NTF9.HL0O08ipq2XsFxHFdGIJVv6Zzxk_8wE1GXv0IGNYWzA\" '{\"id\":\"34872b3e-160f-4477-ad29-6b62950f208a\",\"phone_number\":\"+19990002605\",\"name\":\"Bell Verify User\",\"gender\":null,\"dob\":null,\"city\":null}')",
+      "Bash(R=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlY2VkMWU2ZC0yYjVmLTQ0ZWUtYmM5Ny02YTMzMmMyMTBhYzEiLCJwaG9uZSI6IisxOTk5MDAwNDE1MCIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzgzOTM5MzQyLCJleHAiOjE3ODQ1NDQxNDJ9.41oeXKl8lRDmwIkp4N-VGHnKBlW_6UlWjMfDPK13dFk U='{\"id\":\"eced1e6d-2b5f-44ee-bc97-6a332c210ac1\",\"phone_number\":\"+19990004150\",\"name\":\"Pranav Singh\",\"gender\":\"male\",\"dob\":\"1998-03-01\",\"city\":\"Delhi\",\"activity_level\":\"Active\"}' node -e ' *)",
+      "Bash(R=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzI4MjY1OS05YmJkLTQzZGEtYWEyNy0yODk3ZGIzMDgyYTEiLCJwaG9uZSI6IisxOTk5MDAwNTk4OCIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzgzOTQyNzY0LCJleHAiOjE3ODQ1NDc1NjR9.SV5ODHwBCrZdT8xZrw8jNipw9HwCYweLnXDRSiiFw-k U='{\"id\":\"8c282659-9bbd-43da-aa27-2897db3082a1\",\"phone_number\":\"+19990005988\",\"name\":\"Pranav Singh\",\"gender\":\"male\",\"dob\":\"1998-03-01\",\"city\":\"Delhi\",\"activity_level\":\"Active\",\"height\":175,\"weight\":70,\"waist\":32}' node -e ' *)",
+      "Bash(node -e ' *)",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e \"require\\('./src/controllers/pathology.controller.js'\\); console.log\\('OK'\\)\")",
+      "Bash(node -e \"require\\('./src/controllers/pathology.controller.js'\\); console.log\\('pathology.controller OK'\\)\")",
+      "Bash(R=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkY2VlYjk1Ny0xZjE2LTQzMGUtODE1MC1iNTk1NjVhZjdmMTEiLCJwaG9uZSI6IisxOTk5MDAwNjMxOSIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzgzOTQ2MzcxLCJleHAiOjE3ODQ1NTExNzF9.Wq0tRtKbb9AS1DZvWPd2HLJjkBcRQwq2ZDM_lYmfqtQ U='{\"id\":\"dceeb957-1f16-430e-8150-b59565af7f11\",\"phone_number\":\"+19990006319\",\"name\":\"Pranav Singh\",\"gender\":\"male\",\"dob\":\"1998-03-01\",\"city\":\"Delhi\",\"activity_level\":\"Active\",\"height\":175,\"weight\":70,\"waist\":32,\"drinking_habits\":\"regularly\",\"smoking_habits\":\"regular\",\"tobacco_habits\":\"never\",\"sleep_cycle\":\"7-8 hours\"}' node -e ' *)",
+      "Bash(R=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZDljNjc3NC0xOGE0LTRiNjktYmY2OS1mMWRkNWRmMTk2NTciLCJwaG9uZSI6IisxOTk5MDAwNzI4NiIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzg0MDE0OTY1LCJleHAiOjE3ODQ2MTk3NjV9.QvlXA39jUw6wZprqWpWt2aZiNuRJH-FggxNji4-kuFo U='{\"id\":\"5d9c6774-18a4-4b69-bf69-f1dd5df19657\",\"phone_number\":\"+19990007286\",\"name\":\"Pranav Singh\",\"gender\":\"male\",\"dob\":\"1998-03-01\",\"city\":\"Delhi\"}' node -e ' *)",
+      "Bash(npm run *)",
+      "Bash(disown)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(R=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3Mjk1NGM4ZC1kOGU4LTQyMzctODRlYS1lZWNlMTljNWEzMTIiLCJwaG9uZSI6IisxOTk5MDAwODg1OSIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzg0MDE1Nzk5LCJleHAiOjE3ODQ2MjA1OTl9.8wBbGaXkEUfAS1lSKH0Z37pLGv1tEAArHnXBOJ-LQ2Y U='{\"id\":\"72954c8d-d8e8-4237-84ea-eece19c5a312\",\"phone_number\":\"+19990008859\",\"name\":\"Pranav Singh\",\"gender\":\"male\",\"dob\":\"1998-03-01\",\"city\":\"Delhi\"}' node -e ' *)"
+    ]
+  }
+}

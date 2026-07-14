@@ -14,14 +14,21 @@ import MeasurementSlider from '../../components/wizard/MeasurementSlider';
 import CityInput from '../../components/wizard/CityInput';
 import AnalysisLoadingScreen from '../../components/wizard/AnalysisLoadingScreen';
 import CategoryHub from '../../components/wizard/CategoryHub';
+import MobileSectionList from '../../components/mobile/MobileSectionList';
+import Ico from '../../components/mobile/Ico';
+import { toMobileSections } from '../../utils/mobileSections';
+import useIsMobile from '../../hooks/useIsMobile';
 import {
   LIFESTYLE_ACTIVITIES, LIFESTYLE_DRINKING,
   LIFESTYLE_SMOKING_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL,
   GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS, RELATIONSHIP_STATUSES
 } from '../../constants/lifestyleOptions';
-import { MENTAL_HEALTH_QUESTIONS } from '../../constants/mentalHealthQuestions';
+import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES, mentalCategoryProgress } from '../../constants/mentalHealthQuestions';
+import MentalSubHub from '../../components/wizard/MentalSubHub';
+import { deriveSubstanceConcern } from '../../utils/mentalAutofill';
 import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS, SUGGESTED_GENOMICS_TESTS } from '../../constants/suggestedTests';
-import { aboutProgress as aboutProgressShared, lifestyleProgress, mentalProgress } from '../../utils/healthProfileProgress';
+import { aboutProgress as aboutProgressShared, aboutCounts as aboutCountsShared, lifestyleProgress, lifestyleCounts, mentalProgress, mentalCounts, computeConfidence, RELIABLE_THRESHOLD } from '../../utils/healthProfileProgress';
+import { estimateTimeLeft } from '../../utils/estimateTime';
 
 // Radiology upload state lives only in this page (not the shared Context), so it needs
 // its own small draft-persistence mirror — same pattern/reasoning as the profile draft
@@ -62,6 +69,54 @@ const PROSPECT_MODE_OPTIONS = [
 const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
+// Real, per-upload test coverage from the backend's ontology-based extraction
+// (see backend/src/services/pathology/testCoverage.service.js) — which named
+// tests this specific PDF contained vs. didn't, and what each missing one
+// means for the report, not just a raw "N parameters found" count.
+function TestCoverageSummary({ coverage }) {
+  const [showMissing, setShowMissing] = useState(false);
+  if (!coverage) return null;
+  const { available, missing } = coverage;
+
+  return (
+    <div className="rounded-xl border p-3.5 text-left" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--ink)' }}>
+        {available.length} of {available.length + missing.length} tests found in this report
+      </p>
+      {available.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5 mb-2">
+          {available.map((t) => (
+            <li key={t.test} className="text-[11px] font-medium px-2 py-1 rounded-md" style={{ background: 'var(--soft-teal)', color: 'var(--teal-d)' }}>
+              {t.test}
+            </li>
+          ))}
+        </ul>
+      )}
+      {missing.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowMissing((v) => !v)}
+            className="text-xs font-semibold underline"
+            style={{ color: 'var(--muted)' }}
+          >
+            {showMissing ? 'Hide' : 'Show'} {missing.length} missing test{missing.length === 1 ? '' : 's'} — and what you&apos;ll miss
+          </button>
+          {showMissing && (
+            <ul className="mt-2 space-y-1.5">
+              {missing.map((t) => (
+                <li key={t.test} className="text-xs" style={{ color: 'var(--muted)' }}>
+                  <span className="font-semibold" style={{ color: 'var(--ink)' }}>{t.test}</span> — {t.impacts} will show as not yet assessed
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AddProspectPage() {
   return (
     <Suspense fallback={null}>
@@ -93,6 +148,8 @@ function AddProspectPageInner() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [stepIndex, setStepIndex] = useState(0); // index within the active category / routing sub-flow
   const [cameFromDeepLink, setCameFromDeepLink] = useState(false); // entered directly from a Dashboard health-profile card
+  const [activeMentalSubcategory, setActiveMentalSubcategory] = useState(null); // null = show the mental sub-hub cards
+  const isMobile = useIsMobile();
 
   const fillByProspect = prospectMode === 'invite';
 
@@ -110,9 +167,7 @@ function AddProspectPageInner() {
     setUserReport,
     prospectReport,
     setProspectReport,
-    selfMentalOptIn, setSelfMentalOptIn,
     selfMentalAnswers, setSelfMentalAnswers,
-    prospectMentalOptIn, setProspectMentalOptIn,
     prospectMentalAnswers, setProspectMentalAnswers,
     isUserUploading,
     setIsUserUploading,
@@ -126,7 +181,11 @@ function AddProspectPageInner() {
     setMatchError,
     handleCompatibilityMatch,
     handleMentalAnalysis,
-    restoreMatchSession
+    restoreMatchSession,
+    fetchActiveMatchDetails,
+    chronicResult,
+    mfrResult,
+    activeMatchId
   } = useCompatibility();
 
   const isSelf = !onboardingForm.userRelation || onboardingForm.userRelation === 'Self';
@@ -166,21 +225,131 @@ function AddProspectPageInner() {
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
   const enterCategory = (key) => {
     setActiveCategory(key);
+    if (key === 'mental') {
+      // Always lands on the sub-hub cards first, never mid-question — the
+      // whole point of this screen is picking which subcategory to do next.
+      setActiveMentalSubcategory(null);
+      setStepIndex(0);
+      return;
+    }
     // Resume at the first unanswered step rather than always restarting at 0.
     const steps = getCategorySteps(key, activePerson);
     const firstIncomplete = steps.findIndex((s) => s.canAdvance === false);
     setStepIndex(firstIncomplete === -1 ? 0 : firstIncomplete);
   };
+
+  // Entry point from the mental sub-hub's cards — autofills the drinking/
+  // smoking question from Lifestyle's already-answered questions the one time
+  // the Habits & Calm subcategory is opened with it still blank, so it isn't
+  // asked a third time from scratch. Still fully editable, never hidden.
+  const handleEnterMentalSubcategory = (categoryKey) => {
+    if (categoryKey === 'habits') {
+      const adapter = activePerson === 'self' ? selfAdapter : prospectAdapter;
+      const answers = activePerson === 'self' ? selfMentalAnswers : prospectMentalAnswers;
+      const setAnswers = activePerson === 'self' ? setSelfMentalAnswers : setProspectMentalAnswers;
+      if (answers.substance_concern === undefined) {
+        const derived = deriveSubstanceConcern(adapter.form.drinking_habits, adapter.form.smoking_habits);
+        if (derived) setAnswers({ ...answers, substance_concern: derived });
+      }
+    }
+    setActiveMentalSubcategory(categoryKey);
+    setStepIndex(0);
+  };
+  // Real answers are never lost by leaving (they live in Context for the rest
+  // of this session, and enterCategory already resumes at the first
+  // unanswered step) — but a match can't be generated, and the eventual
+  // analysis is weaker, until About/Lifestyle/Pathology (the only genuinely
+  // required sections — see isPersonReady below) are done. Radiology/Mental/
+  // Genomics are deliberately optional and never trigger this prompt.
+  const confirmLeaveIncomplete = async (person) => {
+    const cats = buildCategories(person);
+    const required = cats.filter((c) => ['about', 'lifestyle', 'pathology'].includes(c.key));
+    const incomplete = required.filter((c) => (c.progress || 0) < 100);
+    if (incomplete.length === 0) return true;
+    return confirmDialog({
+      title: 'Leave with an incomplete profile?',
+      message: `${incomplete.length} required section${incomplete.length === 1 ? '' : 's'} — ${incomplete.map((c) => c.label).join(', ')} — still need${incomplete.length === 1 ? 's' : ''} finishing. Your answers are saved and you can pick up right where you left off, but you won't be able to run a compatibility check until this is done.`,
+      confirmLabel: 'Leave anyway',
+      cancelLabel: 'Keep going',
+      danger: true
+    });
+  };
+
+  // Forward "advance" callback for a completed category — never confirms,
+  // since finishing a section is progress, not abandonment.
   const exitToHub = () => {
     // Someone who deep-linked in from a single Dashboard health-profile card never
-    // chose to start the full "New Compatibility Check" flow — back should return
-    // them to the Dashboard, not drop them into this flow's category hub.
+    // chose to start the full "New Compatibility Check" flow — completing that
+    // one category naturally returns them to the Dashboard.
     if (cameFromDeepLink) {
       router.push('/dashboard');
       return;
     }
     setActiveCategory(null);
     setStepIndex(0);
+  };
+
+  // User-initiated "leave the Questionnaire" — the hub's own back button, or
+  // backing out of a category's very first (still-unanswered) step while
+  // deep-linked. This is the one that confirms if required work is unfinished.
+  const handleBackToDashboard = async () => {
+    const ok = await confirmLeaveIncomplete(activePerson);
+    if (ok) router.push('/dashboard');
+  };
+
+  const handleCategoryBackOut = async () => {
+    if (cameFromDeepLink) {
+      await handleBackToDashboard();
+      return;
+    }
+    setActiveCategory(null);
+    setStepIndex(0);
+  };
+
+  // Mental Wellbeing is deferred/optional — most commonly reached from the
+  // Analysis screen's own "Add Mental Wellbeing" pull-back CTA once a match
+  // already exists, rather than during initial onboarding. If both partners
+  // have now finished all 21 questions AND a match is already active, merge
+  // the result into that existing match immediately instead of routing
+  // through the pre-match hub flow.
+  const handleMentalCategoryAdvance = async () => {
+    const hasActiveMatch = !!(activeMatchId && chronicResult && mfrResult);
+    const selfComplete = Object.keys(selfMentalAnswers).length >= MENTAL_HEALTH_QUESTIONS.length;
+    const prospectComplete = Object.keys(prospectMentalAnswers).length >= MENTAL_HEALTH_QUESTIONS.length;
+    if (hasActiveMatch && selfComplete && prospectComplete) {
+      const ok = await handleMentalAnalysis(selfMentalAnswers, prospectMentalAnswers, activeMatchId);
+      if (ok) {
+        toast.success('Mental Wellbeing added to your report.');
+        // handleMentalAnalysis only updates the in-memory mentalResult — the Analysis
+        // screen reads activeMatchDetails.presentation_json (already-persisted, re-gated
+        // composite), which was just overwritten in the DB by this same merge, so it
+        // must be re-fetched or the screen would keep showing the pre-merge score.
+        await fetchActiveMatchDetails(activeMatchId);
+        router.push('/core-engine/story');
+        return;
+      }
+    }
+    // Finishing every mental subcategory ("Finish Mental Wellbeing") is
+    // forward progress, not abandonment — route like any other completed
+    // category (never confirms), the same as exitToHub, even though Mental
+    // itself is optional and excluded from confirmLeaveIncomplete's check.
+    // Only bailing out early ("Back to Questionnaire" with subcategories
+    // still unanswered) should go through the leave-with-incomplete-profile
+    // prompt via handleCategoryBackOut.
+    //
+    // A completed match is the same durable "already done" evidence
+    // MentalSubHub's allDone/hasEvidence already used to show the "Finish"
+    // label in the first place — checking only the raw live answers here
+    // would disagree with what the button just told the user, sending them
+    // through handleCategoryBackOut's incomplete-profile prompt instead
+    // (which then confusingly flags some *other* unrelated section).
+    const hasMentalEvidence = activePerson === 'self' && !!(matchesList && matchesList.some((m) => m?.analysis?.mentalResult));
+    const activePersonMentalComplete = hasMentalEvidence || (activePerson === 'self' ? selfComplete : prospectComplete);
+    if (activePersonMentalComplete) {
+      exitToHub();
+      return;
+    }
+    await handleCategoryBackOut();
   };
 
   // Radiology Upload Handler
@@ -911,6 +1080,8 @@ function AddProspectPageInner() {
   const choiceStep = (title, options, value, onChange, extra = {}) => ({
     title,
     subtitle: extra.subtitle,
+    section: extra.section,
+    kind: 'choice',
     content: <ChoiceList options={options} value={value} onChange={onChange} />,
     canAdvance: !!value
   });
@@ -918,6 +1089,7 @@ function AddProspectPageInner() {
   const fieldStep = (title, value, onChange, extra = {}) => ({
     title,
     subtitle: extra.subtitle,
+    kind: 'field',
     content: (
       <input
         type={extra.type || 'text'}
@@ -936,12 +1108,14 @@ function AddProspectPageInner() {
 
   const measurementStep = (title, measureType, value, onChange) => ({
     title,
+    kind: 'measurement',
     content: <MeasurementSlider type={measureType} value={value} onChange={onChange} />,
     canAdvance: true
   });
 
   const cityStep = (title, value, onChange) => ({
     title,
+    kind: 'city',
     content: <CityInput value={value} onChange={onChange} />,
     canAdvance: !!(value && value.trim())
   });
@@ -956,9 +1130,10 @@ function AddProspectPageInner() {
     return [...arr.slice(0, lastIdx), last];
   };
 
-  const uploadStep = ({ title, subtitle, isUploading, error, hasReport, onUpload, onMock, required, advance }) => ({
+  const uploadStep = ({ title, subtitle, isUploading, error, hasReport, testCoverage, onUpload, onMock, required, advance }) => ({
     title,
     subtitle,
+    kind: 'upload',
     canAdvance: required ? !!hasReport : true,
     onNext: advance,
     onSkip: required ? undefined : advance,
@@ -985,6 +1160,7 @@ function AddProspectPageInner() {
           Use a mock report instead
         </button>
         {error && <p className="text-xs font-medium text-center" style={{ color: 'var(--danger-d)' }}>{error}</p>}
+        {hasReport && <TestCoverageSummary coverage={testCoverage} />}
       </div>
     )
   });
@@ -1037,43 +1213,20 @@ function AddProspectPageInner() {
     return finalizeSteps(arr, advance);
   };
 
-  // Mental health: an opt-in choice, then (if accepted) the same 21 questions one at a time.
-  const buildMentalSteps = (optIn, setOptIn, answers, setAnswers, advance) => {
-    const arr = [{
-      title: 'Add Mental Health Compatibility?',
-      subtitle: 'Up to 20% deeper insight into long-term emotional & personality compatibility.',
-      canAdvance: !!optIn,
-      content: (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--soft-amber)' }}>
-            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--amber)', color: '#fff' }}>
-              Premium
-            </span>
-            <span className="text-xs font-medium" style={{ color: 'var(--amber-d)' }}>21 quick questions</span>
-          </div>
-          <ChoiceList
-            options={[
-              { val: 'yes', label: 'Yes, add it', desc: 'Premium — 21 quick questions' },
-              { val: 'skip', label: 'Not now', desc: 'Skip — you can add this anytime' }
-            ]}
-            value={optIn}
-            onChange={setOptIn}
-          />
-        </div>
-      )
-    }];
-
-    if (optIn === 'yes') {
-      MENTAL_HEALTH_QUESTIONS.forEach((q) => {
-        arr.push(choiceStep(q.title, q.options, answers[q.id], (v) => setAnswers({ ...answers, [q.id]: v }), { subtitle: q.desc }));
-      });
-    }
-
+  // Mental health: entering a subcategory from the sub-hub walks just that
+  // subcategory's own questions (2-6 of them), then returns to the sub-hub —
+  // no more flat 21-question walk with a nested "section within section" bar.
+  const buildMentalSteps = (categoryKey, answers, setAnswers, advance) => {
+    const questions = MENTAL_HEALTH_QUESTIONS.filter((q) => q.category === categoryKey);
+    const arr = questions.map((q) =>
+      choiceStep(q.title, q.options, answers[q.id], (v) => setAnswers({ ...answers, [q.id]: v }), { subtitle: q.desc })
+    );
     return finalizeSteps(arr, advance);
   };
 
   // ---- Progress calculations for the hub (shared with the dashboard's cards) ----
   const aboutProgress = (adapter) => aboutProgressShared(adapter, prospectForm);
+  const aboutCounts = (adapter) => aboutCountsShared(adapter, prospectForm);
 
   // ---- Build category set for whichever person is active ----
   const selfAdapter = {
@@ -1096,23 +1249,37 @@ function AddProspectPageInner() {
     const adapter = isSelfTurn ? selfAdapter : prospectAdapter;
     const label = isSelfTurn ? 'you' : (prospectForm.name || 'your prospect');
 
+    const aboutC = aboutCounts(adapter);
+    const lifestyleC = lifestyleCounts(adapter.form);
+    const mentalAnswersForPerson = isSelfTurn ? selfMentalAnswers : prospectMentalAnswers;
+    const rawMentalC = mentalCounts(mentalAnswersForPerson);
+
+    // Pathology/mental answers live only in this tab's React state plus a
+    // device-local draft — unlike About/Lifestyle they're never rehydrated
+    // from the backend on a fresh session, so a returning user would see
+    // "Start" here even with real data on file. Scoped to self only: a
+    // completed match is durable proof self's report/mental data existed
+    // (matches can't be created without both reports, and mentalResult is
+    // only ever non-null once mental was completed) — but that evidence
+    // says nothing about a *different*, not-yet-matched prospect, so it
+    // never applies to the prospect adapter.
+    const hasPathologyEvidence = isSelfTurn && !!(matchesList && matchesList.length > 0);
+    const hasMentalEvidence = isSelfTurn && !!(matchesList && matchesList.some((m) => m?.analysis?.mentalResult));
+    const mentalC = hasMentalEvidence ? { answered: rawMentalC.total, total: rawMentalC.total } : rawMentalC;
+
     return [
       {
         key: 'about', label: isSelfTurn ? 'About You' : `About ${prospectForm.name || 'Your Prospect'}`,
         desc: 'Basics, body & relationship context', icon: UserRound,
-        progress: aboutProgress(adapter), required: true
+        progress: aboutProgress(adapter), answered: aboutC.answered, total: aboutC.total, required: true
       },
       {
         key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,
-        progress: lifestyleProgress(adapter.form)
-      },
-      {
-        key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
-        progress: isSelfTurn ? mentalProgress(selfMentalOptIn, selfMentalAnswers) : mentalProgress(prospectMentalOptIn, prospectMentalAnswers)
+        progress: lifestyleProgress(adapter.form), answered: lifestyleC.answered, total: lifestyleC.total
       },
       {
         key: 'pathology', label: 'Pathology Reports', desc: `Blood work for ${label}`, icon: FlaskConical,
-        progress: isSelfTurn ? (userReport ? 100 : 0) : (prospectReport ? 100 : 0),
+        progress: isSelfTurn ? ((userReport || hasPathologyEvidence) ? 100 : 0) : (prospectReport ? 100 : 0),
         suggestedTests: SUGGESTED_PATHOLOGY_TESTS
       },
       {
@@ -1121,6 +1288,15 @@ function AddProspectPageInner() {
         locked: !radiologyUnlocked,
         price: '₹999',
         suggestedTests: SUGGESTED_RADIOLOGY_TESTS
+      },
+      // Deferred/optional, not part of the core "get your first match" path —
+      // sits last (before Genomics) rather than beside About/Lifestyle so it
+      // isn't implied to be a required step; still always tappable here or
+      // from the Analysis screen's own "Add Mental Wellbeing" pull-back CTA.
+      {
+        key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
+        progress: hasMentalEvidence ? 100 : (isSelfTurn ? mentalProgress(selfMentalAnswers) : mentalProgress(prospectMentalAnswers)),
+        answered: mentalC.answered, total: mentalC.total
       },
       {
         key: 'genomics', label: 'Genomics Report', desc: 'Carrier & hereditary risk screening', icon: Dna,
@@ -1137,9 +1313,10 @@ function AddProspectPageInner() {
     if (categoryKey === 'about') return buildAboutSteps(adapter, exitToHub);
     if (categoryKey === 'lifestyle') return buildLifestyleSteps(adapter.form, adapter.setForm, exitToHub);
     if (categoryKey === 'mental') {
+      const returnToSubHub = () => setActiveMentalSubcategory(null);
       return isSelfTurn
-        ? buildMentalSteps(selfMentalOptIn, setSelfMentalOptIn, selfMentalAnswers, setSelfMentalAnswers, exitToHub)
-        : buildMentalSteps(prospectMentalOptIn, setProspectMentalOptIn, prospectMentalAnswers, setProspectMentalAnswers, exitToHub);
+        ? buildMentalSteps(activeMentalSubcategory, selfMentalAnswers, setSelfMentalAnswers, returnToSubHub)
+        : buildMentalSteps(activeMentalSubcategory, prospectMentalAnswers, setProspectMentalAnswers, returnToSubHub);
     }
     if (categoryKey === 'pathology') {
       return [uploadStep({
@@ -1148,6 +1325,7 @@ function AddProspectPageInner() {
         isUploading: isSelfTurn ? isUserUploading : isProspectUploading,
         error: isSelfTurn ? userUploadError : prospectUploadError,
         hasReport: isSelfTurn ? !!userReport : !!prospectReport,
+        testCoverage: isSelfTurn ? userReport?.testCoverage : prospectReport?.testCoverage,
         required: true,
         advance: exitToHub,
         onUpload: () => (isSelfTurn ? userFileInputRef : prospectFileInputRef).current.click(),
@@ -1258,19 +1436,44 @@ function AddProspectPageInner() {
         {step.content}
       </QuestionScreen>
     );
+  } else if (activeCategory === 'mental' && !activeMentalSubcategory) {
+    headerTitle = 'Mental Wellbeing';
+    const mentalAnswers = activePerson === 'self' ? selfMentalAnswers : prospectMentalAnswers;
+    // Same evidence used on the hub cards (a completed match proves all 21
+    // were answered before, even though the live session/draft holding the
+    // actual per-question answers is gone) — without this, the card grid
+    // would show every subcategory at 0/N right below a hub tile that just
+    // told the user this category was already done.
+    const hasMentalEvidence = activePerson === 'self' && !!(matchesList && matchesList.some((m) => m?.analysis?.mentalResult));
+    const allSubcategoriesDone = hasMentalEvidence || MENTAL_HEALTH_CATEGORIES.every((c) => mentalCategoryProgress(c.key, mentalAnswers) >= 100);
+    body = (
+      <MentalSubHub
+        answers={mentalAnswers}
+        onEnter={handleEnterMentalSubcategory}
+        onDone={handleMentalCategoryAdvance}
+        allDone={allSubcategoriesDone}
+        hasEvidence={hasMentalEvidence}
+      />
+    );
   } else if (activeCategory) {
     const steps = getCategorySteps(activeCategory, activePerson);
     const clamped = Math.max(0, Math.min(stepIndex, steps.length - 1));
     const step = steps[clamped];
-    headerTitle = buildCategories(activePerson).find((c) => c.key === activeCategory)?.label || headerTitle;
+    const isMentalSubcategory = activeCategory === 'mental' && !!activeMentalSubcategory;
+    headerTitle = isMentalSubcategory
+      ? MENTAL_HEALTH_CATEGORIES.find((c) => c.key === activeMentalSubcategory)?.label || 'Mental Wellbeing'
+      : buildCategories(activePerson).find((c) => c.key === activeCategory)?.label || headerTitle;
+    // Upload gates (pathology/radiology) are a single yes/no step, not a
+    // multi-question journey — a countdown there would be meaningless noise.
+    const timeLeftLabel = steps.length > 1 ? estimateTimeLeft(steps.slice(clamped)) : null;
     body = (
       <QuestionScreen
-        key={`${activePerson}-${activeCategory}-${clamped}`}
+        key={`${activePerson}-${activeCategory}-${activeMentalSubcategory}-${clamped}`}
         stepIndex={clamped}
         totalSteps={steps.length}
         title={step.title}
         subtitle={step.subtitle}
-        onBack={clamped > 0 ? goBack : exitToHub}
+        onBack={clamped > 0 ? goBack : (isMentalSubcategory ? () => setActiveMentalSubcategory(null) : handleCategoryBackOut)}
         onNext={step.onNext || goNext}
         nextLabel={step.nextLabel || 'Next'}
         nextDisabled={step.canAdvance === false}
@@ -1278,6 +1481,8 @@ function AddProspectPageInner() {
         onSkip={step.onSkip}
         userName={onboardingForm.userName || user?.userName || user?.name}
         trustCategory={activeCategory}
+        sectionInfo={step.section}
+        timeLeftLabel={timeLeftLabel}
       >
         {step.content}
       </QuestionScreen>
@@ -1286,33 +1491,92 @@ function AddProspectPageInner() {
     // Hub view for the active person
     const quotaExceeded = runsUsed >= 1;
     const ready = isPersonReady(activePerson);
+    const categoriesForHub = buildCategories(activePerson);
     headerTitle = activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Prospect'}'s Health Profile`;
+    const primaryLabel = activePerson === 'self'
+      ? 'Continue'
+      : isSavingProfile ? 'Saving…' : isMatching ? 'Generating…' : 'Generate Insights';
+    const primaryDisabled = activePerson === 'self' ? !ready : (!ready || quotaExceeded);
+    const primaryHint = activePerson === 'prospect' && quotaExceeded
+      ? "You've used your free match. Reset your quota from the dashboard to run another."
+      : matchError || undefined;
+    const onPrimary = () => {
+      if (activePerson === 'self') {
+        setShowRouting(true);
+        setStepIndex(0);
+      } else {
+        handleMatch();
+      }
+    };
+
+    // Mobile hub = the mockup's Questionnaire view (target-to-70% bar + compact
+    // section list), rendered as its own full mshell screen.
+    if (isMobile) {
+      const conf = computeConfidence(categoriesForHub);
+      const hubSections = toMobileSections(categoriesForHub);
+      return (
+        <div className="mshell" data-mtheme="light" style={{ minHeight: '100dvh' }}>
+          <main className="scroll" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 24px)' }}>
+            <button
+              type="button"
+              onClick={handleBackToDashboard}
+              aria-label="Back to Dashboard"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 6, color: 'var(--ink-3)', fontSize: 12.5, fontWeight: 600 }}
+            >
+              <span style={{ transform: 'scaleX(-1)', display: 'inline-flex' }}><Ico name="chev" sm /></span>
+              Dashboard
+            </button>
+            <h1 className="vtitle serif">{activePerson === 'self' ? 'Health profile' : `${prospectForm.name || 'Prospect'}'s profile`}</h1>
+            <p className="vsub">Five sections. The engine weighs them differently — finish the heavy ones first.</p>
+
+            <div className="target card">
+              <div className="t-top"><b className="serif tnum">{conf}%</b><span>Target {RELIABLE_THRESHOLD}%</span></div>
+              <div className="tbar">
+                <i style={{ width: `${conf}%` }} />
+                <span className="mark" style={{ left: `${RELIABLE_THRESHOLD}%` }} />
+                <span className="lbl" style={{ left: `${RELIABLE_THRESHOLD}%` }}>reliable</span>
+              </div>
+              <p className="t-note">Below {RELIABLE_THRESHOLD}% we&apos;ll still run a check — we just flag which parts of the report are guesswork.</p>
+            </div>
+
+            <MobileSectionList
+              sections={hubSections}
+              compact
+              onOpen={(s) => enterCategory(s.id)}
+              onUnlock={(s) => { if (s.id === 'radiology') setRadiologyUnlocked(true); }}
+            />
+
+            <div style={{ marginTop: 18 }}>
+              {primaryHint && <p style={{ fontSize: 12, textAlign: 'center', marginBottom: 8, color: 'var(--h-gold)' }}>{primaryHint}</p>}
+              <button
+                type="button"
+                onClick={onPrimary}
+                disabled={primaryDisabled}
+                style={{ width: '100%', height: 48, borderRadius: 15, background: 'var(--mag-600)', color: '#fff', fontWeight: 600, fontSize: 14, opacity: primaryDisabled ? 0.45 : 1 }}
+              >
+                {primaryLabel}
+              </button>
+            </div>
+          </main>
+          <input type="file" ref={userFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleFileUpload(e.target.files[0], false)} />
+          <input type="file" ref={prospectFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleFileUpload(e.target.files[0], true)} />
+          <input type="file" ref={userRadFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleRadiologyUpload(e.target.files[0], false)} />
+          <input type="file" ref={prospectRadFileInputRef} style={{ display: 'none' }} accept=".pdf" onChange={(e) => handleRadiologyUpload(e.target.files[0], true)} />
+        </div>
+      );
+    }
+
     body = (
       <CategoryHub
         subheading="Pick up right where you left off — each card reflects what's already saved."
-        categories={buildCategories(activePerson)}
+        categories={categoriesForHub}
         onEnter={enterCategory}
         onUnlock={(key) => { if (key === 'radiology') setRadiologyUnlocked(true); }}
         confidenceLabel={activePerson === 'self' ? 'Your Confidence' : `${prospectForm.name || 'Prospect'}'s Confidence`}
-        primaryLabel={
-          activePerson === 'self'
-            ? 'Continue'
-            : isSavingProfile ? 'Saving…' : isMatching ? 'Generating…' : 'Generate Insights'
-        }
-        primaryDisabled={activePerson === 'self' ? !ready : (!ready || quotaExceeded)}
-        primaryHint={
-          activePerson === 'prospect' && quotaExceeded
-            ? "You've used your free match. Reset your quota from the dashboard to run another."
-            : matchError || undefined
-        }
-        onPrimary={() => {
-          if (activePerson === 'self') {
-            setShowRouting(true);
-            setStepIndex(0);
-          } else {
-            handleMatch();
-          }
-        }}
+        primaryLabel={primaryLabel}
+        primaryDisabled={primaryDisabled}
+        primaryHint={primaryHint}
+        onPrimary={onPrimary}
       />
     );
   }

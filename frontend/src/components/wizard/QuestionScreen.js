@@ -1,6 +1,7 @@
 'use client';
 
-import { ChevronLeft, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronDown, Sparkles } from 'lucide-react';
 import styles from '../../app/page.module.css';
 import { getTrustMessage } from '../../constants/trustMessages';
 
@@ -25,6 +26,19 @@ export default function QuestionScreen({
   userName,
   trustCategory = 'general',
   trustSeed,
+  // Optional — breaks a long flat step list into visible sub-sections (used by
+  // the mental-wellbeing questionnaire) instead of one long N-of-M counter.
+  // { label, color, soft, index, total, position, length, allColors }
+  // Renders as two separate bars: a global one (`total` segments, one per
+  // sub-category, each lighting up in its own color once reached) and a
+  // local one directly below it (`length` segments, one per question in the
+  // *current* sub-category) — kept as two distinct signals rather than
+  // blending "which section" and "how far into it" into one bar.
+  sectionInfo,
+  // Optional dynamic "~40 sec left" / "Almost there — last one!" read,
+  // pre-computed by the parent from the remaining steps (see utils/estimateTime).
+  // Recomputed every step so it counts down in real time as the user answers.
+  timeLeftLabel,
   children
 }) {
   const progressPct = totalSteps > 0 ? ((stepIndex + 1) / totalSteps) * 100 : 0;
@@ -34,10 +48,35 @@ export default function QuestionScreen({
     : 'hover:shadow-[0_6px_20px_rgba(24,204,150,0.3)]';
   const trustMessage = getTrustMessage(userName, trustCategory, trustSeed ?? stepIndex, title);
 
+  // Some questions (long multi-line choice options, e.g. Mental Wellbeing's
+  // "Habits & Calm") don't fit this slot on shorter phones. The answer area
+  // already scrolls independently of the fixed header/Next button, but a
+  // small nested scroll region with no visual cue reads as "the last option
+  // got cut off," not "swipe up for more" — so surface an explicit hint
+  // whenever there's real overflow, and hide it once fully scrolled.
+  const scrollRef = useRef(null);
+  const [hasMoreBelow, setHasMoreBelow] = useState(false);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const checkOverflow = () => {
+      setHasMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 8);
+    };
+    checkOverflow();
+    el.addEventListener('scroll', checkOverflow, { passive: true });
+    const ro = new ResizeObserver(checkOverflow);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', checkOverflow);
+      ro.disconnect();
+    };
+  }, [children]);
+
   return (
     <div className={`flex-1 flex flex-col overflow-hidden ${styles.dashboard}`}>
-      {/* Progress bar + step counter */}
-      <div className="flex items-center gap-3 mb-6 shrink-0">
+      {/* Global progress — one segment per sub-category */}
+      <div className="flex items-center gap-3 shrink-0" style={{ marginBottom: sectionInfo ? '8px' : '12px' }}>
         {onBack ? (
           <button
             type="button"
@@ -51,16 +90,69 @@ export default function QuestionScreen({
         ) : (
           <div className="w-8 h-8 shrink-0" />
         )}
-        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-          <div
-            className="h-full rounded-full transition-[width] duration-300 ease-out"
-            style={{ width: `${progressPct}%`, background: 'var(--teal)' }}
-          />
-        </div>
-        <span className="text-[11px] font-medium shrink-0" style={{ color: 'var(--muted)' }}>
-          {stepIndex + 1}/{totalSteps}
-        </span>
+
+        {sectionInfo ? (
+          <div className="flex-1 flex items-center gap-1.5">
+            {Array.from({ length: sectionInfo.total }).map((_, i) => {
+              const reached = i <= sectionInfo.index;
+              return (
+                <div key={i} className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
+                  {reached && (
+                    <div className="h-full rounded-full" style={{ background: sectionInfo.allColors[i] }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
+            <div
+              className="h-full rounded-full transition-[width] duration-300 ease-out"
+              style={{ width: `${progressPct}%`, background: 'var(--teal)' }}
+            />
+          </div>
+        )}
+
+        {!sectionInfo && (
+          <span className="text-[11px] font-medium shrink-0" style={{ color: 'var(--muted)' }}>
+            {stepIndex + 1}/{totalSteps}
+          </span>
+        )}
       </div>
+
+      {/* Local progress — one segment per question in the *current* sub-category */}
+      {sectionInfo && (
+        <div className="flex items-center gap-3 mb-3 shrink-0">
+          <div className="w-8 shrink-0" aria-hidden="true" />
+          <div className="flex-1 flex items-center gap-1">
+            {Array.from({ length: sectionInfo.length }).map((_, i) => (
+              <div key={i} className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
+                {i < sectionInfo.position && (
+                  <div className="h-full rounded-full" style={{ background: sectionInfo.color }} />
+                )}
+              </div>
+            ))}
+          </div>
+          <span className="text-[11px] font-medium shrink-0" style={{ color: 'var(--muted)' }}>
+            {sectionInfo.position}/{sectionInfo.length}
+          </span>
+        </div>
+      )}
+
+      {sectionInfo && (
+        <span
+          className="inline-flex self-start items-center text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full mb-3 shrink-0"
+          style={{ background: sectionInfo.soft, color: sectionInfo.color }}
+        >
+          {sectionInfo.label}
+        </span>
+      )}
+
+      {timeLeftLabel && (
+        <p className="text-[11px] font-medium mb-3 -mt-1 shrink-0" style={{ color: 'var(--muted)' }}>
+          {timeLeftLabel}
+        </p>
+      )}
 
       {/* Question */}
       <div className="mb-6 shrink-0">
@@ -71,20 +163,31 @@ export default function QuestionScreen({
       </div>
 
       {/* Answer content */}
-      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-        <div>{children}</div>
+      <div className="flex-1 min-h-0 relative">
+        <div ref={scrollRef} className={`h-full overflow-y-auto flex flex-col ${trustCategory === 'mental' ? 'brand-scroll' : ''}`}>
+          <div className="pb-3">{children}</div>
 
-        {trustMessage && (
-          <div className="mt-auto pt-8 pb-1 flex justify-center shrink-0 animate-fade-in">
-            <div
-              className="flex items-start gap-2 max-w-[260px] px-3.5 py-2.5 rounded-2xl"
-              style={{ background: 'var(--soft-pink)' }}
-            >
-              <Sparkles className="w-3 h-3 mt-0.5 shrink-0" style={{ color: 'var(--pink)' }} />
-              <p className="text-[11px] leading-relaxed font-medium text-left" style={{ color: 'var(--pink-d)' }}>
-                {trustMessage}
-              </p>
+          {trustMessage && (
+            <div className="mt-auto pt-8 pb-1 flex justify-center shrink-0 animate-fade-in">
+              <div
+                className="flex items-start gap-2 max-w-[260px] px-3.5 py-2.5 rounded-2xl"
+                style={{ background: 'var(--soft-pink)' }}
+              >
+                <Sparkles className="w-3 h-3 mt-0.5 shrink-0" style={{ color: 'var(--pink)' }} />
+                <p className="text-[11px] leading-relaxed font-medium text-left" style={{ color: 'var(--pink-d)' }}>
+                  {trustMessage}
+                </p>
+              </div>
             </div>
+          )}
+        </div>
+
+        {hasMoreBelow && (
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 flex items-end justify-center pb-1" style={{ height: 44 }}>
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(247,248,250,0), var(--surface) 85%)' }} />
+            <span className="relative flex items-center justify-center w-6 h-6 rounded-full animate-bounce" style={{ background: 'var(--surface)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+              <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--muted)' }} />
+            </span>
           </div>
         )}
       </div>

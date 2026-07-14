@@ -13,6 +13,7 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_jwt_refre
 
 const ACCESS_EXPIRY = '15m';
 const REFRESH_EXPIRY = '7d';
+const SHARE_EXPIRY = '48h';
 
 /**
  * Generate a new pair of Access and Refresh tokens.
@@ -68,6 +69,40 @@ function verifyRefreshToken(token) {
     return decoded;
   } catch (err) {
     logger.debug(`RefreshToken verification failed: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Mint a short-lived, single-purpose signed token scoped to one match's shareable
+ * assets (currently just the PDF route). Deliberately distinct from an access token —
+ * it carries no `sub`/`phone`, only the matchId it's allowed to unlock, so it can never
+ * be used to hit any other authenticated endpoint even while it's still valid.
+ * @param {string} matchId
+ * @returns {string} signed token, valid for 48h
+ */
+function generateShareToken(matchId) {
+  return jwt.sign(
+    { matchId, type: 'match_share' },
+    JWT_SECRET,
+    { expiresIn: SHARE_EXPIRY }
+  );
+}
+
+/**
+ * Verify a match share token.
+ * @param {string} token
+ * @returns {Object|null} decoded payload ({ matchId, type }) or null if invalid/expired
+ */
+function verifyShareToken(token) {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.type !== 'match_share' || !decoded.matchId) {
+      throw new Error('Invalid token type');
+    }
+    return decoded;
+  } catch (err) {
+    logger.debug(`ShareToken verification failed: ${err.message}`);
     return null;
   }
 }
@@ -170,6 +205,8 @@ module.exports = {
   generateTokens,
   verifyAccessToken,
   verifyRefreshToken,
+  generateShareToken,
+  verifyShareToken,
   saveSession,
   findAndValidateSession,
   revokeSession,

@@ -183,13 +183,13 @@ export default function ReportChatDrawer({
   const getWelcomeMessage = (type) => {
     switch (type) {
       case 'chronic':
-        return "Hi there! I am your SlayHealth premarital health counselor. I've reviewed your chronic risk factors and metabolic biomarkers. Let me know what questions you have or how I can guide you towards a healthier lifestyle together!";
+        return "Hi, I'm SlayHealth's AI assistant. I've read through your chronic risk factors and metabolic biomarkers — ask me anything, or let's talk through what a healthier shared lifestyle could look like.";
       case 'mfr':
-        return "Hello! I am your premarital fertility counselor. I have analyzed your MFR fertility and ovarian/semen reserves. Let's talk about what these indicators mean in a warm, simple way, and explore how you can optimize your path forward.";
+        return "Hi, I'm SlayHealth's AI assistant. I've looked at your fertility indicators and ovarian/semen reserves. Let's talk through what these mean in plain language, and how you might optimize your path forward.";
       case 'usg':
-        return "Hi! I am your health counselor. I've analyzed your abdominal ultrasound parameters (kidneys, liver, prostate, etc.). Ask me anything about your USG report, and we can go over positive lifestyle tips to keep your organs happy!";
+        return "Hi, I'm SlayHealth's AI assistant. I've reviewed your abdominal ultrasound findings (kidneys, liver, prostate, etc.). Ask me anything about your scan, and I can walk through lifestyle tips that support those organs.";
       default:
-        return "Hello! I am your friendly health counselor. How can I help you understand your wellness reports today?";
+        return "Hi, I'm SlayHealth's AI assistant. Ask me anything about your report — I'll explain it in plain language.";
     }
   };
 
@@ -248,7 +248,7 @@ export default function ReportChatDrawer({
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
-        aria-label="AI Health Counselor chat"
+        aria-label="Ask about your report — AI assistant chat"
         className={`${styles.drawer} ${isOpen ? styles.drawerActive : ''}`}
       >
         {/* Header */}
@@ -258,8 +258,8 @@ export default function ReportChatDrawer({
               <Sparkles size={20} />
             </div>
             <div className={styles.titleArea}>
-              <h3 className={styles.title}>AI Health Counselor</h3>
-              <span className={styles.subtitle}>Empathetic, jargon-free guidance</span>
+              <h3 className={styles.title}>Ask about your report</h3>
+              <span className={styles.subtitle}>AI assistant, not a human reviewer</span>
             </div>
           </div>
           <button ref={closeButtonRef} className={styles.closeButton} onClick={onClose} aria-label="Close Chat">
@@ -343,7 +343,7 @@ export default function ReportChatDrawer({
           <input
             type="text"
             className={styles.input}
-            placeholder="Ask counselor anything..."
+            placeholder="Ask about your report..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}

@@ -2,14 +2,18 @@
 
 import { useState } from 'react';
 import { Check, ChevronDown, Lock, ArrowRight, Gauge } from 'lucide-react';
-import { CONFIDENCE_WEIGHTS, computeConfidence } from '../../utils/healthProfileProgress';
+import { CONFIDENCE_WEIGHTS, computeConfidence, categoryTone, TONE_COLORS } from '../../utils/healthProfileProgress';
 
-function ProgressRing({ progress, size = 44, locked, done }) {
+// Center label prefers a concrete "3/6" (answered/total) over an abstract
+// "50%" whenever the caller has real field counts — see MobileMiniRing for
+// the same treatment on the mobile tile list.
+function ProgressRing({ progress, size = 44, locked, tone, answered, total }) {
   const stroke = 4;
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
   const offset = circumference - (progress / 100) * circumference;
-  const color = locked ? 'var(--muted)' : done ? 'var(--teal)' : progress > 0 ? 'var(--pink)' : 'var(--line)';
+  const { color } = TONE_COLORS[tone];
+  const hasCounts = typeof total === 'number' && total > 0;
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -33,8 +37,10 @@ function ProgressRing({ progress, size = 44, locked, done }) {
       <div className="absolute inset-0 flex items-center justify-center">
         {locked ? (
           <Lock className="w-4 h-4" style={{ color: 'var(--muted)' }} />
-        ) : done ? (
-          <Check className="w-4 h-4" style={{ color: 'var(--teal)' }} />
+        ) : progress >= 100 ? (
+          <Check className="w-4 h-4" style={{ color }} />
+        ) : hasCounts ? (
+          <span className="text-[9px] font-bold" style={{ color: 'var(--muted)' }}>{answered}/{total}</span>
         ) : (
           <span className="text-[10px] font-bold" style={{ color: 'var(--muted)' }}>{Math.round(progress)}%</span>
         )}
@@ -44,10 +50,12 @@ function ProgressRing({ progress, size = 44, locked, done }) {
 }
 
 function CategoryCard({ category, onEnter, onUnlock }) {
-  const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, suggestedTests, required } = category;
+  const { icon: Icon, label, desc, progress = 0, locked, comingSoon, price, suggestedTests, required, answered, total } = category;
   const weight = CONFIDENCE_WEIGHTS[category.key];
   const [showSuggested, setShowSuggested] = useState(false);
   const done = progress >= 100;
+  const tone = categoryTone(category);
+  const { color, soft, text } = TONE_COLORS[tone];
   // Subtle nudge toward the one card that's effectively mandatory (basics like
   // age/gender live here) — nothing else in the hub visually distinguishes it
   // from optional cards, so it's easy to skip straight to uploads and never see it.
@@ -58,7 +66,7 @@ function CategoryCard({ category, onEnter, onUnlock }) {
       className="rounded-2xl border transition-all"
       style={{
         background: needsAttention ? 'var(--soft-blue)' : 'var(--surface)',
-        borderColor: done ? 'var(--teal)' : needsAttention ? 'var(--info)' : 'var(--line)',
+        borderColor: done ? color : needsAttention ? 'var(--info)' : 'var(--line)',
         opacity: comingSoon ? 0.65 : 1
       }}
     >
@@ -69,8 +77,8 @@ function CategoryCard({ category, onEnter, onUnlock }) {
         className="w-full flex items-center gap-3.5 p-4 text-left"
         style={{ cursor: locked || comingSoon ? 'default' : 'pointer' }}
       >
-        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--paper)' }}>
-          <Icon className="w-5 h-5" style={{ color: locked ? 'var(--muted)' : 'var(--teal-d)' }} />
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: locked || comingSoon ? 'var(--paper)' : soft }}>
+          <Icon className="w-5 h-5" style={{ color: locked ? 'var(--muted)' : color }} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -83,7 +91,7 @@ function CategoryCard({ category, onEnter, onUnlock }) {
             {!comingSoon && !!weight && (
               <span
                 className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
-                style={{ background: done ? 'var(--soft-teal)' : 'var(--soft-amber)', color: done ? 'var(--teal-d)' : 'var(--amber-d)' }}
+                style={{ background: soft, color: text }}
               >
                 +{weight}% confidence
               </span>
@@ -91,7 +99,7 @@ function CategoryCard({ category, onEnter, onUnlock }) {
           </div>
           <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--muted)' }}>{desc}</p>
         </div>
-        {!comingSoon && <ProgressRing progress={progress} locked={locked} done={done} />}
+        {!comingSoon && <ProgressRing progress={progress} locked={locked} tone={tone} answered={answered} total={total} />}
       </button>
 
       {locked && !comingSoon && (
@@ -104,7 +112,7 @@ function CategoryCard({ category, onEnter, onUnlock }) {
             style={{ background: 'var(--soft-amber)' }}
           >
             <div>
-              <p className="text-xs font-bold" style={{ color: 'var(--amber-d)' }}>{price}</p>
+              <p className="text-xs font-bold" style={{ color: 'var(--amber-d)' }}>{price} — one-time unlock</p>
             </div>
             <span className="text-xs font-bold px-3 py-1.5 rounded-full text-white shrink-0" style={{ background: 'var(--amber)' }}>
               Unlock
@@ -140,6 +148,9 @@ function CategoryCard({ category, onEnter, onUnlock }) {
   );
 }
 
+// Every category always renders — no hide-on-complete, no ack/exiting state
+// (that behavior was tried and then intentionally removed for consistency
+// with the mobile tile list, which always shows everything).
 export default function CategoryHub({
   heading,
   subheading,
@@ -151,7 +162,7 @@ export default function CategoryHub({
   primaryDisabled,
   primaryHint,
   embedded = false,
-  confidenceLabel = 'Engine Confidence'
+  confidenceLabel = 'The Full Picture'
 }) {
   const confidence = computeConfidence(categories);
   return (
@@ -178,7 +189,7 @@ export default function CategoryHub({
           />
         </div>
         <p className="text-[11px] mt-2" style={{ color: 'var(--teal-d)' }}>
-          Fill in each section below to raise your engine's confidence in the analysis.
+          Fill in each section below to raise your engine&apos;s confidence in the analysis.
         </p>
       </div>
 

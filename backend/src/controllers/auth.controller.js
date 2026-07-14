@@ -372,6 +372,63 @@ async function getUserProfile(req, res, next) {
   }
 }
 
+/**
+ * Permanently delete the authenticated user's own account and everything
+ * reachable from it. Self only — there is no admin bypass, req.user.id is
+ * always the acting caller's own id (set by authenticateToken), never a
+ * client-supplied id.
+ *
+ * `reports` and `chat_sessions` have no direct FK to `users`, so their rows
+ * are gathered by this user's matches and deleted explicitly, in a
+ * transaction, before the `users` row itself. Deleting `users` then cascades
+ * `matches`, `user_sessions`, `prospect_invites` (as inviter — the other
+ * party's `prospect_user_id` is SET NULL, not deleted), `radiology_reports`,
+ * and `usg_reports` automatically via their ON DELETE CASCADE user_id FKs.
+ *
+ * Real, disclosed limitation: radiology/USG rows uploaded before user_id
+ * stamping shipped have no reliable link back to an account (only free-text
+ * extracted from the PDF itself) and are not reachable here — the frontend's
+ * confirmation copy says so plainly rather than claiming a complete purge.
+ */
+async function deleteAccount(req, res, next) {
+  const correlationId = req.correlationId || uuidv4();
+  const client = await db.pool.connect();
+  try {
+    const userId = req.user.id;
+
+    await client.query('BEGIN');
+
+    const matchReports = await client.query(
+      `SELECT male_report_id, female_report_id FROM matches
+       WHERE user_id = $1 AND (male_report_id IS NOT NULL OR female_report_id IS NOT NULL)`,
+      [userId]
+    );
+    const reportIds = [...new Set(
+      matchReports.rows.flatMap((r) => [r.male_report_id, r.female_report_id]).filter(Boolean)
+    )];
+
+    if (reportIds.length > 0) {
+      await client.query(
+        'DELETE FROM chat_sessions WHERE report_id = ANY($1) OR partner_report_id = ANY($1)',
+        [reportIds]
+      );
+      await client.query('DELETE FROM reports WHERE id = ANY($1)', [reportIds]);
+    }
+
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    await client.query('COMMIT');
+    logger.info(`[Auth][CID: ${correlationId}] Deleted account ${userId} and all reachable data.`);
+    res.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error(`[Auth][CID: ${correlationId}] Error in deleteAccount: ${error.message}`);
+    next(error);
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   loginUser,
   verifyOtp,
@@ -379,5 +436,6 @@ module.exports = {
   logoutUser,
   updateProfile,
   resetQuota,
-  getUserProfile
+  getUserProfile,
+  deleteAccount
 };

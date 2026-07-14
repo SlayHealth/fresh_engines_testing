@@ -142,8 +142,8 @@ exports.uploadReport = async (req, res, next) => {
     // 3. Save report to DB
     const reportId = uuidv4();
     await db.query(
-      `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         reportId,
         analyzed.patient_slay_id,
@@ -153,7 +153,8 @@ exports.uploadReport = async (req, res, next) => {
         JSON.stringify(analyzed.findings),
         JSON.stringify(analyzed.scores),
         JSON.stringify(analyzed.risk_flags),
-        analyzed.raw_ocr_text
+        analyzed.raw_ocr_text,
+        req.user?.id || null
       ]
     );
 
@@ -195,8 +196,8 @@ exports.saveReport = async (req, res, next) => {
     const recomputedRiskFlags = generateRiskFlags(findings, sex, age);
 
     await db.query(
-      `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, is_mock)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)`,
+      `INSERT INTO radiology_reports (id, patient_slay_id, sex, age, modalities_detected, findings_json, scores_json, risk_flags_json, raw_ocr_text, is_mock, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, $10)`,
       [
         reportId,
         reportData.patient_slay_id,
@@ -206,7 +207,8 @@ exports.saveReport = async (req, res, next) => {
         JSON.stringify(findings),
         JSON.stringify(recomputedScores),
         JSON.stringify(recomputedRiskFlags),
-        reportData.raw_ocr_text || ''
+        reportData.raw_ocr_text || '',
+        req.user?.id || null
       ]
     );
     const legacyMapped = mapRadiologyToLegacyFormat({ ...reportData, findings, scores: recomputedScores, risk_flags: recomputedRiskFlags });

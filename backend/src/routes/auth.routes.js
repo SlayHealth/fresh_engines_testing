@@ -1,12 +1,13 @@
 const express = require('express');
-const { 
-  loginUser, 
-  verifyOtp, 
-  refreshSession, 
-  logoutUser, 
-  updateProfile, 
-  resetQuota, 
-  getUserProfile 
+const {
+  loginUser,
+  verifyOtp,
+  refreshSession,
+  logoutUser,
+  updateProfile,
+  resetQuota,
+  getUserProfile,
+  deleteAccount
 } = require('../controllers/auth.controller');
 const { authenticateToken } = require('../middleware/auth.middleware');
 
@@ -21,5 +22,6 @@ router.post('/logout', logoutUser);
 router.post('/profile', authenticateToken, updateProfile);
 router.post('/reset-quota', authenticateToken, resetQuota);
 router.get('/profile/:userId', authenticateToken, getUserProfile);
+router.delete('/account', authenticateToken, deleteAccount);
 
 module.exports = router;

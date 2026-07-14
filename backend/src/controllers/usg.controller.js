@@ -402,10 +402,10 @@ async function persistReport(req, res, next) {
     const slayId = data.patient?.patient_slay_id || null;
     
     await db.query(
-      'INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results) VALUES ($1, $2, $3, $4)',
-      [reportId, slayId, JSON.stringify(data), JSON.stringify(analyzed)]
+      'INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results, user_id) VALUES ($1, $2, $3, $4, $5)',
+      [reportId, slayId, JSON.stringify(data), JSON.stringify(analyzed), req.user?.id || null]
     );
-    
+
     res.json({ reportId, analyzed });
   } catch (err) {
     next(err);
@@ -501,8 +501,8 @@ async function uploadReport(req, res, next) {
     const reportId = uuidv4();
     const slayId = extractedJson.patient?.patient_slay_id || null;
     await db.query(
-      'INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results) VALUES ($1, $2, $3, $4)',
-      [reportId, slayId, JSON.stringify(extractedJson), JSON.stringify(analyzed)]
+      'INSERT INTO usg_reports (id, patient_slay_id, extracted_json, analyzed_results, user_id) VALUES ($1, $2, $3, $4, $5)',
+      [reportId, slayId, JSON.stringify(extractedJson), JSON.stringify(analyzed), req.user?.id || null]
     );
     
     // 5. Cleanup temp file

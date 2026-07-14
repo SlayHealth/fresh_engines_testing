@@ -271,11 +271,10 @@ export function CompatibilityProvider({ children }) {
   const [userUploadError, setUserUploadError] = useState(null);
   const [prospectUploadError, setProspectUploadError] = useState(null);
 
-  // Mental wellbeing opt-in + answers, per person — shared across add-prospect's
-  // wizard and the dashboard's health-profile progress cards.
-  const [selfMentalOptIn, setSelfMentalOptIn] = useState(() => loadDraft()?.selfMentalOptIn || null);
+  // Mental wellbeing answers, per person — entering the category from the hub
+  // is the opt-in (mirrors About You/Lifestyle, no separate yes/no gate) —
+  // shared across add-prospect's wizard and the dashboard's progress cards.
   const [selfMentalAnswers, setSelfMentalAnswers] = useState(() => loadDraft()?.selfMentalAnswers || {});
-  const [prospectMentalOptIn, setProspectMentalOptIn] = useState(() => loadDraft()?.prospectMentalOptIn || null);
   const [prospectMentalAnswers, setProspectMentalAnswers] = useState(() => loadDraft()?.prospectMentalAnswers || {});
 
   // Results State
@@ -316,9 +315,7 @@ export function CompatibilityProvider({ children }) {
     setChatSessionId(null);
     setUserReport(null);
     setProspectReport(null);
-    setSelfMentalOptIn(null);
     setSelfMentalAnswers({});
-    setProspectMentalOptIn(null);
     setProspectMentalAnswers({});
     setOnboardingForm({
       userName: '',
@@ -367,15 +364,13 @@ export function CompatibilityProvider({ children }) {
         prospectForm,
         userReport,
         prospectReport,
-        selfMentalOptIn,
         selfMentalAnswers,
-        prospectMentalOptIn,
         prospectMentalAnswers
       }));
     } catch (e) {
       // Storage full/unavailable — draft persistence is best-effort only.
     }
-  }, [onboardingForm, prospectForm, userReport, prospectReport, selfMentalOptIn, selfMentalAnswers, prospectMentalOptIn, prospectMentalAnswers]);
+  }, [onboardingForm, prospectForm, userReport, prospectReport, selfMentalAnswers, prospectMentalAnswers]);
 
   // Load user session on mount
   useEffect(() => {
@@ -804,9 +799,7 @@ export function CompatibilityProvider({ children }) {
       prospectForm, setProspectForm,
       userReport, setUserReport,
       prospectReport, setProspectReport,
-      selfMentalOptIn, setSelfMentalOptIn,
       selfMentalAnswers, setSelfMentalAnswers,
-      prospectMentalOptIn, setProspectMentalOptIn,
       prospectMentalAnswers, setProspectMentalAnswers,
       isUserUploading, setIsUserUploading,
       isProspectUploading, setIsProspectUploading,

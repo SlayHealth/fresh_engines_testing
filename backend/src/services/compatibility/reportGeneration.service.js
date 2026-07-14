@@ -134,6 +134,10 @@ class ReportGenerationService {
       detailsForPresentation
     );
     presentation.report_assets = assets;
+    // genScore (100/75/50 by real carrier-pair status, computed above) previously
+    // fed only into the composite blend and was discarded — surfaced here as-is
+    // so a "Genetic carrier risk" tile can show it without inventing a new score.
+    presentation.genetic_score = hasGenetic ? genScore : null;
 
     const compatibilityScore = crossDomainScore !== null ? crossDomainScore / 100 : null;
 
