@@ -472,6 +472,12 @@ export default function YourStoryPage() {
 
   // Health Character state machine resolvers
   const getThreadState = (id, year, actBranch) => {
+    if (id === 'infection') {
+      const gate = activeMatchDetails?.presentation_json?.sti_gate;
+      if (!gate) return 'Pending';
+      return gate.triggered ? 'Needs attention' : 'Resolved';
+    }
+
     if (id === 'fertility') {
       if (!mfrResult) return 'Pending';
       const mfrState = mfrResult.state || 'Aligned';
@@ -545,6 +551,34 @@ export default function YourStoryPage() {
 
   // Defining the stateful findings list
   const threads = [
+    // UX3-01: the STI safety gate is computed correctly server-side
+    // (presentation_json.sti_gate) and already caps the headline score, but
+    // was never bound to any element on this tab — a couple could read a
+    // capped score as generic low-urgency admin with no way to learn a
+    // reactive infectious-disease screen is the reason. Reuses the gate's
+    // own headline/narrative/clinical_footnote/findings text verbatim.
+    {
+      id: 'infection',
+      name: 'Infection screening',
+      icon: AlertTriangle,
+      plain: {
+        why: activeMatchDetails?.presentation_json?.sti_gate?.narrative || 'Standard premarital infectious-disease screening (HIV, Syphilis, Hepatitis B/C).',
+        revealBtnText: 'The screening result, if you want it',
+        revealDetail: () => {
+          const gate = activeMatchDetails?.presentation_json?.sti_gate;
+          return { value: null, suffix: gate?.clinical_footnote || gate?.headline || 'Screening reviewed', text: '' };
+        }
+      },
+      clinical: {
+        why: activeMatchDetails?.presentation_json?.sti_gate?.narrative || 'HIV, Syphilis, and Hepatitis B/C screening markers.',
+        revealBtnText: 'See screening findings',
+        revealDetail: () => {
+          const gate = activeMatchDetails?.presentation_json?.sti_gate;
+          const findingsText = (gate?.findings || []).map((f) => f.detail).filter(Boolean).join(' ');
+          return { value: null, suffix: findingsText || gate?.clinical_footnote || gate?.headline || 'Screening reviewed', text: '' };
+        }
+      }
+    },
     {
       id: 'fertility',
       name: 'Starting a family',
@@ -1027,7 +1061,16 @@ export default function YourStoryPage() {
             </div>
           )}
           <div className="space-y-3">
-            {threads.map((thread) => {
+            {/* UX3-01: promote whatever actually needs attention (a reactive
+                infection screen, a confirmed genetic carrier pair) above
+                routine "Resolved" rows, rather than leaving it wherever it
+                happens to fall in a fixed domain order. */}
+            {[...threads]
+              .sort((a, b) => {
+                const rank = (id) => (getThreadState(id, selectedYear, isAct) === 'Needs attention' ? 0 : 1);
+                return rank(a.id) - rank(b.id);
+              })
+              .map((thread) => {
               const state = getThreadState(thread.id, selectedYear, isAct);
               if (state === 'Pending') return null;
 
