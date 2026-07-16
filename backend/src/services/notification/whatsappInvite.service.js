@@ -67,6 +67,12 @@ class WhatsAppInviteService {
                 text: inviterName
               },
               {
+                // UX8-05: this class currently has no callers anywhere in the
+                // codebase (dead code) — noted here so whoever wires it up
+                // passes the same resolved origin invite.controller.js's
+                // createInvite() now uses (derived from the request, not this
+                // static env value), rather than reintroducing the same
+                // dead-link bug on the WhatsApp delivery path.
                 type: "text",
                 text: `${process.env.APP_URL || 'http://localhost:3000'}/invite/${inviteToken}`
               }

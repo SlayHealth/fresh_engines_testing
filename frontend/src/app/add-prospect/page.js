@@ -718,7 +718,12 @@ function AddProspectPageInner() {
         method: 'POST',
         body: JSON.stringify({
           prospectName: prospectForm.name,
-          mentalAnswers: Object.keys(selfMentalAnswers).length > 0 ? selfMentalAnswers : undefined
+          mentalAnswers: Object.keys(selfMentalAnswers).length > 0 ? selfMentalAnswers : undefined,
+          // UX8-05: the backend previously built the invite link from a static
+          // APP_URL env value that had drifted from this app's real serving
+          // origin, handing out dead links. The browser always knows its own
+          // real origin — sent here so the backend can use it directly.
+          appOrigin: typeof window !== 'undefined' ? window.location.origin : undefined
         })
       });
 

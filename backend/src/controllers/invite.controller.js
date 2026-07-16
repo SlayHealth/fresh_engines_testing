@@ -6,6 +6,32 @@ const { db } = require('../services/storage/postgres.service');
 const logger = require('../utils/logger');
 const reportGenerationService = require('../services/compatibility/reportGeneration.service');
 
+// UX8-05: the invite link previously always used a static APP_URL env value with
+// no validation — when it drifted from the frontend's real serving origin (a
+// stale LAN IP in this exact repro), every invite link handed to an account
+// holder was dead on arrival, with no error surfaced anywhere. The frontend
+// browser making this request knows its own real origin reliably
+// (window.location.origin) — trusted here since it only affects a link shown
+// back to the same authenticated caller, not an authorization decision.
+// APP_URL remains the fallback for non-browser callers.
+function resolveAppOrigin(candidateOrigin) {
+  const isValidHttpOrigin = (value) => {
+    if (typeof value !== 'string' || !value) return false;
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (e) {
+      return false;
+    }
+  };
+
+  if (isValidHttpOrigin(candidateOrigin)) return candidateOrigin;
+  if (isValidHttpOrigin(process.env.APP_URL)) return process.env.APP_URL;
+
+  logger.warn('[InviteController] Neither the request-supplied appOrigin nor APP_URL is a valid http(s) URL — falling back to http://localhost:3000. Invite links will likely be unreachable.');
+  return 'http://localhost:3000';
+}
+
 // Import parsing services for background processing
 const ocrProvider = require('../services/ocr/ocrProvider');
 const parameterExtractor = require('../services/parser/parameterExtractor.service');
@@ -82,7 +108,7 @@ async function createInvite(req, res, next) {
   }
 
   try {
-    const { prospectName, mentalAnswers } = req.body;
+    const { prospectName, mentalAnswers, appOrigin } = req.body;
     if (!prospectName) {
       return res.status(400).json({ success: false, error: 'Prospect Name is required' });
     }
@@ -115,7 +141,7 @@ async function createInvite(req, res, next) {
       [inviteId, inviterId, finalProspectUserId, prospectName, null, token, 'sent', expiresAt, mentalAnswersJson]
     );
 
-    const link = `${process.env.APP_URL || 'http://localhost:3000'}/invite/${token}`;
+    const link = `${resolveAppOrigin(appOrigin)}/invite/${token}`;
 
     return res.status(201).json({
       success: true,
