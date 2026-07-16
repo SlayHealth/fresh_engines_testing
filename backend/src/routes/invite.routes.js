@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const {
   createInvite,
+  logSelfEntryConsent,
   streamInviteStatus,
   getInvites,
   validateToken,
@@ -49,6 +50,7 @@ const upload = multer({
 
 // Secure routes (Require authentication token)
 router.post('/send', authenticateToken, createInvite);
+router.post('/self-entry-consent', authenticateToken, logSelfEntryConsent);
 router.get('/status', authenticateToken, getInvites);
 router.get('/stream', authenticateToken, streamInviteStatus);
 router.post('/revoke/:id', authenticateToken, revokeInvite);

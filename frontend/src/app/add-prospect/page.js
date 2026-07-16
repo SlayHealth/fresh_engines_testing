@@ -143,6 +143,12 @@ function AddProspectPageInner() {
   const [activeInvite, setActiveInvite] = useState(null);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [inviteError, setInviteError] = useState(null);
+  // UX8-01: "self" mode previously had zero consent artifact — this gates
+  // entering the prospect's own clinical/psychological data behind an
+  // explicit, logged acknowledgment from the account holder.
+  const [selfEntryConsentConfirmed, setSelfEntryConsentConfirmed] = useState(false);
+  const [isLoggingSelfEntryConsent, setIsLoggingSelfEntryConsent] = useState(false);
+  const [selfEntryConsentError, setSelfEntryConsentError] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isRunningMatch, setIsRunningMatch] = useState(false);
   const [matchRunError, setMatchRunError] = useState(null);
@@ -738,6 +744,30 @@ function AddProspectPageInner() {
       setInviteError(err.message || 'Failed to generate invite link');
     } finally {
       setIsSendingInvite(false);
+    }
+  };
+
+  // UX8-01: logs the account holder's explicit acknowledgment before "self"
+  // mode proceeds into entering the prospect's own clinical/psychological
+  // data — this path previously had zero consent artifact at all.
+  const handleConfirmSelfEntryConsent = async (onDone) => {
+    if (!selfEntryConsentConfirmed) return;
+    setIsLoggingSelfEntryConsent(true);
+    setSelfEntryConsentError(null);
+    try {
+      const res = await apiFetch(`${API_URL}/api/invite/self-entry-consent`, {
+        method: 'POST',
+        body: JSON.stringify({ prospectName: prospectForm.name })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to record acknowledgment');
+      }
+      onDone();
+    } catch (err) {
+      setSelfEntryConsentError(err.message || 'Failed to record acknowledgment');
+    } finally {
+      setIsLoggingSelfEntryConsent(false);
     }
   };
 
@@ -1418,16 +1448,48 @@ function AddProspectPageInner() {
       });
     }
 
-    const clamped = Math.max(0, Math.min(stepIndex, routingSteps.length - 1));
-    const step = routingSteps[clamped];
-    const isLastRoutingStep = clamped === routingSteps.length - 1;
     const advanceToProspectHub = () => {
       setShowRouting(false);
       setActivePerson('prospect');
       setActiveCategory(null);
       setStepIndex(0);
     };
-    const defaultOnNext = isLastRoutingStep && prospectMode === 'self' ? advanceToProspectHub : goNext;
+
+    // UX8-01: "self" mode previously routed straight from the name field into
+    // entering the prospect's own clinical/psychological data, with zero
+    // consent artifact — no prospect_invites row, no acknowledgment, nothing.
+    // This step requires an explicit, logged confirmation first.
+    if (prospectMode === 'self') {
+      routingSteps.push({
+        title: `Before you enter ${prospectForm.name || "your prospect's"} details…`,
+        subtitle: `You're about to enter health information on ${prospectForm.name || 'their'} behalf, including sensitive results (STI screening, fertility markers, mental wellbeing).`,
+        canAdvance: selfEntryConsentConfirmed && !isLoggingSelfEntryConsent,
+        nextLabel: isLoggingSelfEntryConsent ? 'Confirming…' : 'Confirm & Continue',
+        onNext: () => handleConfirmSelfEntryConsent(advanceToProspectHub),
+        content: (
+          <div className="space-y-3">
+            <label className="flex items-start gap-3 p-4 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+              <input
+                type="checkbox"
+                checked={selfEntryConsentConfirmed}
+                onChange={(e) => setSelfEntryConsentConfirmed(e.target.checked)}
+                className="mt-1"
+              />
+              <span className="text-sm" style={{ color: 'var(--ink)' }}>
+                I confirm I have {prospectForm.name || "my prospect's"}'s permission to enter their health information.
+              </span>
+            </label>
+            {selfEntryConsentError ? (
+              <div className="p-3 rounded-lg text-xs font-medium" style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}>{selfEntryConsentError}</div>
+            ) : null}
+          </div>
+        )
+      });
+    }
+
+    const clamped = Math.max(0, Math.min(stepIndex, routingSteps.length - 1));
+    const step = routingSteps[clamped];
+    const defaultOnNext = goNext;
     body = (
       <QuestionScreen
         key={`routing-${clamped}`}

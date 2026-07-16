@@ -253,6 +253,25 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_created_at ON whatsapp_messages(created_at DESC);
     `);
 
+    // UX8-01: "self" mode (account holder enters the prospect's own clinical/
+    // psychological data directly) previously had zero consent artifact at
+    // all — no prospect_invites row, no token, no accept/reject record. This
+    // is the logged acknowledgment the account holder now must give before
+    // that path proceeds, mirroring the audit trail prospect_invites already
+    // keeps for the invite-link path (consent_timestamp/ip/user_agent).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS self_entry_consents (
+          id TEXT PRIMARY KEY,
+          user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+          prospect_name TEXT NOT NULL,
+          confirmed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          ip TEXT DEFAULT NULL,
+          user_agent TEXT DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_self_entry_consents_user_id ON self_entry_consents(user_id);
+    `);
+
     logger.info('Database schema successfully initialized.');
   } catch (error) {
     logger.error('Database schema initialization failed:', error);

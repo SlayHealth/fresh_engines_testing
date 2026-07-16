@@ -162,6 +162,37 @@ async function createInvite(req, res, next) {
 }
 
 /**
+ * UX8-01: log the account holder's explicit acknowledgment before "self" mode
+ * (entering a prospect's clinical/psychological data on their behalf) proceeds
+ * — this path previously had zero consent artifact at all. Self only; the
+ * acting user's own id, never a client-supplied one.
+ */
+async function logSelfEntryConsent(req, res, next) {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: User ID not found' });
+  }
+  try {
+    const { prospectName } = req.body;
+    if (!prospectName) {
+      return res.status(400).json({ success: false, error: 'Prospect name is required' });
+    }
+    const id = uuidv4();
+    const ip = req.ip || req.headers['x-forwarded-for'] || null;
+    const userAgent = req.headers['user-agent'] || null;
+    await db.query(
+      `INSERT INTO self_entry_consents (id, user_id, prospect_name, ip, user_agent)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, userId, prospectName, ip, userAgent]
+    );
+    return res.status(201).json({ success: true, id });
+  } catch (error) {
+    logger.error(`Failed to log self-entry consent: ${error.message}`);
+    next(error);
+  }
+}
+
+/**
  * Server-Sent Events stream for real-time status updates
  */
 function streamInviteStatus(req, res) {
@@ -943,6 +974,7 @@ async function handleWhatsAppWebhook(req, res, next) {
 
 module.exports = {
   createInvite,
+  logSelfEntryConsent,
   streamInviteStatus,
   getInvites,
   validateToken,
