@@ -1,9 +1,11 @@
 const { db } = require('../services/storage/postgres.service');
 const { generateStructuredInsight } = require('../services/llm.service');
 
-// Constants
-const FEMALE_AGE_LIMIT = 45;
-const MALE_AGE_LIMIT = 55;
+// WS1B06: FEMALE_AGE_LIMIT/MALE_AGE_LIMIT were both dead — never referenced
+// anywhere in this file (the actual age ceiling comes from the FEM/MAL tables'
+// own natural clamping at their max key, 50 and 55 respectively). Removed rather
+// than wired into a new hard age gate, which would be a real clinical-product
+// decision on its own, not a bug fix.
 
 // ---- age -> biological score (illustrative curves) ----
 function interp(table, age) {
@@ -19,18 +21,37 @@ function interp(table, age) {
   return table[ks[ks.length - 1]];
 }
 
-const FEM = { 18: 97, 24: 97, 25: 94, 26: 92, 27: 90, 28: 88, 29: 87, 30: 86, 31: 83, 32: 80, 33: 76, 34: 72, 35: 67, 36: 62, 37: 56, 38: 50, 39: 44, 40: 38, 41: 31, 42: 24, 43: 17, 44: 11, 45: 7, 50: 4 };
+// WS3A04: ages 35-44 were re-anchored to published natural fecundability data
+// (ASRM 2022 committee opinion; standard fecundability-by-age literature: ~12%/
+// cycle at 35, ~5% at 38, ~3-5% at 40, <2-3% at 42+). The previous table showed
+// ~2x the literature value from 38-44 (e.g. age 40 displayed ~8.7% monthly vs.
+// lit ~3-5%), understating the urgency of a specialist conversation for exactly
+// the couples who most need one. 18-34 are unchanged (already close to
+// literature at the one age explicitly checked, 30: ~19.8% shown vs ~20% lit).
+// 45-50 now taper continuously into the existing 50:4 anchor (previously dead
+// code — mfrAt hard-zeroed at 45 before interpolation ever reached it) instead
+// of an absolute cliff to exactly 0, which claimed certainty ("blocked") the
+// data doesn't support — natural conception at 45 is rare, not impossible.
+const FEM = { 18: 97, 24: 97, 25: 94, 26: 92, 27: 90, 28: 88, 29: 87, 30: 86, 31: 83, 32: 80, 33: 76, 34: 72, 35: 52, 36: 38, 37: 28, 38: 21, 39: 19, 40: 17, 41: 14, 42: 11, 43: 9, 44: 7, 45: 5, 50: 4 };
 const MAL = { 18: 97, 25: 97, 30: 95, 32: 91, 34: 89, 35: 87, 37: 83, 40: 80, 42: 76, 45: 71, 48: 66, 50: 62, 55: 55 };
 
 function fScore(age, reserveAdj) { return Math.max(2, Math.min(100, interp(FEM, age) + reserveAdj)); }
 function mScore(age, semenAdj) { return Math.max(2, Math.min(100, interp(MAL, age) + semenAdj)); }
 
-function mfrAt(fa, ma, reserveAdj, semenAdj) {
-  if (fa >= 45) return 0.0; // Strict drop to 0 at age 45
-
+function mfrAt(fa, ma, reserveAdj, semenAdj, isSevere = false) {
   const f = fScore(fa, reserveAdj);
   const m = mScore(ma, semenAdj);
-  const combined = 0.6 * Math.min(f, m) + 0.4 * Math.max(f, m);
+  // WS1B03: the standard 0.6/0.4 blend lets a healthy partner mask a near-sterile
+  // one — a Severe Deficit / Very Low reserve partner (concentration ~2, not
+  // literally azoospermic — that's already a hard gate above) still let 40% of a
+  // healthy partner's score pull the combined figure up to a falsely-reassuring
+  // ~87% annual conception chance. Conception needs both gametes viable, so when
+  // either partner is in the severe category, the weaker partner dominates the
+  // blend (0.9/0.1) instead of being averaged away — without claiming the flat 0%
+  // an absolute barrier gate would (a real, if small, chance still exists short of
+  // outright azoospermia/absolute barriers). Non-severe couples are unaffected.
+  const minWeight = isSevere ? 0.9 : 0.6;
+  const combined = minWeight * Math.min(f, m) + (1 - minWeight) * Math.max(f, m);
   return (combined / 100) * 0.25; // biological MFR as probability
 }
 
@@ -38,36 +59,67 @@ function mfrAt(fa, ma, reserveAdj, semenAdj) {
 function classifyOvarianReserve(amh, afc, age) {
   if (amh === undefined && afc === undefined) return null;
 
+  // WS1B04: only `undefined`/`null`/`isNaN` were rejected — any other finite
+  // value, including negatives, was accepted as a real reading. AMH<=0 and AFC<0
+  // are physiologically impossible (a classic OCR/extraction glitch, e.g. a
+  // misread minus sign or misplaced decimal) and were silently classified as a
+  // genuine "Very Low" reserve, which — via severeOvarianReserve — hard-gates the
+  // couple to "natural conception blocked" from a single mis-extracted value. A
+  // generous upper ceiling catches the same class of glitch on the other end
+  // without false-rejecting genuinely high real values.
+  const AMH_MAX_PLAUSIBLE = 20; // ng/mL — real AMH essentially never exceeds this
+  const AFC_MAX_PLAUSIBLE = 50; // real antral follicle counts essentially never exceed this
+  // WS3A02: the age-banded "Normal" ceiling floats UP with age (e.g. up to 1.5
+  // ng/mL at 40+), so a 40-year-old with AMH 0.7 ng/mL read "Normal" here even
+  // though ASRM/ACOG (the field's headline authority) flag AMH <1.0 ng/mL as
+  // diminished ovarian reserve (DOR) regardless of age — ESHRE Bologna (0.5-1.1)
+  // and POSEIDON (<1.2) concur a value in this range is not simply "normal for
+  // age". The age-relative band is still useful context, but can no longer
+  // present a value below the absolute DOR cutoff as better than "Low".
+  const ABSOLUTE_DOR_THRESHOLD = 1.0; // ng/mL — ASRM/ACOG
+
   function classifyByAmh(val) {
-    if (val === undefined || val === null || isNaN(val)) return null;
+    if (val === undefined || val === null || isNaN(val) || val <= 0 || val > AMH_MAX_PLAUSIBLE) return null;
+    let ageRelative;
     if (age < 30) {
-      if (val < 1.0) return 'Very Low';
-      if (val <= 1.5) return 'Low';
-      if (val <= 4.0) return 'Normal';
-      return 'High for age';
+      if (val < 1.0) ageRelative = 'Very Low';
+      else if (val <= 1.5) ageRelative = 'Low';
+      else if (val <= 4.0) ageRelative = 'Normal';
+      else ageRelative = 'High for age';
     } else if (age < 35) {
-      if (val < 0.8) return 'Very Low';
-      if (val <= 1.2) return 'Low';
-      if (val <= 3.5) return 'Normal';
-      return 'High for age';
+      if (val < 0.8) ageRelative = 'Very Low';
+      else if (val <= 1.2) ageRelative = 'Low';
+      else if (val <= 3.5) ageRelative = 'Normal';
+      else ageRelative = 'High for age';
     } else if (age < 40) {
-      if (val < 0.5) return 'Very Low';
-      if (val <= 0.9) return 'Low';
-      if (val <= 2.5) return 'Normal';
-      return 'High for age';
+      if (val < 0.5) ageRelative = 'Very Low';
+      else if (val <= 0.9) ageRelative = 'Low';
+      else if (val <= 2.5) ageRelative = 'Normal';
+      else ageRelative = 'High for age';
     } else {
-      if (val < 0.3) return 'Very Low';
-      if (val <= 0.6) return 'Low';
-      if (val <= 1.5) return 'Normal';
-      return 'High for age';
+      if (val < 0.3) ageRelative = 'Very Low';
+      else if (val <= 0.6) ageRelative = 'Low';
+      else if (val <= 1.5) ageRelative = 'Normal';
+      else ageRelative = 'High for age';
     }
+
+    if (val < ABSOLUTE_DOR_THRESHOLD && (ageRelative === 'Normal' || ageRelative === 'High for age')) {
+      return 'Low';
+    }
+    return ageRelative;
   }
 
   function classifyByAfc(val) {
-    if (val === undefined || val === null || isNaN(val)) return null;
+    if (val === undefined || val === null || isNaN(val) || val < 0 || val > AFC_MAX_PLAUSIBLE) return null;
+    // WS3A03: the under-30 band previously called AFC<=11 "Low" — stricter than
+    // the literature supports (11 is low-normal at this age, not clearly low).
+    // Widened the Normal floor to 10 and anchored VeryLow/Low to the ESHRE
+    // Bologna/POSEIDON poor-responder evidence (AFC <5-7), matching the already-
+    // correct shape of the next age band rather than using a separate, uncited
+    // wider VeryLow ceiling.
     if (age < 30) {
-      if (val < 8) return 'Very Low';
-      if (val <= 11) return 'Low';
+      if (val < 6) return 'Very Low';
+      if (val <= 9) return 'Low';
       if (val <= 20) return 'Normal';
       return 'High for age';
     } else if (age < 35) {
@@ -226,18 +278,50 @@ async function analyzeMfr(req, res, next) {
       if (femaleReport) parsedFemaleData = JSON.parse(femaleReport.extracted_json);
     }
 
+    // Every downstream input silently defaults to a favourable value when absent
+    // (age -> 30, ovarian reserve -> 'Normal', semen quality -> 'Normal', lifestyle
+    // penalties -> 0) — an empty or malformed request previously still produced a
+    // precise, reassuring ~94% / "Aligned" result with no signal that nothing real
+    // was actually submitted (WS1B02). Age is the one input the real onboarding flow
+    // always has (DOB is a required field before a match can even be requested — see
+    // CompatibilityContext.js's own pre-flight validation), so requiring both real
+    // ages here is a low-risk floor: it only rejects a request that's already
+    // missing data no legitimate flow would omit, rather than fabricating a result.
+    // WS1B05: a bare parseFloat + `|| 30` fallback accepted any finite number,
+    // including implausible ones, as a real age — a negative age (or one below
+    // 18/above 60) was passed straight through: age -3 clamped to the fertility
+    // table's minimum key and returned the *best* possible score; age 0
+    // specifically got the `|| 30` fallback (0 is falsy) while -3 didn't, an
+    // inconsistency with no basis. plausibleAge treats anything outside a
+    // realistic reproductive-relevant range the same as genuinely missing.
+    const plausibleAge = (raw) => (typeof raw === 'number' && !isNaN(raw) && raw >= 18 && raw <= 60) ? raw : null;
+    const fAgePlausible = plausibleAge(parseFloat(female_manual_data.age));
+    const mAgePlausible = plausibleAge(parseFloat(male_manual_data.age));
+    if (fAgePlausible === null && mAgePlausible === null) {
+      return res.status(422).json({
+        success: false,
+        error: 'insufficient_data',
+        message: 'Not enough information to estimate fertility timelines yet — at least both partners’ ages are required.'
+      });
+    }
+
     // Extract Female Inputs
-    const fAge = parseFloat(female_manual_data.age) || 30;
-    
+    const fAge = fAgePlausible ?? 30;
+
     // Auto-detect Ovarian markers from report if available
     const amhValue = parsedFemaleData ? parseFloat(findExtractedParam(parsedFemaleData, 'amh')?.value) : undefined;
     const afcValue = parsedFemaleData ? parseFloat(findExtractedParam(parsedFemaleData, 'afc')?.value) : undefined;
     
     const calculatedReserve = classifyOvarianReserve(amhValue, afcValue, fAge);
-    const ovarianReserve = female_manual_data.ovarianReserve || calculatedReserve || 'Normal';
+    // WS1B06: defaulting genuinely-absent labs to 'Normal' doesn't just mislabel —
+    // it fabricates a real positive claim downstream ("✓ Ovarian reserve
+    // appropriate for age" below fires on exactly this default). 'Not Assessed'
+    // carries the same neutral 0-point modifier (reserveModifiers has no entry for
+    // it) but can no longer be mistaken for a genuine measured-normal result.
+    const ovarianReserve = female_manual_data.ovarianReserve || calculatedReserve || 'Not Assessed';
 
     // Extract Male Inputs
-    const mAge = parseFloat(male_manual_data.age) || 30;
+    const mAge = mAgePlausible ?? 30;
 
     // Auto-detect Semen markers from report — canonical names must match the real
     // ontology exactly (see ontologyMapper.service.js); several of these previously
@@ -255,7 +339,10 @@ async function analyzeMfr(req, res, next) {
     const semPh = parsedMaleData ? parseFloat(findExtractedParam(parsedMaleData, 'semen_ph')?.value) : undefined;
 
     const calculatedSemen = classifySemen(semVol, semConc, semCount, semMot, semProg, semVit, semMorph, semPh);
-    const semenQuality = male_manual_data.semenQuality || calculatedSemen?.category || 'Normal';
+    // WS1B06: same reasoning as ovarianReserve above — 'Not Assessed' keeps the
+    // same neutral 0-point modifier but stops "✓ Semen parameters meet standard
+    // WHO reference values" from firing on a report with no semen analysis at all.
+    const semenQuality = male_manual_data.semenQuality || calculatedSemen?.category || 'Not Assessed';
 
     // Validate progressive motility <= total motility if parsed
     let validationIssue = null;
@@ -263,11 +350,28 @@ async function analyzeMfr(req, res, next) {
       validationIssue = 'Progressive motility cannot exceed total motility. Check report extraction parameters.';
     }
 
-    // Convert string categories to adj points
+    // Convert string categories to adj points.
+    // 'Very Low' ovarian reserve is intentionally left at its original -20 here —
+    // unlike Severe Deficit below, it's not this modifier doing the work: a few
+    // lines down, `severeOvarianReserve` already routes 'Very Low' through the
+    // absolute-barrier `gate` (p_12m forced to exactly 0), which fully overrides
+    // whatever fScore/fReserveAdj compute. Changing this constant would be a no-op
+    // in every reachable path and just mislead a future reader into thinking it's
+    // load-bearing.
     const reserveModifiers = { 'High for age': 5, 'Normal': 0, 'Low': -10, 'Very Low': -20 };
     let fReserveAdj = reserveModifiers[ovarianReserve] || 0;
 
-    const semenModifiers = { 'Normal': 0, 'Mild Deficit': -8, 'Moderate Deficit': -18, 'Severe Deficit': -30 };
+    // WS1B03 (part 2): -30 for Severe Deficit only dropped a young male partner's
+    // own score to ~65/100 — nowhere near severe enough for cryptozoospermia
+    // (conc<5, a WHO-severe finding on its own) to read as near-sterile even with
+    // the heavier min-weighted blend above. Unlike ovarian reserve, semen quality
+    // has no equivalent absolute-barrier gate for this category (only literal
+    // azoospermia, conc===0, is separately hard-gated), so this modifier is the
+    // only lever — raised enough to floor mScore's own Math.max(2, ...) clamp
+    // across the realistic age range on its own, without needing to stack with
+    // age/AZFc/varicocele-type compounding factors the way -30 required. Mild/
+    // Moderate are unchanged — only the most-severe tier moves.
+    const semenModifiers = { 'Normal': 0, 'Mild Deficit': -8, 'Moderate Deficit': -18, 'Severe Deficit': -95 };
     let mSemenAdj = semenModifiers[semenQuality] || 0;
 
     // Retrieve evaluationTier from request body
@@ -472,8 +576,14 @@ async function analyzeMfr(req, res, next) {
     const lambda_current = 0.55 + 0.45 * (L / 100);
     const lambda_optimised = 1.00;
 
+    // WS1B03: cryptozoospermia/severely diminished reserve (Severe Deficit / Very
+    // Low) isn't an absolute barrier like azoospermia (already a hard gate above),
+    // but it's severe enough that a healthy partner's score must not be allowed to
+    // pull the blended figure back up to a falsely-reassuring range.
+    const isSevereFactor = ovarianReserve === 'Very Low' || semenQuality === 'Severe Deficit';
+
     // Current projection logic
-    const bioNow = mfrAt(fAge, mAge, fReserveAdj, mSemenAdj);
+    const bioNow = mfrAt(fAge, mAge, fReserveAdj, mSemenAdj, isSevereFactor);
     let p_monthly_current = gate ? 0 : (bioNow * lambda_current * freqVal);
     let p_monthly_optimised = gate ? 0 : (bioNow * lambda_optimised * freqVal);
 
@@ -483,7 +593,7 @@ async function analyzeMfr(req, res, next) {
     const projection_optimised = [];
 
     for (let y = 0; y < 11; y++) {
-      const bioY = mfrAt(fAge + y, mAge + y, fReserveAdj, mSemenAdj);
+      const bioY = mfrAt(fAge + y, mAge + y, fReserveAdj, mSemenAdj, isSevereFactor);
       projection_current.push(gate ? 0 : bioY * lambda_current * freqVal * 100);
       projection_optimised.push(gate ? 0 : bioY * lambda_optimised * freqVal * 100);
     }

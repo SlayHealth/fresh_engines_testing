@@ -2,6 +2,9 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Hides the dev-mode route indicator badge (bottom-left "N" button) — it's
+  // Next.js tooling chrome, not app UI, and was showing up in every screen.
+  devIndicators: false,
   // Dev-only proxy to the local backend — production must set NEXT_PUBLIC_API_URL instead
   // (see frontend/src/config/api.js), which talks to the backend directly and skips this rewrite.
   async rewrites() {

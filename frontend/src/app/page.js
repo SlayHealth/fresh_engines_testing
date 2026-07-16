@@ -86,7 +86,7 @@ export default function LandingPage() {
               </Link>
               <div className="flex flex-col gap-2 mt-5 text-sm text-slate-400">
                 <span className="flex items-center justify-center gap-2"><Lock className="w-4 h-4" /> 100% Private</span>
-                <span className="flex items-center justify-center gap-2"><Activity className="w-4 h-4" /> Doctor Reviewed</span>
+                <span className="flex items-center justify-center gap-2"><Activity className="w-4 h-4" /> Evidence-Based</span>
                 <span className="flex items-center justify-center gap-2"><Users className="w-4 h-4" /> For Both Partners</span>
               </div>
             </div>

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
   Sparkles, Settings, Activity, MessageSquare, HeartPulse,
   ShieldCheck, ArrowLeft, RotateCcw, Brain, Download,
@@ -19,14 +19,23 @@ import ReportChatDrawer from '../../components/ReportChatDrawer';
 const PROJECTION_YEARS = [0, 3, 5, 7, 10];
 
 export default function CoreEngineLayout({ children }) {
+  return (
+    <Suspense fallback={null}>
+      <CoreEngineLayoutInner>{children}</CoreEngineLayoutInner>
+    </Suspense>
+  );
+}
+
+function CoreEngineLayoutInner({ children }) {
   const router = useRouter();
   const pathname = usePathname();
-  
-  const { 
-    user, 
-    runsUsed, 
-    chatsUsed, 
-    isUpgradingQuota, 
+  const searchParams = useSearchParams();
+
+  const {
+    user,
+    runsUsed,
+    chatsUsed,
+    isUpgradingQuota,
     handleResetQuota,
     chronicResult,
     mfrResult,
@@ -44,20 +53,56 @@ export default function CoreEngineLayout({ children }) {
     setMfrResult,
     setMentalResult,
     setActiveMatchId,
-    activeMatchId
+    activeMatchId,
+    hydrateFromMatchId
   } = useCompatibility();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [hydrationAttempted, setHydrationAttempted] = useState(false);
 
-  // Auth & Data guards
+  // WS8-01: report pages previously read match data ONLY from in-memory context,
+  // so a hard refresh, deep-link, or shared URL always bounced to /dashboard —
+  // the data loss happened before any hydration was even attempted. Now, if the
+  // context is empty but a matchId is available (from the URL's ?match= param,
+  // or already in memory), a real fetch-and-hydrate is attempted first; the
+  // redirect only fires if that hydration also has nothing to offer.
   useEffect(() => {
     const savedUser = localStorage.getItem('slayhealth_user');
     if (!savedUser) {
       router.push('/');
-    } else if (!chronicResult || !mfrResult) {
-      router.push('/dashboard');
+      return;
     }
-  }, [router, chronicResult, mfrResult]);
+    if (chronicResult && mfrResult) return;
+    if (hydrationAttempted) {
+      router.push('/dashboard');
+      return;
+    }
+
+    const matchIdToTry = searchParams.get('match') || activeMatchId;
+    if (!matchIdToTry) {
+      setHydrationAttempted(true);
+      router.push('/dashboard');
+      return;
+    }
+
+    hydrateFromMatchId(matchIdToTry).then((ok) => {
+      setHydrationAttempted(true);
+      if (!ok) router.push('/dashboard');
+    });
+  }, [router, chronicResult, mfrResult, activeMatchId, searchParams, hydrationAttempted, hydrateFromMatchId]);
+
+  // Keeps the URL's ?match= param in sync with the active match so refreshing,
+  // bookmarking, or sharing the URL from ANY core-engine tab (not just the one
+  // that originally set activeMatchId) survives via the hydration path above —
+  // without having to thread a query param through every existing navigation
+  // call site that opens a report.
+  useEffect(() => {
+    if (!activeMatchId) return;
+    if (searchParams.get('match') === activeMatchId) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('match', activeMatchId);
+    router.replace(`${pathname}?${params.toString()}`);
+  }, [activeMatchId, pathname, searchParams, router]);
 
   // Determine active tab from current route path
   const selectedTab = useMemo(() => {
@@ -313,6 +358,10 @@ export default function CoreEngineLayout({ children }) {
             <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
             <span>Counselor chat: {Math.max(0, 5 - chatsUsed)}/5 left</span>
           </div>
+
+          <p className="text-[10px] text-slate-400 font-sans mt-3 leading-relaxed">
+            This report is for informational and educational purposes and does not diagnose or treat any medical condition. Always confirm results with a qualified doctor.
+          </p>
         </div>
 
         {/* Tab main child page content panel */}

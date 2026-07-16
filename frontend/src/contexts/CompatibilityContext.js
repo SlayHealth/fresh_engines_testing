@@ -125,7 +125,10 @@ export function getRiskDrivers(data, age) {
   if (data.activity === 'Sedentary') drivers.push("sedentary physical patterns");
   else if (data.activity === 'Moderate') drivers.push("moderate daily activity");
   
-  if (data.parentDiabetes) drivers.push("family history (maternal or paternal diabetes)");
+  // parentDiabetes is the 'None'/'One'/'Both' string (WS1A04/WS3B01) — 'None' is
+  // itself a non-empty, truthy string, so a bare truthy check would wrongly list
+  // "family history" as a driver even when there isn't one.
+  if (data.parentDiabetes === 'One' || data.parentDiabetes === 'Both' || data.parentDiabetes === true) drivers.push("family history (maternal or paternal diabetes)");
   
   if (drivers.length === 0) return "No primary clinical drivers detected at this baseline.";
   return "Influenced primarily by: " + drivers.join(", ") + ".";
@@ -569,7 +572,14 @@ export function CompatibilityProvider({ children }) {
     const prospectHeight = parseFloat(prospectForm.height) || 170;
     const prospectBmi = parseFloat((prospectWeight / Math.pow(prospectHeight / 100, 2)).toFixed(1));
 
-    const isUserMale = selfUser.gender === 'male';
+    // Case-insensitive on purpose: the real gender picker (GENDERS in
+    // lifestyleOptions.js) stores capitalized 'Male'/'Female', and the profile save/
+    // load round-trip (auth.controller.js's updateProfile) never normalizes it — a
+    // bare === 'male' check here was always false for every real user, silently
+    // swapping which partner's manual data AND which partner's actual uploaded
+    // report (male_report_id/female_report_id below) fed which sex-specific scoring
+    // path for every match created through the live UI.
+    const isUserMale = selfUser.gender?.toLowerCase() === 'male';
     const maleManual = isUserMale ? {
       name: selfUser.name,
       age: calculateAge(selfUser.dob),
@@ -578,7 +588,10 @@ export function CompatibilityProvider({ children }) {
       bloodPressure: 'Normal',
       glucose: 'Normal',
       lipids: 'Normal',
-      history: { parentDiabetes: false }
+      // WS1A04/WS3B01: was hardcoded false regardless of a person's real family
+      // history — now reads the wizard's Family History of Diabetes answer
+      // ('None'/'One'/'Both'), defaulting to 'None' only when genuinely unanswered.
+      history: { parentDiabetes: selfUser.parentDiabetes || 'None' }
     } : {
       name: prospectForm.name,
       age: calculateAge(prospectForm.dob),
@@ -587,7 +600,7 @@ export function CompatibilityProvider({ children }) {
       bloodPressure: 'Normal',
       glucose: 'Normal',
       lipids: 'Normal',
-      history: { parentDiabetes: false }
+      history: { parentDiabetes: prospectForm.parentDiabetes || 'None' }
     };
 
     const femaleManual = isUserMale ? {
@@ -598,7 +611,7 @@ export function CompatibilityProvider({ children }) {
       bloodPressure: 'Normal',
       glucose: 'Normal',
       lipids: 'Normal',
-      history: { parentDiabetes: false }
+      history: { parentDiabetes: prospectForm.parentDiabetes || 'None' }
     } : {
       name: selfUser.name,
       age: calculateAge(selfUser.dob),
@@ -607,7 +620,7 @@ export function CompatibilityProvider({ children }) {
       bloodPressure: 'Normal',
       glucose: 'Normal',
       lipids: 'Normal',
-      history: { parentDiabetes: false }
+      history: { parentDiabetes: selfUser.parentDiabetes || 'None' }
     };
 
     const sharedLifestyle = {
@@ -738,9 +751,16 @@ export function CompatibilityProvider({ children }) {
 
     // Restore prospect details from stored manual data or matches list
     const details = match.analysis.details || {};
-    const isUserMale = user?.gender === 'male';
-    const restoredProspectName = isUserMale 
-      ? details.female_manual_data?.name 
+    // Case-insensitive on purpose — the real gender picker (GENDERS in
+    // lifestyleOptions.js) stores capitalized 'Male'/'Female', so a bare === 'male'
+    // check here would always be false and silently mis-derive the prospect's
+    // restored gender. The same bare lowercase comparison also existed at
+    // handleCompatibilityMatch's isUserMale (~line 572), which drives which
+    // report/manual-data slot each partner's real data lands in during live match
+    // creation — fixed there too.
+    const isUserMale = user?.gender?.toLowerCase() === 'male';
+    const restoredProspectName = isUserMale
+      ? details.female_manual_data?.name
       : details.male_manual_data?.name;
 
     if (restoredProspectName) {
@@ -748,10 +768,61 @@ export function CompatibilityProvider({ children }) {
     } else if (match.prospect?.name && match.prospect.name !== 'Partner B') {
       setProspectForm(prev => ({ ...prev, name: match.prospect.name }));
     }
-    
+
+    // WS6-05: this previously restored only the prospect's name — gender and DOB
+    // were left at whatever prospectForm already held (often blank), so reopening a
+    // saved match and then uploading the prospect's radiology report could silently
+    // score a real male prospect as Female/age-defaulted. Gender is always knowable
+    // with certainty here (it's the mirror of the current user's own gender, which
+    // manual_data slot — male_manual_data vs female_manual_data — the prospect's data
+    // lives in is exactly that mirror), so it's restored unconditionally rather than
+    // left to whatever stale value prospectForm happened to hold. DOB is not
+    // restored: only a derived age number was ever persisted (age = calculateAge(dob)
+    // at match time, see handleCompatibilityMatch), not the real DOB itself, and
+    // synthesizing a fake DOB from that number would just be a subtler version of
+    // the same fabrication this fix exists to remove — the upload-time guard added
+    // in usg/page.js already blocks with an actionable message when DOB is genuinely
+    // unknown, rather than silently defaulting it.
+    setProspectForm(prev => ({ ...prev, gender: isUserMale ? 'Female' : 'Male' }));
+
     // Clear current chat to force it to refetch the saved session
     setChatSessionId(null);
     setIsChatOpen(false);
+  };
+
+  // WS8-01: report pages (core-engine/*) previously read match data ONLY from this
+  // context's in-memory state, which never survives a hard refresh/deep-link/shared
+  // URL — landing the user back on /dashboard with the report silently gone. This
+  // hydrates the same state a normal click-through from the dashboard would set,
+  // but from a matchId alone (e.g. read from a ?match= URL param), by fetching the
+  // raw match row and reusing restoreMatchSession's existing restoration logic
+  // (gender/name rehydration, chat session reset, etc.) rather than duplicating it.
+  // Returns true if there was real data to hydrate, false otherwise.
+  const hydrateFromMatchId = async (matchId) => {
+    if (!matchId) return false;
+    try {
+      const res = await apiFetch(`${API_URL}/api/compatibility/matches/${matchId}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (!data.success || !data.match) return false;
+
+      const raw = data.match;
+      let analysis = raw.analysis_json || {};
+      if (typeof analysis === 'string') {
+        try { analysis = JSON.parse(analysis); } catch (e) { analysis = {}; }
+      }
+      if (!analysis.chronicResult || !analysis.mfrResult) return false;
+
+      restoreMatchSession({
+        id: raw.id,
+        analysis,
+        prospect: { name: analysis.details?.female_manual_data?.name || 'Partner B' }
+      });
+      return true;
+    } catch (err) {
+      console.error('Failed to hydrate from matchId:', err);
+      return false;
+    }
   };
 
   const handleMentalAnalysis = async (partnerAAnswers, partnerBAnswers, matchIdOverride) => {
@@ -820,6 +891,7 @@ export function CompatibilityProvider({ children }) {
       showCalculations, setShowCalculations,
       fetchRecentMatches,
       restoreMatchSession,
+      hydrateFromMatchId,
       handleResetQuota,
       handleLogout,
       handleCompatibilityMatch,

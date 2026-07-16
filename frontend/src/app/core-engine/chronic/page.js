@@ -373,6 +373,14 @@ export default function ChronicEnginePage() {
         <p className="mt-2 text-[11px] leading-relaxed text-slate-400 text-left">
           Honest by construction: IDRS steps only as a partner crosses an age band (35, 50). The household lines model continuous ageing drift and the recoverable lifestyle dividend.
         </p>
+        {/* WS3B04/05: the underlying likelihood ratios (IDRS band weighting, biomarker
+            and lifestyle multipliers, baseline prevalence) are reasoned but not
+            independently validated against a published outcomes study for this exact
+            use — disclosed here rather than presented as a clinically validated
+            probability. */}
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400 text-left">
+          This score is a wellness heuristic built on a validated screening tool (IDRS) combined with reasoned, but not independently validated, risk multipliers — not a clinically validated probability of developing diabetes or heart disease.
+        </p>
       </div>
 
       {/* Calibration scaffold mock */}

@@ -247,7 +247,7 @@ export default function ProfilePage() {
               <li><button onClick={() => setMobileEditing(true)}><Ico name="user" /><b>Personal details</b><Ico name="chev" className="chevron" /></button></li>
               <li><button onClick={() => router.push('/dashboard')}><Ico name="file" /><b>Reports &amp; downloads</b><Ico name="chev" className="chevron" /></button></li>
               <li><button onClick={() => toast.info('Your data is encrypted and never shared without your consent.')}><Ico name="shield" /><b>Privacy &amp; data</b><Ico name="chev" className="chevron" /></button></li>
-              <li><button onClick={() => toast.info('DPDP compliance and HIPAA compliance coming soon.')}><Ico name="gear" /><b>Settings</b><Ico name="chev" className="chevron" /></button></li>
+              <li><button onClick={() => toast.info('DPDP compliance coming soon.')}><Ico name="gear" /><b>Settings</b><Ico name="chev" className="chevron" /></button></li>
             </ul>
           )}
 
@@ -391,7 +391,7 @@ export default function ProfilePage() {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Compliance</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>DPDP compliance and HIPAA compliance coming soon</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>DPDP compliance coming soon</p>
               </div>
             </div>
           </div>

@@ -16,13 +16,23 @@ function calculateRadiologyNuptiaContribution(aggregatedRecord, patientSex, pati
   // below — so USG_PELVIS is only scored as its own modality when there's no abdomen
   // scan to fall back to, rather than double-counting the same organs under two
   // different weights.)
+  // compositeAbdominalScore / femaleReproductiveScore can now return null — "this
+  // modality was detected but nothing in it was actually assessed" (WS1D01) — which
+  // must be excluded from the blend entirely, not folded in as a contributing score.
+  // `null * weight` silently evaluates to 0 in JS, which would otherwise count a
+  // not-assessed modality as if it were a confirmed catastrophic (score-0) finding —
+  // exactly the fabrication this fix exists to remove, just inverted.
+  const addModalityScore = (key, score, weight) => {
+    if (score === null || score === undefined) return;
+    scores[key] = score;
+    totalWeightedScore += score * weight;
+    totalWeight += weight;
+  };
+
   if (unified.USG_ABDOMEN || unified.USG_ABDOMEN_PELVIS) {
     const usgData = unified.USG_ABDOMEN || unified.USG_ABDOMEN_PELVIS;
     const usgScore = compositeAbdominalScore(usgData, patientSex, patientAge);
-    const weight = schemaRegistry.getWeight('USG_ABDOMEN');
-    scores.USG_ABDOMEN = usgScore;
-    totalWeightedScore += usgScore * weight;
-    totalWeight += weight;
+    addModalityScore('USG_ABDOMEN', usgScore, schemaRegistry.getWeight('USG_ABDOMEN'));
   } else if (unified.USG_PELVIS) {
     // USG_PELVIS was previously classified, scored for risk flags, and given a weight
     // in schemaRegistry — but never actually read here, so a patient whose only scan
@@ -30,12 +40,10 @@ function calculateRadiologyNuptiaContribution(aggregatedRecord, patientSex, pati
     // and never appeared in modalities_scored. compositeAbdominalScore already
     // degrades gracefully for the abdomen-only organs (liver/gallbladder/pancreas/
     // spleen/kidneys) a pelvis scan doesn't cover — those are genuinely out of scope
-    // for this modality, not missing data, so scoring them as unremarkable is correct.
+    // for this modality and excluded from its internal blend, not scored as
+    // unremarkable.
     const pelvisScore = compositeAbdominalScore(unified.USG_PELVIS, patientSex, patientAge);
-    const weight = schemaRegistry.getWeight('USG_PELVIS');
-    scores.USG_PELVIS = pelvisScore;
-    totalWeightedScore += pelvisScore * weight;
-    totalWeight += weight;
+    addModalityScore('USG_PELVIS', pelvisScore, schemaRegistry.getWeight('USG_PELVIS'));
   }
 
   // USG Scrotum (male only)
@@ -53,10 +61,7 @@ function calculateRadiologyNuptiaContribution(aggregatedRecord, patientSex, pati
       unified.USG_TVS.uterus,
       unified.USG_TVS
     );
-    const weight = schemaRegistry.getWeight('USG_TVS');
-    scores.USG_TVS = tvs;
-    totalWeightedScore += tvs * weight;
-    totalWeight += weight;
+    addModalityScore('USG_TVS', tvs, schemaRegistry.getWeight('USG_TVS'));
   }
 
   // Echo
@@ -79,7 +84,7 @@ function calculateRadiologyNuptiaContribution(aggregatedRecord, patientSex, pati
 
   // DEXA
   if (unified.DEXA) {
-    const ds = dexaScore(unified.DEXA);
+    const ds = dexaScore(unified.DEXA, patientAge);
     const weight = schemaRegistry.getWeight('DEXA');
     scores.DEXA = ds;
     totalWeightedScore += ds * weight;

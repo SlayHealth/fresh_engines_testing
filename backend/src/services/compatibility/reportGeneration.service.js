@@ -20,7 +20,7 @@ class ReportGenerationService {
       ]);
 
       const partnerScores = [maleRad, femaleRad]
-        .map((rad) => rad?.scores_json?.radiology_nuptia_contribution)
+        .map((rad) => rad?.scores?.radiology_nuptia_contribution)
         .filter((c) => typeof c === 'number');
 
       if (partnerScores.length > 0) {
@@ -68,52 +68,111 @@ class ReportGenerationService {
     // mapPresentation, so it can feed the weighted blend below instead of only being
     // available after the presentation object already exists.
     const carrierRisk = reportSummaryService.evaluateThalassemiaCarrierRisk(maleData, femaleData);
-    const hasGenetic = carrierRisk.thalassemia.covered;
+    let hasGenetic = carrierRisk.thalassemia.covered;
     // A carrier-pair risk only clinically matters for an autosomal recessive condition
     // like thalassemia when BOTH partners carry the trait (that's what puts a child at
     // real risk) — a single carrier alongside a non-carrier partner is a much smaller
     // concern. Score accordingly rather than treating "either partner flagged" the same
     // as "both partners flagged".
     let genScore = 100;
+    // WS1D08: both-carrier thalassemia is a categorical genetic-risk marker, not a
+    // continuous domain score that just happens to be low — flagged separately so
+    // the composite floor below can force a status-downgrade for it regardless of
+    // whether genScore's raw value crosses the generic critical-domain threshold.
+    let bothConfirmedCarriers = false;
     if (hasGenetic) {
       const maleRed = carrierRisk.thalassemia.male_status === 'red';
       const femaleRed = carrierRisk.thalassemia.female_status === 'red';
+      const maleUntested = carrierRisk.thalassemia.male_status === 'gray';
+      const femaleUntested = carrierRisk.thalassemia.female_status === 'gray';
+      const eitherBorderline = carrierRisk.thalassemia.male_status === 'yellow' || carrierRisk.thalassemia.female_status === 'yellow';
       if (maleRed && femaleRed) {
         genScore = 50;
+        bothConfirmedCarriers = true;
+      } else if ((maleRed && femaleUntested) || (femaleRed && maleUntested)) {
+        // WS1D06: one partner confirmed a carrier, the other never tested — the
+        // couple's real both-carrier risk (the only thing that clinically matters
+        // here) can't be ruled out. Previously this scored a reassuring 75, treating
+        // the untested partner as if confirmed clear. Excluded from the composite
+        // instead — an untested partner alongside a confirmed carrier is genuinely
+        // "not assessed", not "probably fine".
+        hasGenetic = false;
       } else if (maleRed || femaleRed) {
         genScore = 75;
+      } else if (eitherBorderline) {
+        // WS1D05/WS3A05: a 3.5-4.0% borderline HbA2 (with no confirmed carrier on
+        // either side) is genuinely unresolved pending a repeat HPLC — not a clean
+        // 100, but also not a number the review specifies, so this is excluded from
+        // the composite rather than inventing an untested intermediate score.
+        hasGenetic = false;
       }
     }
 
     // Weights: Chronic=35%, Fertility=25%, Mental=20%, Radiology=10%, Genetics=10%
     let sumScores = 0;
     let sumWeights = 0;
+    const domainScores = [];
 
     if (chronicResult?.calculations?.coupleIndex) {
       sumScores += chronicResult.calculations.coupleIndex * 0.35;
       sumWeights += 0.35;
+      domainScores.push(chronicResult.calculations.coupleIndex);
     }
     if (mfrResult?.p_12m_current) {
       // mfrResult.p_12m_current is already 0-100 scale (see mfr.controller.js) — don't re-multiply by 100.
       sumScores += mfrResult.p_12m_current * 0.25;
       sumWeights += 0.25;
+      domainScores.push(mfrResult.p_12m_current);
     }
-    if (mentalResult?.overall_readiness?.score) {
+    // A truthy check here would silently drop a genuine score of 0 (mental.controller.js's
+    // compatibilityIndex is legitimately 0 for a maximally-incompatible couple,
+    // avgDiff >= 5 — see WS6-03/WS8-04) out of the composite entirely, as if the
+    // domain were simply absent — erasing the couple's worst real finding rather
+    // than weighting it in.
+    if (typeof mentalResult?.overall_readiness?.score === 'number') {
       sumScores += mentalResult.overall_readiness.score * 0.20;
       sumWeights += 0.20;
+      domainScores.push(mentalResult.overall_readiness.score);
     }
     if (hasRadiology) {
       sumScores += radScore * 0.10;
       sumWeights += 0.10;
+      domainScores.push(radScore);
     }
     if (hasGenetic) {
       sumScores += genScore * 0.10;
       sumWeights += 0.10;
+      domainScores.push(genScore);
     }
 
     // If literally no domain produced a usable score, there is nothing real to
     // report — leave it null (pending) rather than presenting a fabricated number.
     const rawCrossDomainScore = sumWeights > 0 ? (sumScores / sumWeights) : null;
+
+    // WS1D07: a plain weighted average lets one catastrophic domain (e.g. chronic=10)
+    // get averaged away by healthy domains elsewhere (chronic=10, others=90 -> 63,
+    // still a reassuring-looking headline). abdomen.score.js already solves this exact
+    // problem one layer down for individual organs — reusing the same threshold/buffer
+    // here for consistency rather than inventing a new, separately-uncited cap.
+    const CRITICAL_DOMAIN_SCORE_THRESHOLD = 30;
+    const CRITICAL_DOMAIN_CAP_BUFFER = 20;
+    let flooredCrossDomainScore = rawCrossDomainScore;
+    if (rawCrossDomainScore !== null && domainScores.length > 0) {
+      const worstDomainScore = Math.min(...domainScores);
+      if (worstDomainScore < CRITICAL_DOMAIN_SCORE_THRESHOLD) {
+        flooredCrossDomainScore = Math.min(rawCrossDomainScore, worstDomainScore + CRITICAL_DOMAIN_CAP_BUFFER);
+      }
+    }
+
+    // WS1D08: genScore's raw value (50) sits above the generic 30-point critical-
+    // domain threshold, so a confirmed both-carrier couple could otherwise stay in
+    // an "Excellent"-adjacent headline band (e.g. 91) despite the single most
+    // clinically significant premarital finding this app can surface. Forces the
+    // same worst+buffer cap used above, anchored to genScore specifically,
+    // independent of whether it happened to cross the generic threshold.
+    if (bothConfirmedCarriers && flooredCrossDomainScore !== null) {
+      flooredCrossDomainScore = Math.min(flooredCrossDomainScore, genScore + CRITICAL_DOMAIN_CAP_BUFFER);
+    }
 
     // STI safety gate applied directly to the real composite score — not just to a
     // display-layer copy of it — so it's structurally impossible for a positive/reactive
@@ -122,8 +181,8 @@ class ReportGenerationService {
     // this one gated value).
     const stiGate = reportSummaryService.checkSTISafetyGate(detailsForPresentation);
     const crossDomainScore = stiGate.triggered
-      ? Math.min(rawCrossDomainScore !== null ? rawCrossDomainScore : 50, 50)
-      : rawCrossDomainScore;
+      ? Math.min(flooredCrossDomainScore !== null ? flooredCrossDomainScore : 50, 50)
+      : flooredCrossDomainScore;
 
     detailsForPresentation.compiled_compatibility_score = crossDomainScore;
 

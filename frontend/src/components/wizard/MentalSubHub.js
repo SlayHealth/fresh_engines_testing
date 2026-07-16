@@ -3,6 +3,7 @@
 import { Check, ArrowRight, Info } from 'lucide-react';
 import { MENTAL_HEALTH_CATEGORIES, MENTAL_HEALTH_QUESTIONS, mentalCategoryCounts } from '../../constants/mentalHealthQuestions';
 import { estimateTimeLeftForCount } from '../../utils/estimateTime';
+import ScrollHintArea from './ScrollHintArea';
 
 // Center label is a concrete "3/5" rather than "60%" — an exact count of
 // what's left reads as more tangible and less abstract than a percentage,
@@ -67,38 +68,44 @@ export default function MentalSubHub({ answers, onEnter, onDone, allDone, hasEvi
         </p>
       </div>
 
-      <div className="brand-scroll flex-1 overflow-y-auto min-h-0 mt-4 space-y-2.5 pb-2">
-        {MENTAL_HEALTH_CATEGORIES.map((cat) => {
-          const rawCounts = mentalCategoryCounts(cat.key, answers);
-          const { answered, total } = hasEvidence ? { answered: rawCounts.total, total: rawCounts.total } : rawCounts;
-          const remaining = total - answered;
-          const eta = estimateTimeLeftForCount(remaining, { compact: true });
-          const Icon = cat.icon;
-          return (
-            <button
-              key={cat.key}
-              type="button"
-              onClick={() => onEnter(cat.key)}
-              className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl border text-left transition-transform duration-150 active:scale-[0.98]"
-              style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}
-            >
-              <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: cat.soft }}>
-                {Icon && <Icon className="w-5 h-5" style={{ color: cat.color }} />}
-              </span>
-              <span className="flex-1 min-w-0">
-                <b className="block text-sm font-semibold" style={{ color: 'var(--ink)' }}>{cat.label}</b>
-                <span className="block text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{cat.desc}</span>
-              </span>
-              <span className="flex flex-col items-center gap-1 shrink-0">
-                <SubRing answered={answered} total={total} color={cat.color} />
+      <ScrollHintArea wrapperClassName="mt-4" className="brand-scroll pb-2" watch={answers}>
+        <div className="grid grid-cols-2 gap-2.5">
+          {MENTAL_HEALTH_CATEGORIES.map((cat, i) => {
+            const rawCounts = mentalCategoryCounts(cat.key, answers);
+            const { answered, total } = hasEvidence ? { answered: rawCounts.total, total: rawCounts.total } : rawCounts;
+            const remaining = total - answered;
+            const eta = estimateTimeLeftForCount(remaining, { compact: true });
+            const Icon = cat.icon;
+            // Odd one out (5th of 5) spans both columns but is itself
+            // width-capped to one column and centered, so it reads as a
+            // lone box on its own row rather than a stretched-out one.
+            const isOrphan = MENTAL_HEALTH_CATEGORIES.length % 2 === 1 && i === MENTAL_HEALTH_CATEGORIES.length - 1;
+            return (
+              <button
+                key={cat.key}
+                type="button"
+                onClick={() => onEnter(cat.key)}
+                className={`flex flex-col gap-2.5 p-3.5 rounded-2xl border text-left transition-transform duration-150 active:scale-[0.97] ${isOrphan ? 'col-span-2 justify-self-center' : ''}`}
+                style={{ borderColor: 'var(--line)', background: 'var(--surface)', width: isOrphan ? 'calc(50% - 5px)' : undefined }}
+              >
+                <span className="flex items-center justify-between">
+                  <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: cat.soft }}>
+                    {Icon && <Icon className="w-5 h-5" style={{ color: cat.color }} />}
+                  </span>
+                  <SubRing answered={answered} total={total} color={cat.color} />
+                </span>
+                <span className="min-w-0">
+                  <b className="block text-sm font-semibold leading-snug" style={{ color: 'var(--ink)' }}>{cat.label}</b>
+                  <span className="block text-[11px] leading-snug mt-0.5 line-clamp-2" style={{ color: 'var(--muted)' }}>{cat.desc}</span>
+                </span>
                 <span className="text-[9px] font-semibold" style={{ color: remaining === 0 ? cat.color : 'var(--muted)' }}>
                   {remaining === 0 ? 'Done' : eta}
                 </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+              </button>
+            );
+          })}
+        </div>
+      </ScrollHintArea>
 
       <div className="mt-4 pt-2 shrink-0">
         <button

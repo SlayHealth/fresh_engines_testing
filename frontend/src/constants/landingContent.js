@@ -124,7 +124,10 @@ export const PRICING_PLANS = [
       'Joint PDF with shared + private sections'
     ],
     outcome: 'Make your decision with complete clarity',
-    cta: 'Join 2,847 Couples Who Know',
+    // REG-07: was 'Join 2,847 Couples Who Know' — a specific, precise-sounding
+    // user-count with no backing anywhere in the repo. Removed rather than left
+    // unsubstantiated; replaced with an honest CTA matching this array's other entries.
+    cta: 'Start Your Joint Report',
     popular: true
   },
   {
@@ -213,7 +216,7 @@ export const PERSONAS = [
     needs: [
       'Independent health verification of prospective match',
       'Genetic carrier screening — both families',
-      'Confidential doctor-reviewed risk report for your child'
+      'Confidential, evidence-based risk report for your child'
     ],
     warningStat: '82% of parents say they had no way to verify health claims made during rishta discussions.',
     price: '2,999'

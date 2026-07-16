@@ -64,7 +64,7 @@ export function QuickTrustBadges() {
       </span>
       <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full font-medium" style={{ background: 'var(--soft-pink)', color: 'var(--pink-d)' }}>
         <Award className="w-4 h-4 lg:w-5 lg:h-5" />
-        Doctor Reviewed
+        Evidence-Based
       </span>
     </div>
   );

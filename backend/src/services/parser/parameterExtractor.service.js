@@ -2,6 +2,49 @@ const sectionDetector = require('./sectionDetector.service');
 const ontologyMapper = require('./ontologyMapper.service');
 const logger = require('../../utils/logger');
 
+// WS2-01: no conversion existed anywhere between extraction and scoring, so a value
+// reported in a different (but clinically valid) unit than the scoring engines
+// assume was consumed as a bare number — e.g. a normal fasting glucose of
+// "5.5 mmol/L" (~99 mg/dL) scored as if it read 5.5 mg/dL, a critically-low value.
+// Scoped to the four parameter families the deep review explicitly validated
+// conversion factors for (glucose, cholesterol-family, creatinine, vitamin D) —
+// not a general unit-inference system. Factors: glucose mg/dL = mmol/L x 18.0;
+// cholesterol mg/dL = mmol/L x 38.67; creatinine mg/dL = umol/L / 88.4; 25-OH
+// vitamin D ng/mL = nmol/L / 2.5.
+const SI_UNIT_CONVERSIONS = {
+  fasting_blood_glucose_fbg: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 18.0 },
+  random_blood_sugar_rbs: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 18.0 },
+  average_blood_glucose_abg: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 18.0 },
+  estimated_average_glucose_eag: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 18.0 },
+  total_cholesterol: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 38.67 },
+  low_density_lipoprotein_cholesterol_ldl_c: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 38.67 },
+  high_density_lipoprotein_cholesterol_hdl_c: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 38.67 },
+  non_hdl_cholesterol: { fromUnit: 'mmol/l', toUnit: 'mg/dl', convert: (v) => v * 38.67 },
+  serum_creatinine: { fromUnit: 'umol/l', toUnit: 'mg/dl', convert: (v) => v / 88.4 },
+  vitamin_d_3_25_hydroxy: { fromUnit: 'nmol/l', toUnit: 'ng/ml', convert: (v) => v / 2.5 }
+};
+
+// Real reports spell the same unit several ways (case, spacing, u vs µ for micro).
+function normalizeUnitToken(unit) {
+  if (!unit) return null;
+  return unit.toLowerCase().replace(/\s+/g, '').replace(/µ/g, 'u');
+}
+
+// WS2-02: strips thousands/lakh grouping commas ("1,50,000" / "150,000") and a
+// trailing single-letter H(igh)/L(ow) flag or asterisk ("14.2 H", "92*") — both
+// ubiquitous on real Indian lab reports. Without this, the real value token fails
+// the plain-numeric test, the parameter is left "pending", and the columnar
+// heuristic pops the NEXT value-shaped token — almost always the reference range —
+// as if it were the result. A ferritin of 1,200 (iron overload) was silently read
+// as 20 (the range's near-deficient lower bound): a clinical inversion, not a
+// dropped value. Safe to run unconditionally: a token with no comma/flag (a
+// qualitative word, a titre, a plain number) passes through byte-identical, since
+// none of those end in a bare H/L/* or contain digit-grouping commas.
+function stripValueNoise(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/,/g, '').replace(/\s*[HL*]\s*$/i, '').trim();
+}
+
 class ParameterExtractorService {
   /**
    * Extracts parameters from raw text pages
@@ -24,14 +67,17 @@ class ParameterExtractorService {
      */
     const isValueStr = (str) => {
       if (!str) return false;
+      // Strip grouping commas / a trailing H/L/* flag before the numeric tests —
+      // a no-op for qualitative words, titres, and already-clean numbers (WS2-02).
+      const cleaned = stripValueNoise(str);
       // Numeric with optional leading comparator
-      if (/^[<>]?\s*\d+(?:\.\d+)?$/.test(str)) return true;
+      if (/^[<>]?\s*\d+(?:\.\d+)?$/.test(cleaned)) return true;
       // Numeric ranges like 0-5 or 0.4-4.0
-      if (/^\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?$/.test(str)) return true;
+      if (/^\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?$/.test(cleaned)) return true;
       // Blood-pressure-style slash pair: 130.0/80.0, 120/80
-      if (/^\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?$/.test(str)) return true;
+      if (/^\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?$/.test(cleaned)) return true;
       // Titer formats: 1:16, 1 : 4 — critical for Syphilis RPR titre
-      if (/^\d+\s*:\s*\d+$/.test(str)) return true;
+      if (/^\d+\s*:\s*\d+$/.test(cleaned)) return true;
       // Qualitative clinical terms. "Non-Reactive"/"Non-Immune" use `[-\s]` (not a
       // literal hyphen) because real rapid-card reports commonly print these as two
       // space-separated words ("NON REACTIVE") rather than hyphenated — the hyphen-only
@@ -68,10 +114,28 @@ class ParameterExtractorService {
         }
         return;
       }
+      // WS2-02: clean grouping commas / a trailing H/L/* flag before the numeric
+      // coercion — "1,50,000" and "14.2 H" both fail a bare Number() otherwise and
+      // would fall through to being stored as the literal noisy string.
+      const cleanedRawValue = stripValueNoise(rawValue);
+      let value = isNaN(Number(cleanedRawValue)) ? rawValue : Number(cleanedRawValue);
+      let resolvedUnit = unit;
+
+      // WS2-01: convert a known SI-unit variant to the unit the scoring engines
+      // assume, so a value like "5.5 mmol/L" glucose is stored as ~99 (mg/dL), not
+      // consumed downstream as the bare number 5.5. Only fires for a recognized
+      // canonical + a unit that actually matches its known "from" unit — an
+      // unrecognized or already-correct unit passes through unchanged.
+      const conversion = SI_UNIT_CONVERSIONS[mapping.canonical_name];
+      if (conversion && typeof value === 'number' && normalizeUnitToken(unit) === conversion.fromUnit) {
+        value = parseFloat(conversion.convert(value).toFixed(2));
+        resolvedUnit = conversion.toUnit;
+      }
+
       extractedData[section][mapping.canonical_name] = {
         original_name: originalName,
-        value: isNaN(Number(rawValue)) ? rawValue : Number(rawValue),
-        unit,
+        value,
+        unit: resolvedUnit,
         reference_range: referenceRange,
         confidence
       };

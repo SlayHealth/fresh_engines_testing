@@ -23,7 +23,21 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage: storage });
+// WS2-08: previously accepted any file type/size at all — pathology.controller.js
+// already enforces PDF-only + 25MB for the equivalent upload; matched here so the
+// two upload paths behave consistently instead of one silently accepting
+// arbitrary files the downstream pipeline was never built to handle.
+const upload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max size
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  }
+});
 
 router.post('/upload',         upload.single('pdf'), ctrl.uploadReport);
 router.post('/analyze',        ctrl.analyze);

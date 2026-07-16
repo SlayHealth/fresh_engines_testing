@@ -173,7 +173,10 @@ export default function YourStoryPage() {
 
     // 3. Mental: weight = 20%
     if (mentalResult) {
-      const mentalScore = mentalResult.overall_readiness?.score || 80;
+      // A real score of 0 (a maximally-incompatible couple — mental.controller.js's
+      // compatibilityIndex is legitimately 0 for avgDiff >= 5) must not be treated as
+      // falsy and replaced with a reassuring 80.
+      const mentalScore = mentalResult.overall_readiness?.score ?? 80;
       sumScores += mentalScore * 0.20;
       sumWeights += 0.20;
     }
@@ -185,8 +188,10 @@ export default function YourStoryPage() {
       // The backend deliberately reports a genuine catastrophic-finding score as a
       // real 0 (not null) so it can never be diluted away — `|| 25` would treat that
       // real 0 as falsy and silently substitute a much better-looking 25 instead,
-      // undermining that exact safeguard.
-      const rawRadContribution = radiologyData.partner_A.scores_json?.radiology_nuptia_contribution;
+      // undermining that exact safeguard. Field is `nuptia_score_usg_contribution`,
+      // flat on the partner object (the API's legacy-mapped shape) — not nested
+      // under a `scores_json` key, which doesn't exist on this response at all.
+      const rawRadContribution = radiologyData.partner_A.nuptia_score_usg_contribution;
       const radScore = (typeof rawRadContribution === 'number' ? rawRadContribution : 25) / 30 * 100;
       sumScores += radScore * 0.10;
       sumWeights += 0.10;
@@ -210,26 +215,39 @@ export default function YourStoryPage() {
     return sumWeights > 0 ? Math.round(sumScores / sumWeights) : null;
   };
 
-  const targetScore = calculateDynamicScore(selectedYear, isAct);
-  const hasScoreData = targetScore !== null;
+  // The "Health Together Index" ring is the primary headline and must show the one
+  // real, STI-gate-checked score everyone else on the couple's report sees — the same
+  // `relationship_snapshot.score` the dashboard, PDF, and DB column all derive from
+  // (see reportGeneration.service.js computeGatedComposite) — never a client-side
+  // recomputation, which has no knowledge of the STI gate or the server's exact
+  // renormalization and could show a healthy ring while the real score is capped.
+  const baselineScore = activeMatchDetails?.presentation_json?.relationship_snapshot?.score ?? null;
+  const hasScoreData = baselineScore !== null;
+
+  // The Timeline Projection card's scrubber tooltip is the one place local
+  // interpolation still belongs — it visualizes a hypothetical future, which has no
+  // persisted value to read. At Year 0 ("Today"), though, there's nothing hypothetical
+  // about it, so it shows the same real baseline as the ring instead of a second,
+  // possibly-divergent "today" number computed a different way right next to it.
+  const targetScore = selectedYear === 0 ? baselineScore : calculateDynamicScore(selectedYear, isAct);
 
   // Score transition counters, scale pulsing, and shimmers
-  const [displayScore, setDisplayScore] = useState(targetScore ?? 0);
-  const [prevScore, setPrevScore] = useState(targetScore ?? 0);
+  const [displayScore, setDisplayScore] = useState(baselineScore ?? 0);
+  const [prevScore, setPrevScore] = useState(baselineScore ?? 0);
   const [isPulsing, setIsPulsing] = useState(false);
   const [isShimmering, setIsShimmering] = useState(false);
 
   useEffect(() => {
-    if (targetScore === null) return;
-    if (targetScore > prevScore) {
+    if (baselineScore === null) return;
+    if (baselineScore > prevScore) {
       setIsPulsing(true);
       setIsShimmering(true);
       const timerP = setTimeout(() => setIsPulsing(false), 400);
       const timerS = setTimeout(() => setIsShimmering(false), 600);
-      setPrevScore(targetScore);
-      
+      setPrevScore(baselineScore);
+
       let start = displayScore;
-      const end = targetScore;
+      const end = baselineScore;
       const duration = 400;
       const range = end - start;
       let currentStep = 0;
@@ -250,10 +268,10 @@ export default function YourStoryPage() {
         clearTimeout(timerS);
         clearInterval(timerCount);
       };
-    } else if (targetScore < prevScore) {
-      setPrevScore(targetScore);
+    } else if (baselineScore < prevScore) {
+      setPrevScore(baselineScore);
       let start = displayScore;
-      const end = targetScore;
+      const end = baselineScore;
       const duration = 400;
       const range = end - start;
       let currentStep = 0;
@@ -271,7 +289,7 @@ export default function YourStoryPage() {
 
       return () => clearInterval(timerCount);
     }
-  }, [targetScore]);
+  }, [baselineScore]);
 
   // Three distinct score categories, progress ring colors, and radial glows
   let scoreBand = "Steady";
@@ -355,7 +373,7 @@ export default function YourStoryPage() {
     if (mentalResult) {
       const isMentalGood = mentalResult.overall_readiness?.label === 'Highly Aligned';
       if (isMentalGood) {
-        paragraphs.push(`On the relational and emotional front, you share a highly compatible foundation (${mentalResult.overall_readiness?.score || 80}% attachment alignment). You communicate constructively and hold identical expectations, providing a solid anchor to navigate these long-term physical health goals together.`);
+        paragraphs.push(`On the relational and emotional front, you share a highly compatible foundation (${mentalResult.overall_readiness?.score ?? 80}% attachment alignment). You communicate constructively and hold identical expectations, providing a solid anchor to navigate these long-term physical health goals together.`);
       } else {
         paragraphs.push(`On the relational front, you share a compatible foundation, though a few differences in communication styles or expectations are present. Regular check-ins will help align your goals as you navigate your physical health trajectories.`);
       }
@@ -365,7 +383,7 @@ export default function YourStoryPage() {
     const hasRadA = radiologyData?.partner_A && Object.keys(radiologyData.partner_A).length > 0;
     const hasRadB = radiologyData?.partner_B && Object.keys(radiologyData.partner_B).length > 0;
     if (radiologyData && hasRadA && hasRadB) {
-      const allFlags = [...(radiologyData.partner_A.risk_flags_json || []), ...(radiologyData.partner_B.risk_flags_json || [])];
+      const allFlags = [...(radiologyData.partner_A.risk_flags || []), ...(radiologyData.partner_B.risk_flags || [])];
       if (allFlags.length === 0) {
         paragraphs.push(`Your structural wellness scans (including abdominal, scrotal, and pelvic ultrasounds) show completely standard organ anatomy, verifying there are no organic blocks or anatomical issues.`);
       } else {
@@ -474,7 +492,11 @@ export default function YourStoryPage() {
 
     if (id === 'mental') {
       if (!mentalResult) return 'Pending';
-      const label = mentalResult.overall_readiness?.label || 'Highly Aligned';
+      const label = mentalResult.overall_readiness?.label;
+      // A mentalResult that exists but carries no label must not fail open to the
+      // fabricated-positive "Highly Aligned" — show a neutral, honest state instead
+      // (getThreadBadgeStyle's default case already renders this as neutral gray).
+      if (!label) return 'Not scored';
       if (label === 'Highly Aligned') return 'Resolved';
       if (label === 'Discussion Recommended') return 'Needs attention';
       return 'Steady watch';
@@ -484,8 +506,8 @@ export default function YourStoryPage() {
       const hasRadA = radiologyData?.partner_A && Object.keys(radiologyData.partner_A).length > 0;
       const hasRadB = radiologyData?.partner_B && Object.keys(radiologyData.partner_B).length > 0;
       if (!radiologyData || !hasRadA || !hasRadB) return 'Pending';
-      
-      const allFlags = [...(radiologyData.partner_A.risk_flags_json || []), ...(radiologyData.partner_B.risk_flags_json || [])];
+
+      const allFlags = [...(radiologyData.partner_A.risk_flags || []), ...(radiologyData.partner_B.risk_flags || [])];
       const hasSevere = allFlags.some(f => ['high', 'critical', 'severe'].includes(f.severity?.toLowerCase()));
       const hasMild = allFlags.some(f => ['moderate', 'low', 'mild'].includes(f.severity?.toLowerCase()));
       
@@ -577,12 +599,12 @@ export default function YourStoryPage() {
       plain: {
         why: mentalResult?.couple_analysis?.attachment_insight || "Attachment style compatibility, expectation alignments, and conflict indices mapped.",
         revealBtnText: "The compatibility index, if you want it",
-        revealDetail: () => ({ value: Math.round(mentalResult?.overall_readiness?.score || 80), suffix: '%', text: `Overall psychometric compatibility score: ` })
+        revealDetail: () => ({ value: Math.round(mentalResult?.overall_readiness?.score ?? 80), suffix: '%', text: `Overall psychometric compatibility score: ` })
       },
       clinical: {
         why: mentalResult?.couple_analysis?.attachment_insight || "Big Five compatibility metrics and Gottman questionnaire assessments.",
         revealBtnText: "See compatibility calculations",
-        revealDetail: () => ({ value: Math.round(mentalResult?.overall_readiness?.score || 80), suffix: '/100', text: `Compatibility index resolves to ` })
+        revealDetail: () => ({ value: Math.round(mentalResult?.overall_readiness?.score ?? 80), suffix: '/100', text: `Compatibility index resolves to ` })
       }
     },
     {
@@ -595,7 +617,7 @@ export default function YourStoryPage() {
         revealDetail: () => {
           // See the note on the same `|| 25` pattern above — a genuine 0 (the worst
           // possible finding) must not be displayed as a reassuring 25.
-          const raw = radiologyData?.partner_A?.scores_json?.radiology_nuptia_contribution;
+          const raw = radiologyData?.partner_A?.nuptia_score_usg_contribution;
           const score = Math.round(typeof raw === 'number' ? raw : 25);
           return { value: score, suffix: '/30', text: `Organ scans contribution resolves to ` };
         }
@@ -604,7 +626,7 @@ export default function YourStoryPage() {
         why: "USG Abdomen, TVS/scrotal Doppler, Echocardiography outputs mapped.",
         revealBtnText: "See radiology score contribution",
         revealDetail: () => {
-          const raw = radiologyData?.partner_A?.scores_json?.radiology_nuptia_contribution;
+          const raw = radiologyData?.partner_A?.nuptia_score_usg_contribution;
           const score = Math.round(typeof raw === 'number' ? raw : 25);
           return { value: score, suffix: '/30', text: `Nuptia USG contribution resolves to ` };
         }
@@ -641,9 +663,12 @@ export default function YourStoryPage() {
     }
   ];
 
-  // Action items inside path forward
+  // Action items inside path forward — same reasoning as the ring: a real clinical
+  // recommendation (book a specialist vs. no action needed) must key off the actual
+  // gated score, not the ungated client recompute, so it can never under-flag a couple
+  // the STI gate or another safety check already capped server-side.
   const actions = [];
-  const flaggedCount = calculateDynamicScore(0, false) < 80;
+  const flaggedCount = (baselineScore ?? calculateDynamicScore(0, false)) < 80;
   if (flaggedCount) {
     actions.push("Book a professional clinical session to review metabolic and reproductive markers.");
     actions.push("Establish a couple-centered tracking timeline (diet, exercise, sleep habits) for the next 90 days.");

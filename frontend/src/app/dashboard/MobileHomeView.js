@@ -166,7 +166,10 @@ export default function MobileHomeView({
           </div>
         </section>
 
-        <p className="trust"><Ico name="lock" /> Encrypted end to end. Nothing is shared with your partner or family until you say so. DPDP-compliant.</p>
+        <p className="trust"><Ico name="lock" /> Encrypted end to end. Nothing is shared with your partner or family until you say so.</p>
+        <p className="text-[10px] text-center leading-relaxed px-4" style={{ color: 'var(--ink-3)' }}>
+          This report is for informational and educational purposes and does not diagnose or treat any medical condition. Always confirm results with a qualified doctor.
+        </p>
       </main>
     </div>
   );

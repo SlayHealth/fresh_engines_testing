@@ -1,6 +1,7 @@
 const openRouter = require('../llm/openrouter.service');
 const logger = require('../../utils/logger');
 const schemaRegistry = require('./schemaRegistry');
+const { coerceAndValidate } = require('./schemaValidator');
 
 const BASE_SYSTEM_PROMPT = `You are a specialized medical AI designed to extract structured JSON data
 from radiology reports. Your output MUST be ONLY valid JSON matching the exact schema provided.
@@ -36,14 +37,33 @@ ${JSON.stringify(schema.jsonSchema, null, 2)}`;
 
     const userPrompt = `Extract structured JSON from this ${schema.label} report section:\n\n${sectionText}`;
 
-    try {
-      logger.info(`Extracting ${modalityKey} for ${patientName || 'unknown'}...`);
-      const jsonResponse = await openRouter.extractJSON(userPrompt, systemPrompt);
-      return { modalityKey, extracted: jsonResponse, error: null };
-    } catch (err) {
-      logger.error(`Extraction failed for ${modalityKey}: ${err.message}`);
-      return { modalityKey, extracted: null, error: err.message };
+    // WS2-07: malformed JSON is often model non-determinism on a single turn — worth
+    // one retry. Other failures (auth, network, timeout) won't be fixed by retrying,
+    // so only LLM_MALFORMED_JSON gets a second attempt.
+    let jsonResponse;
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        logger.info(`Extracting ${modalityKey} for ${patientName || 'unknown'}...${attempt > 0 ? ' (retry after malformed JSON)' : ''}`);
+        jsonResponse = await openRouter.extractJSON(userPrompt, systemPrompt);
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (err.code !== 'LLM_MALFORMED_JSON' || attempt === 1) break;
+      }
     }
+
+    if (lastErr) {
+      logger.error(`Extraction failed for ${modalityKey}: ${lastErr.message}`);
+      return { modalityKey, extracted: null, error: lastErr.message };
+    }
+
+    // Validate/coerce against the declared schema: drop invented fields, coerce
+    // wrong-typed values (e.g. fatty_grade: "2" as a string), reject hallucinated
+    // enum values not in the closed vocabulary a scorer actually checks against.
+    const validated = coerceAndValidate(jsonResponse, schema.jsonSchema);
+    return { modalityKey, extracted: validated, error: null };
   }
 
   // Parallel extraction of all sections

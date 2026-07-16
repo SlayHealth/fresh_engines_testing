@@ -112,7 +112,12 @@ const parametersOntology = [
     "aliases": [
       "total white blood cell count (wbc / tlc)",
       "wbc",
-      "tlc"
+      "tlc",
+      "wbc count",
+      "total leucocyte count",
+      "total leukocyte count",
+      "leucocyte count",
+      "leukocyte count"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -316,7 +321,17 @@ const parametersOntology = [
     "section": "cbc",
     "aliases": [
       "fasting blood glucose (fbg)",
-      "fbg"
+      "fbg",
+      // WS2-04: the far more common real-world label on Indian lab reports is "FBS" /
+      // "Fasting Blood Sugar", not "FBG" — without these, this canonical almost never
+      // actually populates, which would make WS1A03's diabetic-gate fix a silent no-op.
+      "fbs",
+      "fasting blood sugar",
+      "blood sugar fasting",
+      "blood sugar - fasting",
+      "blood sugar (fasting)",
+      "fasting blood sugar (fbs)",
+      "blood sugar - fasting (fbs / fbg)"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -437,7 +452,11 @@ const parametersOntology = [
     "section": "kft",
     "aliases": [
       "serum creatinine",
-      "creatinine"
+      "creatinine",
+      // WS2-04: plain/prefixed real-world label variants for this same test.
+      "s. creatinine",
+      "creatinine, serum",
+      "creatinine serum"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -465,7 +484,8 @@ const parametersOntology = [
     "canonical_name": "serum_uric_acid",
     "section": "kft",
     "aliases": [
-      "serum uric acid"
+      "serum uric acid",
+      "uric acid"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -474,7 +494,16 @@ const parametersOntology = [
     "canonical_name": "serum_urea",
     "section": "kft",
     "aliases": [
-      "serum urea"
+      "serum urea",
+      // WS2-03: without an exact alias, "Blood Urea" (an extremely common report
+      // label — urea, not BUN) fuzzy-matched the longer "blood urea nitrogen (bun)"
+      // alias below Fuse's threshold and got silently mis-scored as BUN. Urea and
+      // BUN differ by ~2.14x (Urea mg/dL = BUN x 2.14), so this misrepresented renal
+      // status for a live scoring consumer (reportSummary.service.js's body-health
+      // card). Registered here as an exact alias so it's matched before fuzzy search
+      // ever runs, not just deprioritized against the BUN entry.
+      "blood urea",
+      "urea"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -498,7 +527,9 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "serum sodium (na⁺)",
-      "na⁺"
+      "na⁺",
+      "sodium",
+      "na"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -508,7 +539,9 @@ const parametersOntology = [
     "section": "general",
     "aliases": [
       "serum potassium (k⁺)",
-      "k⁺"
+      "k⁺",
+      "potassium",
+      "k"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -796,7 +829,9 @@ const parametersOntology = [
     "canonical_name": "total_cholesterol",
     "section": "lipid",
     "aliases": [
-      "total cholesterol"
+      "total cholesterol",
+      "t. cholesterol",
+      "t cholesterol"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -806,7 +841,9 @@ const parametersOntology = [
     "section": "lipid",
     "aliases": [
       "high-density lipoprotein cholesterol (hdl-c)",
-      "hdl-c"
+      "hdl-c",
+      "hdl cholesterol",
+      "hdl"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -816,7 +853,11 @@ const parametersOntology = [
     "section": "lipid",
     "aliases": [
       "low-density lipoprotein cholesterol (ldl-c)",
-      "ldl-c"
+      "ldl-c",
+      "ldl cholesterol",
+      // WS2-04: "LDL" alone is 3 chars — below the fuzzy-search length floor — but
+      // registering it as an exact alias resolves it with zero fuzzy risk instead.
+      "ldl"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -1256,7 +1297,12 @@ const parametersOntology = [
     "canonical_name": "sperm_concentration",
     "section": "semen_analysis",
     "aliases": [
-      "sperm concentration"
+      "sperm concentration",
+      // WS2-04: an unqualified "Sperm Count" (no "Total" prefix) conventionally
+      // means concentration (million/mL) in real-world Indian semen analysis
+      // reports — "Total Sperm Count" (already its own distinct alias below)
+      // is the one that means count-per-whole-ejaculate.
+      "sperm count"
     ],
     "expected_units": [],
     "normal_range_type": "unknown"
@@ -1501,6 +1547,23 @@ const parametersOntology = [
     "normal_range_type": "unknown"
   },
   {
+    // WS0-11: mfr.controller.js's classifyOvarianReserve reads this exact canonical
+    // (findExtractedParam(parsedFemaleData, 'afc')) and 'afc' was already referenced
+    // in FEMALE_MARKERS below, but no extractable canonical with aliases ever
+    // existed for it — every report-sourced AFC value silently evaluated to
+    // undefined, degrading ovarian-reserve classification to AMH-only even when a
+    // real AFC (a genuinely different, sometimes-discordant marker) was on the report.
+    "canonical_name": "afc",
+    "section": "general",
+    "aliases": [
+      "afc",
+      "antral follicle count",
+      "antral follicle count (afc)"
+    ],
+    "expected_units": [],
+    "normal_range_type": "unknown"
+  },
+  {
     // Matches the exact key reportSummary.service.js's Vitamin body-health card already
     // reads (flatParams.vitamin_d_3_25_hydroxy) — was entirely absent from the ontology,
     // so that card always fell back to "optimal" regardless of the couple's real value.
@@ -1568,6 +1631,14 @@ const fuse = new Fuse(searchableParams, {
 });
 
 class OntologyMapperService {
+  // WS0-05: lets a binding test assert a consumer's hardcoded canonical name (e.g.
+  // the STI gate's five param keys) genuinely exists in the ontology, independent
+  // of alias/fuzzy-matching — a canonical_name is a data key, not necessarily a
+  // typeable alias, so mapParameter() alone can't answer "does this key exist".
+  hasCanonical(canonicalName) {
+    return parametersOntology.some((p) => p.canonical_name === canonicalName);
+  }
+
   mapParameter(rawName, currentSection) {
     if (!rawName) return null;
 

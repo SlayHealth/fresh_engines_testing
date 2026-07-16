@@ -7,7 +7,7 @@ const extractor = require('../services/radiology/radiologyExtractor.service');
 const aggregator = require('../services/radiology/reportAggregator.service');
 const { calculateRadiologyNuptiaContribution } = require('../services/scoring/nuptia.composite.score');
 const { generateRiskFlags } = require('../services/scoring/riskFlags.service');
-const ocrSpaceService = require('../services/ocr/ocrSpace.service');
+const ocrProvider = require('../services/ocr/ocrProvider');
 const { db } = require('../services/storage/postgres.service');
 const logger = require('../utils/logger');
 
@@ -132,8 +132,13 @@ exports.uploadReport = async (req, res, next) => {
     const { patientSlayId, sex, age, bmi } = req.body;
 
     // 1. OCR
+    // WS2-08: previously called ocrSpaceService directly, bypassing ocrProvider's
+    // local PyMuPDF fast path (paid OCR.space latency/cost on every upload, even
+    // text-native PDFs) and its mock-mode guard (radiology couldn't run in dev
+    // without a real OCR key, unlike pathology). Routed through the shared
+    // provider so both pipelines behave the same way.
     logger.info(`Running OCR on file: ${filePath}`);
-    const ocrResults = await ocrSpaceService.process(filePath);
+    const ocrResults = await ocrProvider.process(filePath);
     const rawText = ocrResults.map(p => p.text).join('\n\n');
 
     // 2. Master radiology pipeline

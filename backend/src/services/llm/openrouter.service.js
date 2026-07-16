@@ -38,8 +38,17 @@ class OpenRouterService {
       if (cleanContent.startsWith('```json')) cleanContent = cleanContent.replace(/^```json/, '');
       if (cleanContent.startsWith('```')) cleanContent = cleanContent.replace(/^```/, '');
       if (cleanContent.endsWith('```')) cleanContent = cleanContent.replace(/```$/, '');
-      
-      return JSON.parse(cleanContent.trim());
+
+      try {
+        return JSON.parse(cleanContent.trim());
+      } catch (parseErr) {
+        // WS2-07: tagged distinctly from network/auth failures so callers can
+        // retry a malformed-JSON turn (often model non-determinism) without
+        // retrying errors a retry can't fix.
+        const taggedErr = new Error(`LLM returned malformed JSON: ${parseErr.message}`);
+        taggedErr.code = 'LLM_MALFORMED_JSON';
+        throw taggedErr;
+      }
     } catch (error) {
       logger.error(`OpenRouter API failed: ${error.message}`);
       if (error.response) {

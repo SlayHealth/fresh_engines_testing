@@ -384,6 +384,10 @@ export default function DashboardPage() {
             Contact Support
           </button>
         </div>
+
+        <p className="text-[10px] text-center mt-6 leading-relaxed" style={{ color: 'var(--muted)' }}>
+          This report is for informational and educational purposes and does not diagnose or treat any medical condition. Always confirm results with a qualified doctor.
+        </p>
       </div>
     </main>
   );

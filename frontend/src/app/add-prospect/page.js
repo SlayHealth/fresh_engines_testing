@@ -21,7 +21,8 @@ import useIsMobile from '../../hooks/useIsMobile';
 import {
   LIFESTYLE_ACTIVITIES, LIFESTYLE_DRINKING,
   LIFESTYLE_SMOKING_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL,
-  GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS, RELATIONSHIP_STATUSES
+  GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS, RELATIONSHIP_STATUSES,
+  FAMILY_HISTORY_DIABETES
 } from '../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES, mentalCategoryProgress } from '../../constants/mentalHealthQuestions';
 import MentalSubHub from '../../components/wizard/MentalSubHub';
@@ -1205,7 +1206,8 @@ function AddProspectPageInner() {
       choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, form.activity_level, (v) => set({ activity_level: v })),
       choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, form.drinking_habits, (v) => set({ drinking_habits: v })),
       choiceStep('Smoking & Tobacco Habits', LIFESTYLE_SMOKING_TOBACCO, form.smoking_habits, (v) => set({ smoking_habits: v })),
-      choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, form.sleep_cycle, (v) => set({ sleep_cycle: v }))
+      choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, form.sleep_cycle, (v) => set({ sleep_cycle: v })),
+      choiceStep('Family History of Diabetes', FAMILY_HISTORY_DIABETES, form.parentDiabetes, (v) => set({ parentDiabetes: v }))
     ];
     if (form.gender === 'Female' || form.candidateGender === 'Female') {
       arr.push(choiceStep('Menstrual Cycle Status', LIFESTYLE_MENSTRUAL, form.menstrualCycle, (v) => set({ menstrualCycle: v }), { subtitle: 'Optional' }));
@@ -1586,13 +1588,6 @@ function AddProspectPageInner() {
       <div className="flex-1 flex flex-col max-w-md mx-auto w-full px-4 pt-4 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-4 overflow-hidden">
         <div className="flex items-center justify-between mb-4 shrink-0">
           <span className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>{headerTitle}</span>
-          <button
-            onClick={() => router.push('/profile')}
-            className="text-xs font-medium transition-colors duration-150 hover:opacity-70"
-            style={{ color: 'var(--muted)' }}
-          >
-            Profile
-          </button>
         </div>
 
         {body}

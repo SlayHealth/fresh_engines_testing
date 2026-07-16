@@ -381,9 +381,18 @@ async function getUserProfile(req, res, next) {
  * `reports` and `chat_sessions` have no direct FK to `users`, so their rows
  * are gathered by this user's matches and deleted explicitly, in a
  * transaction, before the `users` row itself. Deleting `users` then cascades
- * `matches`, `user_sessions`, `prospect_invites` (as inviter — the other
- * party's `prospect_user_id` is SET NULL, not deleted), `radiology_reports`,
+ * `matches`, `user_sessions`, `prospect_invites` (as inviter), `radiology_reports`,
  * and `usg_reports` automatically via their ON DELETE CASCADE user_id FKs.
+ *
+ * REG-06: the invited partner is a placeholder `users` row with no login of
+ * their own (created in invite.controller.js's createInvite) — they have no
+ * self-service way to ever request deletion. Previously, deleting the account
+ * holder only cascaded away the `prospect_invites` row itself (its
+ * `prospect_user_id` FK is ON DELETE SET NULL, not a cascade onto that row),
+ * leaving the partner's placeholder `users` row — and anything hanging off
+ * its own user_id, e.g. radiology_reports — permanently orphaned rather than
+ * erased. Collected before the `users` delete below (which cascades the
+ * `prospect_invites` rows away) and deleted alongside.
  *
  * Real, disclosed limitation: radiology/USG rows uploaded before user_id
  * stamping shipped have no reliable link back to an account (only free-text
@@ -397,6 +406,13 @@ async function deleteAccount(req, res, next) {
     const userId = req.user.id;
 
     await client.query('BEGIN');
+
+    const prospectRows = await client.query(
+      `SELECT DISTINCT prospect_user_id FROM prospect_invites
+       WHERE user_id = $1 AND prospect_user_id IS NOT NULL`,
+      [userId]
+    );
+    const prospectUserIds = prospectRows.rows.map((r) => r.prospect_user_id);
 
     const matchReports = await client.query(
       `SELECT male_report_id, female_report_id FROM matches
@@ -417,8 +433,12 @@ async function deleteAccount(req, res, next) {
 
     await client.query('DELETE FROM users WHERE id = $1', [userId]);
 
+    if (prospectUserIds.length > 0) {
+      await client.query('DELETE FROM users WHERE id = ANY($1)', [prospectUserIds]);
+    }
+
     await client.query('COMMIT');
-    logger.info(`[Auth][CID: ${correlationId}] Deleted account ${userId} and all reachable data.`);
+    logger.info(`[Auth][CID: ${correlationId}] Deleted account ${userId}, ${prospectUserIds.length} associated prospect placeholder(s), and all reachable data.`);
     res.json({ success: true });
   } catch (error) {
     await client.query('ROLLBACK');

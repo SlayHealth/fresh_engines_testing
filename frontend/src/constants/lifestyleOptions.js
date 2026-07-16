@@ -3,7 +3,8 @@ import {
   WineOff, Martini, Beer, BottleWine,
   CigaretteOff, Cigarette, Package,
   Sunrise, MoonStar, Shuffle, Eye,
-  CalendarCheck, CalendarX, CalendarOff
+  CalendarCheck, CalendarX, CalendarOff,
+  ShieldCheck, User, Users
 } from 'lucide-react';
 
 // Renders a tight row of `count` copies of the same icon, for options whose intensity
@@ -42,6 +43,16 @@ export const LIFESTYLE_ACTIVITIES = [
   { val: 'Moderate', label: 'Moderate', desc: 'Light exercise, about 1-3 times a week', icon: Footprints },
   { val: 'Active', label: 'Active', desc: 'Regular exercise, about 3-5 times a week', icon: Zap },
   { val: 'Athletic', label: 'Athletic', desc: 'Daily intense exercise or sports, 6-7 times a week', icon: Trophy }
+];
+
+// WS1A04/WS3B01: feeds the IDRS family-history axis (none 0 / one parent 10 / both
+// parents 20, per the validated MDRF-IDRS instrument) — previously uncaptured in
+// the live wizard, so this always silently scored as "none" regardless of a
+// person's real history.
+export const FAMILY_HISTORY_DIABETES = [
+  { val: 'None', label: 'Neither parent', desc: 'No parent diagnosed with diabetes', icon: ShieldCheck },
+  { val: 'One', label: 'One parent', desc: 'One parent diagnosed with diabetes', icon: User },
+  { val: 'Both', label: 'Both parents', desc: 'Both parents diagnosed with diabetes', icon: Users }
 ];
 
 export const LIFESTYLE_DRINKING = [

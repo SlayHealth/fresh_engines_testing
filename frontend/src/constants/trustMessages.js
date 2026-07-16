@@ -1,7 +1,16 @@
 // Small, rotating "why this matters" whispers shown beneath each questionnaire
-// step. Personalized with the person's first name, kept short and warm —
-// never the visual focus of the screen, just quiet reassurance while they answer.
+// step. Personalized with the person's first name, kept short and warm, with
+// a light touch of wit — never the visual focus of the screen, just quiet
+// reassurance (with a small smile) while they answer.
 // {name} is replaced with the person's first name at render time.
+//
+// Wit is deliberately dialed differently by category: About/Lifestyle/routing
+// are low-stakes, so they can be playful. Mental Wellbeing is real
+// psychological territory (trust, anger, attachment) — most of that pool
+// stays sincere, with only the lighter, lower-stakes questions getting a
+// gentle joke. Pathology/Radiology/Genomics touch real health data and
+// sometimes real anxiety, so wit there is used sparingly and never at the
+// expense of what someone might actually be nervous about reading.
 //
 // Messages are grouped per questionnaire (category) so "About You" doesn't
 // echo the same lines as "Lifestyle" or "Mental Wellbeing" — each pool is
@@ -10,62 +19,62 @@
 
 export const TRUST_MESSAGES_BY_CATEGORY = {
   about: [
-    "{name}, these basics are the foundation everything else builds on — no detail here is too small to matter.",
-    "There's no 'ideal' answer to this one, {name} — just the true one.",
-    "{name}, your body, your data — this stays between you and your match, nothing more.",
-    "Every detail here helps paint an honest picture, not a perfect one, {name}.",
-    "{name}, filling this out honestly is one of the most useful things you can do right now.",
-    "Simple facts like this one quietly power a much bigger picture, {name}.",
-    "{name}, nobody's judging these numbers — they're just context for what comes next.",
-    "You're laying the groundwork for real clarity, {name}, one basic detail at a time.",
-    "{name}, we ask for this because it genuinely changes how accurate your results are.",
-    "This is the easy part, {name} — the more meaningful questions build right on top of it.",
-    "{name}, small identity details like this connect the dots between every report you upload.",
-    "Nothing about you is 'just a number' here, {name} — every field adds real signal.",
-    "{name}, you're one honest answer closer to a result that actually reflects you.",
-    "We use this to calibrate your results precisely, {name} — not to categorize you.",
-    "{name}, this is where your story starts to take shape."
+    "{name}, think of this as your app's 'nice to meet you' — small talk that actually matters later.",
+    "There's no gold-star answer here, {name} — no one's grading on a curve.",
+    "{name}, your data isn't going on a billboard — just to you and your match, promise.",
+    "We're going for an honest portrait here, {name}, not a dating-app profile pic.",
+    "{name}, five seconds of honesty here beats five years of 'wait, you never told me that.'",
+    "This tiny fact is doing more behind the scenes than it looks like, {name}.",
+    "{name}, our engine has seen it all — nothing here raises an eyebrow.",
+    "Rome wasn't built in a day, {name}, but your health profile might be — one field at a time.",
+    "{name}, skip this and our engine starts guessing — and it's a terrible guesser.",
+    "Consider this the warm-up lap, {name} — the real questions are just ahead.",
+    "{name}, this little detail is the glue holding your whole report together.",
+    "You're not a number to us, {name} — well, except for the ones you're about to type in.",
+    "{name}, one more honest tap and you're that much closer to a result that actually sounds like you.",
+    "This calibrates your results precisely, {name} — it's not a personality quiz for a magazine.",
+    "{name}, every good story needs a chapter one — this is yours."
   ],
 
   lifestyle: [
-    "{name}, daily habits like this one often matter more for long-term health than any single test result.",
-    "Be honest here, {name} — this is exactly where lifestyle science earns its keep.",
-    "{name}, small daily patterns compound into big outcomes over a lifetime together.",
-    "No judgment on this one, {name} — just the real picture of how you live.",
-    "{name}, habits are the most changeable part of health, which is exactly why they matter so much.",
-    "Your everyday rhythm, {name}, tells us more than you'd think about long-term wellbeing.",
-    "{name}, this is the kind of detail that turns a generic report into a personal one.",
-    "Whatever your honest answer is here, {name}, it's the right one to give.",
+    "{name}, your habits are basically running the show — more than any single test result ever could.",
+    "Be honest here, {name} — this is exactly the one place fibbing shows up on a chart.",
+    "{name}, small daily patterns compound like interest — except the account is your future together.",
+    "No judgment on this one, {name} — we've heard it all, and worse.",
+    "{name}, the good news about habits? Unlike genetics, you can actually do something about them.",
+    "Your everyday rhythm, {name}, is basically a health diary you didn't know you were keeping.",
+    "{name}, this is what separates 'a report' from 'your report.'",
+    "There's no trick question here, {name} — just answer like nobody's watching. (We are. Kindly.)",
     "{name}, lifestyle factors like this one are often the most fixable — knowing is the first step.",
-    "You'd be surprised how much a simple habit like this shifts a long-term picture, {name}.",
+    "You'd be surprised how much one simple habit shifts a long-term picture, {name}.",
     "{name}, we're not grading your lifestyle — we're mapping it, honestly.",
-    "This detail helps connect your day-to-day life to your long-term health story, {name}.",
-    "{name}, real habits, real insights — that's the whole idea here.",
+    "This is how an ordinary Tuesday turns into a trend, {name}.",
+    "{name}, real habits, real insight — no filters needed here.",
     "Every honest answer here sharpens the accuracy of what we can tell you both, {name}.",
-    "{name}, this is exactly the kind of thing couples wish they'd talked about earlier."
+    "{name}, 'wish we'd talked about this sooner' is basically our whole reason for existing."
   ],
 
   mental: [
-    "{name}, there are no wrong answers in this section — only honest ones.",
+    "{name}, there's no wrong answer here — only an honest one (multiple choice makes that easier, at least).",
     "Take a breath before this one, {name} — self-awareness is the whole point here.",
-    "{name}, understanding yourself here helps your partner understand you too.",
+    "{name}, understanding yourself here is basically a cheat sheet for your future partner.",
     "This section exists because emotional compatibility matters just as much as physical health, {name}.",
     "{name}, it's okay if this one makes you pause — that's usually a sign it matters.",
-    "Your honest reflection here, {name}, is worth more than a 'correct' sounding answer.",
+    "{name}, we're not grading for the answer that sounds best in an interview — just the true one.",
     "{name}, every lasting couple has had to answer questions like this one honestly, eventually.",
-    "This isn't a personality test to pass, {name} — it's a mirror, and that's a good thing.",
+    "This isn't a personality quiz you can 'win,' {name} — more of a mirror, and a kind one.",
     "{name}, the goal here is clarity, not perfection.",
     "Emotional insight like this, {name}, is the part most relationships skip and shouldn't.",
     "{name}, however you answer this, it's giving your future partner a truer picture of you.",
     "This kind of self-honesty, {name}, is what makes your mental compatibility score actually meaningful.",
-    "{name}, you're allowed to still be figuring some of this out — just answer where you are today.",
+    "{name}, 'still figuring it out' is a completely valid answer — we won't tell.",
     "Real emotional maturity starts with questions exactly like this one, {name}.",
     "{name}, we ask this because relationships are built on emotional patterns, not just chemistry.",
     "However you feel about this one, {name}, that feeling is useful information.",
-    "{name}, this section is private and used only to understand you and your match better.",
+    "{name}, this stays between us and your match — not even our engineers are nosy enough to peek.",
     "You're being remarkably thoughtful right now, {name} — that matters more than you know.",
     "{name}, understanding your own patterns is the first step to healthier ones.",
-    "This is the kind of question a good therapist would ask, {name}, and you're answering it for free.",
+    "This is the kind of question a good therapist would ask, {name} — and you're getting it for the price of a tap.",
     "{name}, insight like this is exactly what makes a compatibility score more than just numbers.",
     "Whatever comes to mind first, {name}, is usually worth trusting here.",
     "{name}, you're building real self-knowledge with every question in this section.",
@@ -73,8 +82,8 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
   ],
 
   pathology: [
-    "{name}, your pathology report says a lot more about your future together than most people realize.",
-    "This upload stays encrypted and private, {name}, used only for your compatibility analysis.",
+    "{name}, that pathology report is basically your body's tell-all memoir — minus the drama.",
+    "This upload stays encrypted and private, {name} — locked up tighter than your group chat.",
     "{name}, blood work sounds clinical, but it's really just your body's honest status update.",
     "We extract only what's clinically relevant here, {name} — nothing more, nothing less.",
     "{name}, plenty of couples have trusted us with exactly this kind of report already.",
@@ -88,7 +97,7 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
   radiology: [
     "{name}, imaging reports like this fill in details blood work alone can't show.",
     "This stays private and is only used for your own compatibility analysis, {name}.",
-    "{name}, most people never think to share this before marriage — you're ahead of the curve.",
+    "{name}, most people don't think to share this before marriage — look at you, overachiever.",
     "Structural health matters just as much as lab numbers, {name}, and this is how we see it.",
     "{name}, this one detail can quietly resolve a lot of uncertainty.",
     "Whatever this scan shows, {name}, it's simply information, not a judgment.",
@@ -108,37 +117,37 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
   ],
 
   routing: [
-    "{name}, almost there — this next part is just logistics, not more health details.",
-    "However your prospect shares their side, {name}, the process stays just as secure.",
+    "{name}, almost there — this next part is just paperwork, no more prodding questions.",
+    "However your prospect shares their side, {name}, it's Fort Knox either way.",
     "{name}, you're seconds away from either their link or their profile.",
-    "This step is quick, {name} — the real insight comes right after.",
+    "This bit's quick, {name} — think of it as the ad break before the main event.",
     "{name}, nearly done with your side of the story."
   ],
 
   // Fallback pool for any step that isn't tagged with a specific category.
   general: [
-    "{name}, did you know couples who understand each other's health early report far fewer surprises later?",
+    "{name}, fun fact: couples who sort this out early report way fewer 'wait, WHAT?' moments later.",
     "Every answer here brings your health story into sharper focus, {name}.",
     "{name}, your answers stay private between you and your match — always.",
     "Small, honest answers like this one are what make compatibility science actually useful, {name}.",
     "This is exactly the kind of clarity most couples wish they'd had before marriage, {name}.",
     "You're building something most people skip — real, honest health transparency, {name}.",
-    "{name}, every question here exists because it matters for your future together, nothing filler.",
+    "{name}, no filler questions here — we cut those in an early draft. This one made the final cut.",
     "Your care in answering this, {name}, is what makes your results actually trustworthy.",
     "{name}, a few honest minutes now can save a lot of guesswork later.",
-    "Nothing here is graded, {name} — there's no 'right' answer, only an honest one.",
+    "Nothing here is graded, {name} — no gold stars, no report card, just the truth.",
     "Take your time, {name}. Thoughtful answers make for a far more useful result.",
     "{name}, thousands of couples have trusted this same process before their big day.",
     "You're closer to a clearer picture than you were a minute ago, {name}.",
     "{name}, your data is encrypted and never shared without your say-so.",
-    "It's okay to not know something exactly, {name} — your best estimate is enough.",
+    "{name}, 'roughly' is a perfectly good answer — we're not the IRS.",
     "This kind of openness is rare, {name}, and it's exactly what makes a match meaningful.",
     "{name}, one more honest answer, one step closer to real clarity.",
     "Every field you fill helps the two of you start this chapter better informed, {name}.",
     "{name}, you're doing something genuinely thoughtful for your relationship right now.",
     "Good health conversations start with small honest moments like this one, {name}.",
     "{name}, we built this so you'd never have to guess about what matters most.",
-    "You can always come back and change this later, {name} — nothing here is permanent.",
+    "You can change this later, {name} — unlike a tattoo, this one's actually editable.",
     "{name}, the more real this is, the more useful it becomes for both of you."
   ]
 };
@@ -153,7 +162,7 @@ export const TRUST_MESSAGES_BY_QUESTION = {
   // --- About ---
   "What's their name?": [
     "{name}, just so we can personalize their side of the experience too.",
-    "One quick detail, {name} — the rest of their questions will feel more personal with this."
+    "One quick detail, {name} — we promise not to just call them 'the prospect' the whole time."
   ],
   'Gender': [
     "{name}, we ask this to route the right reference ranges and risk models to your reports.",
@@ -165,15 +174,15 @@ export const TRUST_MESSAGES_BY_QUESTION = {
   ],
   'City': [
     "{name}, your city helps us account for regional health patterns — nothing more.",
-    "Just context, {name} — where you live can matter for things like local health baselines."
+    "Just context, {name} — and no, we're not going to show up unannounced."
   ],
   'Height': [
     "{name}, height feeds directly into your BMI and a few other calculated markers.",
-    "One quick measurement, {name} — this pairs with your weight to complete the picture."
+    "One quick measurement, {name} — no tiptoes, we'll know."
   ],
   'Weight': [
     "{name}, this pairs with your height to calculate BMI — a genuinely useful health marker.",
-    "Your honest current weight, {name}, keeps every downstream calculation accurate."
+    "Your honest current weight, {name} — not your 'at the doctor's office in January' weight."
   ],
   'Waist': [
     "{name}, waist measurement is one of the better predictors of metabolic risk — worth getting right.",
@@ -181,7 +190,7 @@ export const TRUST_MESSAGES_BY_QUESTION = {
   ],
   'How did you meet?': [
     "{name}, this is just context for your story — no health data here, promise.",
-    "Just curious how this began, {name} — purely for the narrative, not the score."
+    "Just curious how this began, {name} — think of it as the 'how we met' story at the wedding, minus the mic."
   ],
   'Which platform?': [
     "{name}, just filling in the detail you already mentioned — nothing more to it.",
@@ -195,7 +204,7 @@ export const TRUST_MESSAGES_BY_QUESTION = {
   // --- Lifestyle ---
   'Physical Activity Level': [
     "{name}, activity level is one of the strongest predictors of long-term cardiovascular health.",
-    "Be honest here, {name} — this single habit ripples into almost every health outcome we track."
+    "Be honest here, {name} — a gym membership you haven't used since January doesn't count."
   ],
   'Daily Steps': [
     "{name}, a rough daily average is all we need — no need to check your phone for the exact count.",
@@ -207,7 +216,7 @@ export const TRUST_MESSAGES_BY_QUESTION = {
   ],
   'Alcohol Drinking Habits': [
     "{name}, drinking habits matter for liver markers and a few other things we'll be checking.",
-    "No judgment here, {name} — just an honest read on frequency helps us interpret your reports correctly."
+    "No judgment here, {name} — we've seen 'socially' mean everything from one glass to Fridays that start on Wednesday."
   ],
   'Smoking Habits': [
     "{name}, this affects cardiovascular and respiratory risk more than almost anything else we ask.",
@@ -219,7 +228,7 @@ export const TRUST_MESSAGES_BY_QUESTION = {
   ],
   'Sleep Cycle Patterns': [
     "{name}, sleep quality touches almost every system in the body — it's a bigger deal than it sounds.",
-    "Your real sleep pattern, {name}, not the ideal one — that's what actually helps us here."
+    "Your real sleep pattern, {name} — the one with the 2am scrolling, not the Pinterest version."
   ],
   'Menstrual Cycle Status': [
     "{name}, cycle regularity is a genuinely useful signal for hormonal and fertility health.",
@@ -240,11 +249,11 @@ export const TRUST_MESSAGES_BY_QUESTION = {
     "Adaptability like this, {name}, often matters more than any single crisis-response story."
   ],
   'Intellectual curiosity & flexibility': [
-    "{name}, this is about comfort with new ideas, not intelligence — there's a difference.",
+    "{name}, this is about comfort with new ideas, not intelligence — no IQ test hiding in here.",
     "Whether you love novelty or prefer the familiar, {name}, both are valid answers here."
   ],
   'Planning, reliability & organization': [
-    "{name}, this is one of the classic compatibility friction points — worth answering honestly.",
+    "{name}, this is a classic compatibility friction point — ask any couple who's tried to pack for a trip together.",
     "Spontaneous or scheduled, {name}, neither is 'better' — just different rhythms to match."
   ],
   'Social energy & engagement': [
@@ -284,11 +293,11 @@ export const TRUST_MESSAGES_BY_QUESTION = {
     "However naturally supportive you are, {name}, that's worth capturing accurately."
   ],
   'Career priorities & relocation': [
-    "{name}, career alignment quietly determines a lot of major life decisions down the line.",
+    "{name}, career alignment quietly determines a lot of major life decisions down the line — like whose city you actually end up in.",
     "This helps flag potential friction early, {name}, while it's still easy to talk about."
   ],
   'Savings, budgets & financial views': [
-    "{name}, money habits are one of the top sources of relationship friction — worth surfacing early.",
+    "{name}, money habits are one of the top sources of relationship friction — right up there with hosting duties.",
     "No judgment on spending style here, {name} — just an honest read on how you approach money."
   ],
   'Daily routines & social pacing': [

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronLeft, Sparkles } from 'lucide-react';
 import styles from '../../app/page.module.css';
 import { getTrustMessage } from '../../constants/trustMessages';
+import useKeyboardInset from '../../hooks/useKeyboardInset';
+import ScrollHintArea from './ScrollHintArea';
 
 /**
  * One-question-at-a-time step shell. Pass `key={stepIndex}` when rendering
@@ -48,30 +49,11 @@ export default function QuestionScreen({
     : 'hover:shadow-[0_6px_20px_rgba(24,204,150,0.3)]';
   const trustMessage = getTrustMessage(userName, trustCategory, trustSeed ?? stepIndex, title);
 
-  // Some questions (long multi-line choice options, e.g. Mental Wellbeing's
-  // "Habits & Calm") don't fit this slot on shorter phones. The answer area
-  // already scrolls independently of the fixed header/Next button, but a
-  // small nested scroll region with no visual cue reads as "the last option
-  // got cut off," not "swipe up for more" — so surface an explicit hint
-  // whenever there's real overflow, and hide it once fully scrolled.
-  const scrollRef = useRef(null);
-  const [hasMoreBelow, setHasMoreBelow] = useState(false);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return undefined;
-    const checkOverflow = () => {
-      setHasMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 8);
-    };
-    checkOverflow();
-    el.addEventListener('scroll', checkOverflow, { passive: true });
-    const ro = new ResizeObserver(checkOverflow);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener('scroll', checkOverflow);
-      ro.disconnect();
-    };
-  }, [children]);
+  // Pushes the Next button up above the on-screen keyboard — iOS Safari's
+  // viewport is supposed to shrink around it, but that's unreliable and
+  // flatly doesn't happen inside in-app webviews (WhatsApp, etc.), where a
+  // text-input step's Next button ends up hidden behind the keyboard entirely.
+  const keyboardInset = useKeyboardInset();
 
   return (
     <div className={`flex-1 flex flex-col overflow-hidden ${styles.dashboard}`}>
@@ -163,37 +145,26 @@ export default function QuestionScreen({
       </div>
 
       {/* Answer content */}
-      <div className="flex-1 min-h-0 relative">
-        <div ref={scrollRef} className={`h-full overflow-y-auto flex flex-col ${trustCategory === 'mental' ? 'brand-scroll' : ''}`}>
-          <div className="pb-3">{children}</div>
+      <ScrollHintArea className={`flex flex-col ${trustCategory === 'mental' ? 'brand-scroll' : ''}`} watch={children}>
+        <div className="pb-3">{children}</div>
 
-          {trustMessage && (
-            <div className="mt-auto pt-8 pb-1 flex justify-center shrink-0 animate-fade-in">
-              <div
-                className="flex items-start gap-2 max-w-[260px] px-3.5 py-2.5 rounded-2xl"
-                style={{ background: 'var(--soft-pink)' }}
-              >
-                <Sparkles className="w-3 h-3 mt-0.5 shrink-0" style={{ color: 'var(--pink)' }} />
-                <p className="text-[11px] leading-relaxed font-medium text-left" style={{ color: 'var(--pink-d)' }}>
-                  {trustMessage}
-                </p>
-              </div>
+        {trustMessage && (
+          <div className="mt-auto pt-8 pb-1 flex justify-center shrink-0 animate-fade-in">
+            <div
+              className="flex items-start gap-2 max-w-[260px] px-3.5 py-2.5 rounded-2xl"
+              style={{ background: 'var(--soft-pink)' }}
+            >
+              <Sparkles className="w-3 h-3 mt-0.5 shrink-0" style={{ color: 'var(--pink)' }} />
+              <p className="text-[11px] leading-relaxed font-medium text-left" style={{ color: 'var(--pink-d)' }}>
+                {trustMessage}
+              </p>
             </div>
-          )}
-        </div>
-
-        {hasMoreBelow && (
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 flex items-end justify-center pb-1" style={{ height: 44 }}>
-            <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(247,248,250,0), var(--surface) 85%)' }} />
-            <span className="relative flex items-center justify-center w-6 h-6 rounded-full animate-bounce" style={{ background: 'var(--surface)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-              <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--muted)' }} />
-            </span>
           </div>
         )}
-      </div>
+      </ScrollHintArea>
 
       {/* Navigation */}
-      <div className="mt-6 pt-2 shrink-0">
+      <div className="mt-6 pt-2 shrink-0" style={{ paddingBottom: keyboardInset }}>
         <button
           type="button"
           onClick={onNext}

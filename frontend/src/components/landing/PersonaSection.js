@@ -77,7 +77,7 @@ export default function PersonaSection({ personas }) {
                 Begin your {selected.title.toLowerCase()} health assessment
               </p>
               <p className="text-xs lg:text-sm mt-0.5" style={{ color: 'var(--muted)' }}>
-                15-minute intake · Doctor-reviewed · Starting at <strong>₹{selected.price}</strong>
+                15-minute intake · Evidence-based · Starting at <strong>₹{selected.price}</strong>
               </p>
             </div>
             <Link

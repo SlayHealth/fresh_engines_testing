@@ -5,6 +5,21 @@ const logger = require('../utils/logger');
 // Helper to scale 1-5 score to 0-100
 const scaleTo100 = (val) => Math.max(0, Math.min(100, (parseFloat(val) - 1) * 25));
 
+// WS1C02: agreeableness/conscientiousness were scored with the same strict
+// linear scaleTo100 as every other item, treating an extreme answer (5 —
+// "Always put others first" / "Everything scheduled, no surprises") as the best
+// possible score. The research doc this app itself cites (Malouff et al. 2010,
+// J Res Pers 44(1):124-127) frames the extreme pole of these two traits as a
+// relationship risk (over-deference, rigidity), not the optimum — a strong-but-
+// not-extreme answer (4) is. This peaks at 4 and dips back down at the extreme
+// 5, instead of climbing monotonically to it.
+const scaleAgreeablenessConscientiousness = (val) => {
+  const v = parseFloat(val);
+  if (isNaN(v)) return 75; // matches the old || 4 fallback's scaleTo100(4)=75
+  if (v <= 4) return Math.max(0, Math.min(100, (v - 1) * (100 / 3)));
+  return 70; // v === 5: extreme pole, scored below the v=4 peak (100) but still above-average
+};
+
 // Helper to get average
 const average = (arr) => arr.reduce((p, c) => p + c, 0) / arr.length;
 
@@ -84,18 +99,20 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   // PILLAR 2: Personality & Attachment (20%)
   // ────────────────────────────────────────────────────────
   // Big Five comparison + Attachment styles
+  // WS1C02: openness/extraversion dropped from this per-partner QUALITY average —
+  // the research doc this app itself cites (Malouff et al. 2010) finds no robust
+  // link from either trait to marital satisfaction, so scoring "more of the trait"
+  // as "healthier" here wasn't supported. Both remain in the couple-AGREEMENT
+  // index below (fieldsToCompare) unaffected — comparing how similarly two
+  // partners answered is a different question than scoring one answer "better."
   const b5A = {
-    openness: scaleTo100(pA.personality_openness || 4),
-    conscientiousness: scaleTo100(pA.personality_conscientiousness || 4),
-    extraversion: scaleTo100(pA.personality_extraversion || 4),
-    agreeableness: scaleTo100(pA.personality_agreeableness || 4),
+    conscientiousness: scaleAgreeablenessConscientiousness(pA.personality_conscientiousness || 4),
+    agreeableness: scaleAgreeablenessConscientiousness(pA.personality_agreeableness || 4),
     stability: scaleTo100(pA.personality_stability || 4)
   };
   const b5B = {
-    openness: scaleTo100(pB.personality_openness || 4),
-    conscientiousness: scaleTo100(pB.personality_conscientiousness || 4),
-    extraversion: scaleTo100(pB.personality_extraversion || 4),
-    agreeableness: scaleTo100(pB.personality_agreeableness || 4),
+    conscientiousness: scaleAgreeablenessConscientiousness(pB.personality_conscientiousness || 4),
+    agreeableness: scaleAgreeablenessConscientiousness(pB.personality_agreeableness || 4),
     stability: scaleTo100(pB.personality_stability || 4)
   };
 
@@ -103,8 +120,14 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   const b5AvgB = average(Object.values(b5B));
 
   // Attachment compatibility scoring
-  const styleA = pA.attachment_style || 'Secure';
-  const styleB = pB.attachment_style || 'Secure';
+  // WS1C06: a missing attachment_style previously defaulted to 'Secure' (the
+  // best-case tier), so an unanswered question silently scored as a fully secure
+  // pairing. Defaulting to null (a value that can never equal 'Secure') routes a
+  // missing style through the same pessimistic else-branch below that already
+  // handles a genuinely mismatched/unrecognized style, instead of rewarding an
+  // unknown with the healthiest read.
+  const styleA = pA.attachment_style || null;
+  const styleB = pB.attachment_style || null;
   let attachmentCompatibility = 80;
   let attachmentInsight = '';
 
@@ -171,8 +194,13 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   // PILLAR 6: Risk Factors (10%) - Higher score means LOWER risk / higher composition
   // ────────────────────────────────────────────────────────
   const subMap = { 'Low': 100, 'Moderate': 50, 'Elevated': 10 };
-  const subValA = subMap[pA.substance_concern || 'Low'] || 100;
-  const subValB = subMap[pB.substance_concern || 'Low'] || 100;
+  // WS1C06: subMap[key] || 100 fails open twice — a missing substance_concern AND
+  // any unrecognized/mistyped value (a future enum drift, wrong casing) both fell
+  // through to 100, the best possible score, on a risk-specific field. `?? 10`
+  // (the 'Elevated' score) makes both cases fail toward the worst reading instead,
+  // per the review's fail-safe-for-risk-fields recommendation.
+  const subValA = subMap[pA.substance_concern] ?? 10;
+  const subValB = subMap[pB.substance_concern] ?? 10;
 
   const riskScoreA = average([
     subValA,
@@ -214,12 +242,15 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   });
 
   // Couple Alignment index based on absolute differences in answers
+  // WS1C05: anger_regulation is numeric (1-5, like every field below) but was
+  // deliberately left out of this comparison — added here as one more field.
   const fieldsToCompare = [
     'emotional_wellbeing', 'stress_worry', 'life_stress_capacity',
     'personality_openness', 'personality_conscientiousness', 'personality_extraversion', 'personality_agreeableness', 'personality_stability',
     'readiness_communication', 'readiness_conflict', 'readiness_trust', 'readiness_commitment', 'readiness_support',
     'career_alignment', 'financial_alignment', 'lifestyle_alignment',
-    'family_expectations', 'parenting_alignment'
+    'family_expectations', 'parenting_alignment',
+    'anger_regulation'
   ];
   let totalDiff = 0;
   fieldsToCompare.forEach(f => {
@@ -227,14 +258,49 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
     const valB = parseFloat(pB[f] || 4);
     totalDiff += Math.abs(valA - valB);
   });
-  // Max diff is 4 per question. 18 questions * 4 = 72 max possible difference.
-  // Map average difference out of 4 to a compatibility index
+  // Max diff is 4 per question. Map average difference out of 4 to an agreement index.
   const avgDiff = totalDiff / fieldsToCompare.length;
-  const compatibilityIndex = Math.round(Math.max(0, 100 - avgDiff * 20));
+  const numericAgreementIndex = Math.max(0, 100 - avgDiff * 20);
+
+  // WS1C04/05: attachment_style and substance_concern are categorical, so they can't
+  // join the |A-B| numeric diff above — but excluding them entirely from the headline
+  // meant the single best-replicated relationship predictor in the underlying research
+  // doc (attachment style, per Li & Chan 2012) and a substance-use mismatch both moved
+  // nothing a user sees: an Anxious+Avoidant couple and a Secure+Secure couple with
+  // identical numeric answers both scored compatibilityIndex=100. attachmentCompatibility
+  // (computed above: 100 both-Secure / 75 one-Secure / 50 neither) is already a 0-100
+  // couple-agreement score, used here directly. substanceAgreement is the equivalent
+  // couple-level construct for substance_concern: a linear 0-100 scale over ordinal
+  // distance between tiers (same tier -> 100, adjacent tier -> 50, opposite ends,
+  // e.g. Low vs Elevated -> 0) — unrecognized/missing values rank as 'Elevated' (the
+  // worst tier), matching WS1C06's fail-safe-for-risk-fields policy rather than
+  // silently reading as agreement.
+  const SUBSTANCE_RANK = { Low: 0, Moderate: 1, Elevated: 2 };
+  const MAX_SUBSTANCE_RANK_DIFF = 2;
+  const subRankA = SUBSTANCE_RANK[pA.substance_concern] ?? SUBSTANCE_RANK.Elevated;
+  const subRankB = SUBSTANCE_RANK[pB.substance_concern] ?? SUBSTANCE_RANK.Elevated;
+  const substanceAgreement = 100 - (Math.abs(subRankA - subRankB) / MAX_SUBSTANCE_RANK_DIFF) * 100;
+
+  const compatibilityIndex = Math.round(
+    numericAgreementIndex * 0.70 +
+    attachmentCompatibility * 0.15 +
+    substanceAgreement * 0.15
+  );
+
+  // WS1C01: compatibilityIndex measures agreement only (|answerA-answerB|) — two
+  // partners who both floor every answer agree with each other perfectly and score
+  // "100 Highly Aligned", identical to two partners who both answer at ceiling.
+  // overallScoreA/B (computed above, per-partner quality across emotional/
+  // personality/readiness/life/family/risk pillars) already exist and already go
+  // unused for the headline. The headline now can never exceed what per-partner
+  // quality justifies — real agreement still matters (it's the other side of the
+  // min), but can no longer stand alone as an unqualified positive.
+  const qualityMean = (overallScoreA + overallScoreB) / 2;
+  const overallReadinessScore = Math.round(Math.min(compatibilityIndex, qualityMean));
 
   let overallLabel = 'Highly Aligned';
-  if (compatibilityIndex < 60) overallLabel = 'Discussion Recommended';
-  else if (compatibilityIndex < 80) overallLabel = 'Moderate Alignment';
+  if (overallReadinessScore < 60) overallLabel = 'Discussion Recommended';
+  else if (overallReadinessScore < 80) overallLabel = 'Moderate Alignment';
 
   // ────────────────────────────────────────────────────────
   // Dynamic Insight Narrative Generation (LLM Integration)
@@ -291,8 +357,9 @@ Generate the JSON response according to the schema: { "strengths": [], "discussi
   return {
     schema_version: "v1",
     overall_readiness: {
-      score: compatibilityIndex,
+      score: overallReadinessScore,
       label: overallLabel,
+      agreement_index: compatibilityIndex,
       partner_A_overall: Math.round(overallScoreA),
       partner_B_overall: Math.round(overallScoreB)
     },

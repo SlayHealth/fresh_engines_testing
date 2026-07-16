@@ -1,3 +1,5 @@
+const { lowestZScore, Z_SCORE_BELOW_EXPECTED_THRESHOLD } = require('./dexa.score');
+
 function generateRiskFlags(findings, sex, age) {
   const flags = [];
   if (!findings) return flags;
@@ -212,19 +214,42 @@ function generateRiskFlags(findings, sex, age) {
 
   // 5. DEXA findings
   const dexaData = findings.DEXA;
-  if (dexaData?.lowest_t_score_value < -1.0) {
+  // WS3B12: per ISCD 2019/2023 Adult Official Positions, WHO's T-score-based
+  // osteopenia/osteoporosis classification applies only to postmenopausal women
+  // and men >=50. This is a premarital screening product, so most users fall
+  // into the premenopausal-women/men-<50 cohort ISCD says must be read by
+  // Z-score instead, with "below expected range for age" language — labeling a
+  // healthy 28-year-old "osteoporosis" from a T-score is a false, alarming
+  // diagnosis for exactly this app's target users.
+  if (dexaData && typeof age === 'number' && age < 50) {
+    const lowestZ = lowestZScore(dexaData);
+    if (lowestZ !== null && lowestZ <= Z_SCORE_BELOW_EXPECTED_THRESHOLD) {
+      flags.push({
+        flag_id: 'DEXA_BELOW_EXPECTED_RANGE_FOR_AGE',
+        flag_label: `Bone Density Below Expected Range For Age — Lowest Z-score: ${lowestZ}`,
+        organ: 'bone',
+        severity: 'moderate',
+        fertility_relevance: 'low',
+        clinical_note: 'A Z-score at or below -2.0 in a premenopausal woman or a man under 50 is flagged for follow-up, not a T-score-based osteoporosis/osteopenia diagnosis, which does not apply to this age group.',
+        recommended_action: 'Endocrinology/orthopedics consultation to evaluate secondary causes of low bone density; dietary calcium/Vitamin D review'
+      });
+    }
+  } else if (dexaData?.lowest_t_score_value < -1.0) {
     // Derive the WHO classification locally from the T-score itself (same bands as
     // dexa.score.js) rather than trusting the LLM-extracted overall_who_classification
     // field directly — that field isn't schema-constrained to be non-null, and this
     // line previously called .toUpperCase() on it unguarded. A partial/malformed
     // extraction that populated lowest_t_score_value but omitted the classification
     // would throw here and crash the entire risk-flag generation for the request.
-    const classification = dexaData.lowest_t_score_value < -2.5 ? 'Osteoporosis' : 'Osteopenia';
+    // WS3B11: WHO defines osteoporosis as T <= -2.5 — <= (not <) so a T-score of
+    // exactly -2.5 is correctly classified as osteoporosis, not one tier too
+    // lenient as osteopenia.
+    const classification = dexaData.lowest_t_score_value <= -2.5 ? 'Osteoporosis' : 'Osteopenia';
     flags.push({
       flag_id: 'DEXA_OSTEOPENIA',
       flag_label: `${classification.toUpperCase()} — Lowest T-score: ${dexaData.lowest_t_score_value} (${dexaData.lowest_t_score_site})`,
       organ: 'bone',
-      severity: dexaData.lowest_t_score_value < -2.5 ? 'high' : 'moderate',
+      severity: dexaData.lowest_t_score_value <= -2.5 ? 'high' : 'moderate',
       fertility_relevance: 'low',
       clinical_note: 'Bone density below normal for age. Calcium + Vitamin D supplementation often indicated.',
       recommended_action: 'Endocrinology/orthopedics consultation, dietary calcium review'

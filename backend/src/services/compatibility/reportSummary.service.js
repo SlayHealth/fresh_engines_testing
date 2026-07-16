@@ -41,11 +41,20 @@ function getPartnerHba1c(partnerData) {
   return eag !== null ? (eag + 46.7) / 28.7 : null;
 }
 
+// WS1D05/WS1D06/WS3A05: a single strict >3.5% cutoff over-called a 3.5-4.0%
+// borderline value as a definite carrier and under-caveated a normal result — per
+// common lab practice / ICSH, 3.5-3.9% is a recognized indeterminate zone (one
+// screen of 23,485 people found ~17% landed here) needing repeat HPLC + RBC
+// indices, not a definite-carrier call. Iron deficiency can also falsely LOWER
+// HbA2, masking a true carrier, so a normal result is scoped to "by HbA2" rather
+// than an unqualified "all clear".
+const HBA2_BORDERLINE_LOW = 3.5;
+const HBA2_DEFINITE_CARRIER = 4.0;
+
 /**
  * Real beta-thalassemia carrier-trait screen, based on each partner's own extracted
  * HbA2 (hemoglobin_a2_hba2) value — replaces a previous hardcoded "All clear" that
- * never actually looked at the data. HbA2 > 3.5% is the standard threshold used to
- * flag likely beta-thalassemia trait carriers.
+ * never actually looked at the data.
  *
  * Hemoglobin variant screening (sickle/C/D/E) isn't currently extractable from our
  * pathology ontology, so that sub-check is honestly reported as "not assessed"
@@ -59,13 +68,17 @@ function evaluateThalassemiaCarrierRisk(maleData, femaleData) {
 
   const classify = (val) => {
     if (isNaN(val)) return 'gray';
-    return val > 3.5 ? 'red' : 'green';
+    if (val > HBA2_DEFINITE_CARRIER) return 'red';
+    if (val > HBA2_BORDERLINE_LOW) return 'yellow';
+    return 'green';
   };
+  const fmt = (val, has) => (has ? val + '%' : 'not tested');
 
   const maleStatus = classify(maleRaw);
   const femaleStatus = classify(femaleRaw);
   const bothCarriers = maleStatus === 'red' && femaleStatus === 'red';
   const eitherCarrier = maleStatus === 'red' || femaleStatus === 'red';
+  const eitherBorderline = maleStatus === 'yellow' || femaleStatus === 'yellow';
   const eitherUntested = maleStatus === 'gray' || femaleStatus === 'gray';
 
   let headline, narrative, badge;
@@ -75,15 +88,19 @@ function evaluateThalassemiaCarrierRisk(maleData, femaleData) {
     badge = 'Discuss with a specialist';
   } else if (eitherCarrier) {
     headline = 'One of you may carry this trait';
-    narrative = `One partner shows an elevated HbA2 level, consistent with possible beta-thalassemia carrier trait (Male: ${hasMale ? maleRaw + '%' : 'not tested'}, Female: ${hasFemale ? femaleRaw + '%' : 'not tested'}). This is usually not a concern on its own, but worth confirming with your doctor before family planning.`;
+    narrative = `One partner shows an elevated HbA2 level, consistent with possible beta-thalassemia carrier trait (Male: ${fmt(maleRaw, hasMale)}, Female: ${fmt(femaleRaw, hasFemale)}). This is usually not a concern on its own, but worth confirming with your doctor before family planning.`;
     badge = 'Worth a look';
+  } else if (eitherBorderline) {
+    headline = 'Borderline result — worth confirming';
+    narrative = `An HbA2 in the 3.5-4.0% range (Male: ${fmt(maleRaw, hasMale)}, Female: ${fmt(femaleRaw, hasFemale)}) is a recognized borderline zone — not a definite carrier result, but not clearly normal either. A repeat HPLC test correlated with red-cell indices (MCV/MCH) and iron status is the standard next step before ruling beta-thalassemia trait in or out.`;
+    badge = 'Confirm with repeat test';
   } else if (eitherUntested) {
     headline = 'Carrier screening incomplete';
     narrative = "We couldn't find an HbA2 (hemoglobin electrophoresis) value for one or both of you in the uploaded reports, so this couldn't be fully assessed.";
     badge = 'Needs testing';
   } else {
     headline = 'Do you both quietly carry the same thing?';
-    narrative = `Both of your HbA2 levels are within the normal range (Male: ${maleRaw}%, Female: ${femaleRaw}%), with no indication of beta-thalassemia carrier trait.`;
+    narrative = `Both of your HbA2 levels are within the normal range for beta-thalassemia trait screening (Male: ${maleRaw}%, Female: ${femaleRaw}%). Note: this checks beta-thalassemia trait by HbA2 only — iron deficiency can lower HbA2 and mask a true carrier, and other hemoglobin variants aren't assessed by this test.`;
     badge = 'All clear';
   }
 
@@ -101,8 +118,14 @@ function evaluateThalassemiaCarrierRisk(maleData, femaleData) {
       male_status: 'gray',
       female_status: 'gray',
       headline: 'Hemoglobin variant screening',
-      narrative: 'Hemoglobin variant (sickle/C/D/E) screening requires an HPLC report that was not part of this analysis.',
-      clinical_footnote: 'Not assessed — no HPLC variant screening data available.',
+      // WS2-10 (2026-07): the ontology already defines hemoglobin_s_hbs/c/d/e
+      // canonicals and could extract these values, but no clinical
+      // interpretation thresholds have been sourced/signed off for variant
+      // carrier classification (trait vs. disease vs. compound genotypes like
+      // HbSC/HbS-beta-thal). This is a tracked gap to wire up, not a permanent
+      // limitation of the underlying report data.
+      narrative: 'Hemoglobin variant (sickle/C/D/E) screening is not yet interpreted in this report. The underlying HPLC values may be present in your uploaded report but are not currently read here — this is a known gap, not necessarily a missing test.',
+      clinical_footnote: 'Not assessed — hemoglobin variant interpretation not yet available in this report.',
       badge: 'Not assessed',
       covered: false
     },
@@ -110,17 +133,63 @@ function evaluateThalassemiaCarrierRisk(maleData, femaleData) {
   };
 }
 
+// Whole-word vocabulary, not bare substring tests — a bare `/non/i` guard
+// (the previous implementation) wrongly cleared "Reactive (non-specific
+// pattern)" as negative, wrongly triggered on "Not Reactive"/"Undetected",
+// and neither pattern recognized plain "Positive"/"Detected" phrasing at
+// all (common in real Indian lab reports for HBsAg/HIV/syphilis), letting
+// a genuinely reactive result through as if clear. Order matters: negative
+// and equivocal vocabulary are checked before positive, since e.g.
+// "Non-Reactive" and "Not Reactive" both also contain the substring
+// "reactive".
+const NEGATIVE_SEROLOGY_PATTERN = /\b(?:non[- ]?reactive|not[- ]?reactive|not[- ]?detected|undetected|negative|absent)\b/i;
+const EQUIVOCAL_SEROLOGY_PATTERN = /\b(?:equivocal|indeterminate|borderline)\b/i;
+const POSITIVE_SEROLOGY_PATTERN = /\b(?:reactive|positive|detected|present)\b/i;
+
+function classifySerologyResult(rawValue) {
+  if (typeof rawValue !== 'string') return 'unknown';
+  const value = rawValue.trim();
+  if (!value) return 'unknown';
+  if (NEGATIVE_SEROLOGY_PATTERN.test(value)) return 'negative';
+  if (EQUIVOCAL_SEROLOGY_PATTERN.test(value)) return 'equivocal';
+  if (POSITIVE_SEROLOGY_PATTERN.test(value)) return 'positive';
+  return 'unknown';
+}
+
+// WS0-05: the gate and the ontology are two independently-maintained string
+// contracts, bound by nothing but convention — if the ontology's extractor ever
+// renames, drops, or fuzzy-loses one of these five canonicals, getVal() below
+// silently returns null and the gate never fires for that marker again, with no
+// error anywhere. Exported (and the sole source `checks` builds from below) so a
+// test can assert every one of these still exists as a real canonical_name in
+// the ontology — see backend/__tests__/sti-gate-ontology-binding.test.js.
+const STI_GATE_CANONICAL_PARAMS = {
+  syphilis: 'vdrl_rpr_result_reactive_non_reactive',
+  hivAntibody: 'hiv_1_2_antibody_result_reactive_non_reactive',
+  hivP24: 'hiv_p24_antigen_result_detected_not_detected',
+  hepatitisB: 'hbsag_qualitative_result_reactive_non_reactive',
+  hepatitisC: 'anti_hcv_antibody_qualitative_result_reactive_non_reactive'
+};
+
 /**
  * STI Clinical Safety Gate
- * Scans both partners' extracted report data for active infectious disease markers.
- * Returns a gate object if any reactive/positive STI is found.
+ * Scans both partners' extracted report data for reactive infectious-disease
+ * screening markers (screening results — not, on their own, confirmed diagnoses;
+ * see classifySerologyResult and the per-marker detail strings below for the
+ * confirmatory-testing framing this gate uses).
+ * Returns a gate object if any reactive/positive STI screen is found.
  *
  * Checked parameters:
- *  - Syphilis (VDRL/RPR): vdrl_rpr_result_reactive_non_reactive === 'Reactive'
- *  - HIV 1&2 Antibody: hiv_1_2_antibody_result_reactive_non_reactive === 'Reactive'
- *  - HIV P24 Antigen: hiv_p24_antigen_result_detected_not_detected === 'Detected'
- *  - Hepatitis B (HBsAg): hbsag_qualitative_result_reactive_non_reactive === 'Reactive'
- *  - Hepatitis C (HCV): anti_hcv_antibody_qualitative_result_reactive_non_reactive === 'Reactive'
+ *  - Syphilis (VDRL/RPR): vdrl_rpr_result_reactive_non_reactive
+ *  - HIV 1&2 Antibody: hiv_1_2_antibody_result_reactive_non_reactive
+ *  - HIV P24 Antigen: hiv_p24_antigen_result_detected_not_detected
+ *  - Hepatitis B (HBsAg): hbsag_qualitative_result_reactive_non_reactive
+ *  - Hepatitis C (HCV): anti_hcv_antibody_qualitative_result_reactive_non_reactive
+ *
+ * A result only trips the gate when classifySerologyResult() reads it as
+ * 'positive' — 'equivocal'/'unknown' results are deliberately NOT gated
+ * here (they don't clear the couple either; a confirmatory-testing flow
+ * for those is tracked separately, not built into this gate).
  */
 function checkSTISafetyGate(details) {
   const findings = [];
@@ -139,61 +208,54 @@ function checkSTISafetyGate(details) {
       return null;
     }
 
-    // Syphilis
-    const syphilisResult = getVal(reportData, 'vdrl_rpr_result_reactive_non_reactive');
-    const rprTitre = getVal(reportData, 'rpr_titre_if_reactive');
-    if (typeof syphilisResult === 'string' && /reactive/i.test(syphilisResult) && !/non/i.test(syphilisResult)) {
-      const titreStr = rprTitre ? ` (RPR Titer: ${rprTitre})` : '';
-      findings.push({
-        partner: partnerLabel,
+    // WS3A06/REG-04: a single reactive screening assay is not a diagnosis — VDRL/RPR
+    // (non-treponemal), HIV antibody/P24, HBsAg, and anti-HCV all have real
+    // false-positive rates and each has an established confirmatory pathway
+    // (CDC/NACO/FDA guidance). These detail strings previously asserted "Active ...
+    // detected"/"active infection" as settled fact from the screen alone; reframed
+    // to name the result as reactive-and-unconfirmed while keeping the same
+    // specialist-referral urgency.
+    const checks = [
+      {
         sti: 'Syphilis',
-        detail: `Active Syphilis (VDRL Reactive${titreStr}) detected. Immediate clinical consultation and treatment is required before marriage.`,
-        severity: 'critical'
-      });
-    }
-
-    // HIV 1 & 2 Antibody
-    const hivAbResult = getVal(reportData, 'hiv_1_2_antibody_result_reactive_non_reactive');
-    if (typeof hivAbResult === 'string' && /reactive/i.test(hivAbResult) && !/non/i.test(hivAbResult)) {
-      findings.push({
-        partner: partnerLabel,
+        param: STI_GATE_CANONICAL_PARAMS.syphilis,
+        detail: () => {
+          const rprTitre = getVal(reportData, 'rpr_titre_if_reactive');
+          const titreStr = rprTitre ? ` (RPR Titer: ${rprTitre})` : '';
+          return `VDRL/RPR is Reactive${titreStr} for ${partnerLabel} — a screening result, not a confirmed diagnosis. Confirmatory treponemal testing (TPHA/TPPA/FTA-ABS) and clinical consultation are required before this can be treated as an active infection.`;
+        }
+      },
+      {
         sti: 'HIV',
-        detail: `HIV 1 & 2 Antibody test is Reactive for ${partnerLabel}. Confirmatory testing and specialist consultation are urgently required.`,
-        severity: 'critical'
-      });
-    }
-
-    // HIV P24 Antigen (early infection marker)
-    const hivP24Result = getVal(reportData, 'hiv_p24_antigen_result_detected_not_detected');
-    if (typeof hivP24Result === 'string' && /detected/i.test(hivP24Result) && !/not/i.test(hivP24Result)) {
-      findings.push({
-        partner: partnerLabel,
+        param: STI_GATE_CANONICAL_PARAMS.hivAntibody,
+        detail: () => `HIV 1 & 2 Antibody test is Reactive for ${partnerLabel} — a screening result. Per NACO guidelines, a diagnosis requires the full 3-test confirmatory algorithm; urgent specialist consultation is required.`
+      },
+      {
         sti: 'HIV (P24 Antigen)',
-        detail: `HIV P24 Antigen detected for ${partnerLabel}. This may indicate early acute HIV infection. Urgent specialist referral required.`,
-        severity: 'critical'
-      });
-    }
-
-    // Hepatitis B
-    const hbsagResult = getVal(reportData, 'hbsag_qualitative_result_reactive_non_reactive');
-    if (typeof hbsagResult === 'string' && /reactive/i.test(hbsagResult) && !/non/i.test(hbsagResult)) {
-      findings.push({
-        partner: partnerLabel,
+        param: STI_GATE_CANONICAL_PARAMS.hivP24,
+        detail: () => `HIV P24 Antigen is Reactive for ${partnerLabel} — a screening result that may indicate early infection but requires confirmatory testing before it can be treated as such. Urgent specialist referral is required.`
+      },
+      {
         sti: 'Hepatitis B',
-        detail: `HBsAg is Reactive for ${partnerLabel}, indicating active Hepatitis B infection. Liver function tests and vaccination status review required.`,
-        severity: 'critical'
-      });
-    }
-
-    // Hepatitis C
-    const hcvResult = getVal(reportData, 'anti_hcv_antibody_qualitative_result_reactive_non_reactive');
-    if (typeof hcvResult === 'string' && /reactive/i.test(hcvResult) && !/non/i.test(hcvResult)) {
-      findings.push({
-        partner: partnerLabel,
+        param: STI_GATE_CANONICAL_PARAMS.hepatitisB,
+        detail: () => `HBsAg is Reactive for ${partnerLabel} — a screening result. Confirmatory neutralization testing is required before active Hepatitis B infection can be confirmed; liver function tests and specialist consultation are also advised.`
+      },
+      {
         sti: 'Hepatitis C',
-        detail: `Anti-HCV Antibody is Reactive for ${partnerLabel}, indicating possible Hepatitis C exposure. HCV RNA confirmatory testing required.`,
-        severity: 'critical'
-      });
+        param: STI_GATE_CANONICAL_PARAMS.hepatitisC,
+        detail: () => `Anti-HCV Antibody is Reactive for ${partnerLabel} — a screening result indicating possible past or current Hepatitis C exposure. HCV RNA confirmatory testing is required to determine if the infection is active.`
+      }
+    ];
+
+    for (const check of checks) {
+      if (classifySerologyResult(getVal(reportData, check.param)) === 'positive') {
+        findings.push({
+          partner: partnerLabel,
+          sti: check.sti,
+          detail: check.detail(),
+          severity: 'critical'
+        });
+      }
     }
   }
 
@@ -313,26 +375,32 @@ class ReportSummaryService {
     const stiOpportunities = [];
     let stiTriggered = false;
     let stiHeadline = 'The important screens came back clear';
-    let stiNarrative = 'Both of you tested negative for the standard premarital infectious disease screens.';
+    // WS3A07: an unqualified "all clear" doesn't account for window periods — a
+    // non-reactive result taken shortly after a potential exposure doesn't rule
+    // out infection (e.g. HIV Ab-only up to ~3 months, HCV ~8-11 weeks, HBsAg ~4
+    // weeks, syphilis ~3-6 weeks per standard CDC/NACO testing guidance).
+    let stiNarrative = 'Both of you tested negative for the standard premarital infectious disease screens. Note: a negative result only reliably rules out infection when testing is done after the relevant window period has passed since any potential exposure — if in doubt, ask your doctor whether retesting is advisable.';
     let stiFootnote = 'In your report: HIV, Syphilis, and Hepatitis B/C are non-reactive.';
     let stiBadge = 'All clear';
 
     if (stiGate.triggered) {
       logger.warn(`[ReportSummaryService] STI Safety Gate TRIGGERED fallback.`);
-      // An active STI finding is itself a real, definite signal (not a missing-data
-      // case), so it's fine to assert a capped score here even if no other score exists.
+      // A reactive screening finding is itself a real, definite signal (not a
+      // missing-data case), so it's fine to assert a capped score here even if no
+      // other score exists — the score cap doesn't claim a diagnosis, only that a
+      // reactive screen changes the couple's status until confirmed either way.
       coupleScore = coupleScore !== null ? Math.min(coupleScore, 50) : 50;
       coupleStatus = 'Action Advised';
-      coupleStatusDescription = 'One or more active infectious disease markers were detected. Immediate specialist consultation is required before proceeding.';
+      coupleStatusDescription = 'One or more infectious-disease screening markers came back reactive. These are screening results, not confirmed diagnoses — confirmatory testing and immediate specialist consultation are required before proceeding.';
       coupleStatusColor = 'red';
       stiTriggered = true;
-      stiHeadline = 'Active Screening Alert — Review Required';
-      stiNarrative = 'One or more active infectious disease markers have been found. Seek specialist consultation immediately.';
-      stiFootnote = 'In your report: Positive or Reactive markers detected.';
+      stiHeadline = 'Reactive Screening Result — Confirmation Needed';
+      stiNarrative = 'One or more infectious-disease screening markers came back reactive. These require confirmatory testing — please seek specialist consultation to confirm or rule out infection.';
+      stiFootnote = 'In your report: one or more screening markers came back Positive or Reactive.';
       stiBadge = 'Worth a look';
       for (const finding of stiGate.findings) {
         stiOpportunities.push({
-          title: `Active ${finding.sti} Detected`,
+          title: `${finding.sti} Screening Reactive`,
           description: `In your report: ${finding.detail}`,
           severity: 'critical'
         });
@@ -699,7 +767,7 @@ class ReportSummaryService {
     // rest of the report already uses instead.
     let coupleSynthesis;
     if (stiTriggered) {
-      coupleSynthesis = 'An active infectious-disease marker was detected — please read the alert above first. The rest of this summary should be considered alongside that finding, not instead of it.';
+      coupleSynthesis = 'A reactive infectious-disease screening marker was found — please read the alert above first. This is a screening result requiring confirmatory testing, not a confirmed diagnosis; the rest of this summary should be considered alongside that finding, not instead of it.';
     } else if (coupleStatus === 'Action Advised') {
       coupleSynthesis = 'A few clinical markers in this report are significant enough to warrant a specialist conversation before moving forward — see the flagged items below for specifics.';
     } else if (coupleStatus === 'Good') {
@@ -731,9 +799,9 @@ class ReportSummaryService {
           partner: f.partner,
           sti: f.sti,
           detail: f.detail,
-          headline: `Active ${f.sti} Detected`,
+          headline: `${f.sti} Screening Reactive`,
           narrative: f.detail,
-          clinical_footnote: `In your report: ${f.sti} result positive.`,
+          clinical_footnote: `In your report: ${f.sti} screening result reactive/positive — confirmatory testing required.`,
           severity: f.severity
         }))
       },
@@ -758,3 +826,8 @@ module.exports = new ReportSummaryService();
 // only being able to apply it to the presentation layer after the fact.
 module.exports.checkSTISafetyGate = checkSTISafetyGate;
 module.exports.evaluateThalassemiaCarrierRisk = evaluateThalassemiaCarrierRisk;
+module.exports.classifySerologyResult = classifySerologyResult;
+// WS0-05: the single source of truth for the gate's five canonical param names —
+// see backend/__tests__/sti-gate-ontology-binding.test.js, which asserts each of
+// these still exists as a real canonical_name in the ontology.
+module.exports.STI_GATE_CANONICAL_PARAMS = STI_GATE_CANONICAL_PARAMS;

@@ -38,15 +38,29 @@ export default function UsgPage() {
   const userSex = user?.gender || 'Male';
   const isUserMale = userSex.toLowerCase() === 'male';
 
-  const maleName = isUserMale ? (user?.name || 'Sachin') : (prospectForm?.name || 'Sachin');
-  const femaleName = isUserMale ? (prospectForm?.name || 'Swati') : (user?.name || 'Swati');
+  // Partner A is always the account holder, Partner B always the prospect — same
+  // convention as story/page.js and core-engine/layout.js — never the dev's own test
+  // names, which could otherwise show a stranger's identity as the couple's own.
+  const maleName = isUserMale ? (user?.name || 'Partner A') : (prospectForm?.name || 'Partner B');
+  const femaleName = isUserMale ? (prospectForm?.name || 'Partner B') : (user?.name || 'Partner A');
 
+  // A missing DOB must not silently become a fabricated 30 — that value goes on to
+  // gate real, age-banded organ scoring (prostate/DEXA thresholds) server-side, not
+  // just display. Callers below block the upload instead of proceeding with it.
   const calculateAge = (dobString) => {
-    if (!dobString) return 30;
+    if (!dobString) return null;
     const birthDate = new Date(dobString);
     const difference = Date.now() - birthDate.getTime();
     const ageDate = new Date(difference);
-    return Math.abs(ageDate.getUTCFullYear() - 1970) || 30;
+    return Math.abs(ageDate.getUTCFullYear() - 1970) || null;
+  };
+
+  // Same reasoning as calculateAge — a missing gender must not silently collapse to
+  // 'Female', since sex also gates real organ scoring (prostate vs. reproductive
+  // panel, DEXA reference ranges).
+  const resolveSex = (genderVal) => {
+    if (!genderVal) return null;
+    return genderVal.toLowerCase() === 'male' ? 'Male' : 'Female';
   };
 
   const fetchRadiology = async () => {
@@ -76,6 +90,18 @@ export default function UsgPage() {
       return;
     }
 
+    const sexVal = isProspect ? resolveSex(prospectForm?.gender) : resolveSex(user?.gender);
+    const ageVal = isProspect ? calculateAge(prospectForm?.dob) : calculateAge(user?.dob);
+    const nameVal = isProspect ? prospectForm.name : user.name;
+
+    // Sex and age directly gate real organ scoring — block rather than silently
+    // upload with a fabricated default (WS6-05: the restore path can leave these
+    // unset even though a fresh match cannot).
+    if (!sexVal || !ageVal) {
+      toast.error(`${isProspect ? "Your prospect's" : "Your"} sex and date of birth need to be on file before uploading a radiology report — they directly affect the scoring. Please add them under "About You" first.`);
+      return;
+    }
+
     const setIsUploading = isProspect ? setIsProspectUploading : setIsUserUploading;
     const setErrorVal = isProspect ? setProspectUploadError : setUserUploadError;
 
@@ -84,12 +110,6 @@ export default function UsgPage() {
 
     const formData = new FormData();
     formData.append('pdf', file);
-    
-    const sexVal = isProspect 
-      ? (prospectForm.gender === 'Male' ? 'Male' : 'Female') 
-      : (user.gender.toLowerCase() === 'male' ? 'Male' : 'Female');
-    const ageVal = isProspect ? calculateAge(prospectForm.dob) : calculateAge(user.dob);
-    const nameVal = isProspect ? prospectForm.name : user.name;
 
     formData.append('patientSlayId', nameVal);
     formData.append('sex', sexVal);
@@ -120,17 +140,20 @@ export default function UsgPage() {
   };
 
   const triggerMockRadiology = async (isProspect) => {
+    const sexVal = isProspect ? resolveSex(prospectForm?.gender) : resolveSex(user?.gender);
+    const ageVal = isProspect ? calculateAge(prospectForm?.dob) : calculateAge(user?.dob);
+    const nameVal = isProspect ? prospectForm.name : user.name;
+
+    if (!sexVal || !ageVal) {
+      toast.error(`${isProspect ? "Your prospect's" : "Your"} sex and date of birth need to be on file before generating a mock report — they directly affect the scoring. Please add them under "About You" first.`);
+      return;
+    }
+
     const setIsUploading = isProspect ? setIsProspectUploading : setIsUserUploading;
     const setErrorVal = isProspect ? setProspectUploadError : setUserUploadError;
 
     setIsUploading(true);
     setErrorVal(null);
-
-    const sexVal = isProspect 
-      ? (prospectForm.gender === 'Male' ? 'Male' : 'Female') 
-      : (user.gender.toLowerCase() === 'male' ? 'Male' : 'Female');
-    const ageVal = isProspect ? calculateAge(prospectForm.dob) : calculateAge(user.dob);
-    const nameVal = isProspect ? prospectForm.name : user.name;
 
     try {
       const mockScrotum = sexVal === 'Male' ? {
