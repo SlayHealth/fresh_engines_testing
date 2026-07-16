@@ -207,11 +207,6 @@ export const TRUST_MESSAGES_BY_QUESTION = {
     "{name}, just filling in the detail you already mentioned — nothing more to it.",
     "Quick follow-up, {name}, so your story reads accurately later."
   ],
-  'Relationship Status': [
-    "{name}, this helps us tailor the tone of your report to where you actually are.",
-    "Knowing this, {name}, keeps the rest of the experience relevant to your situation."
-  ],
-
   // --- Lifestyle ---
   'Physical Activity Level': [
     "{name}, activity level is one of the strongest predictors of long-term cardiovascular health.",

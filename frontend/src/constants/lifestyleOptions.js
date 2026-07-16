@@ -114,12 +114,6 @@ export const MATRIMONIAL_PLATFORMS = [
   { val: 'Other', label: 'Other' }
 ];
 
-export const RELATIONSHIP_STATUSES = [
-  { val: 'Single', label: 'Single' },
-  { val: 'Engaged', label: 'Engaged' },
-  { val: 'In a Relationship', label: 'In a Relationship' }
-];
-
 export const MARRIAGE_TIMELINES = [
   { val: 'Within 6 months', label: 'Within 6 months' },
   { val: '6 - 12 months', label: '6 - 12 months' },

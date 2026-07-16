@@ -39,7 +39,7 @@ export function aboutCounts(adapter, prospectForm) {
   const { form, nameField, genderField, dobField, cityField, isSelfPerson, needsNameStep } = adapter;
   const fields = [form[genderField], form[dobField], form[cityField], form.height, form.weight, form.waist];
   if (needsNameStep) fields.push(form[nameField]);
-  if (isSelfPerson) fields.push(prospectForm?.meetingSource, form.relationshipStatus);
+  if (isSelfPerson) fields.push(prospectForm?.meetingSource);
   const answered = fields.filter((f) => f !== undefined && f !== null && f !== '').length;
   return { answered, total: fields.length };
 }

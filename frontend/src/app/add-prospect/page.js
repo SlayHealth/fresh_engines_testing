@@ -21,7 +21,7 @@ import useIsMobile from '../../hooks/useIsMobile';
 import {
   LIFESTYLE_ACTIVITIES, LIFESTYLE_DRINKING,
   LIFESTYLE_SMOKING_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL,
-  GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS, RELATIONSHIP_STATUSES,
+  GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS,
   FAMILY_HISTORY_DIABETES
 } from '../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES, mentalCategoryProgress } from '../../constants/mentalHealthQuestions';
@@ -1053,7 +1053,6 @@ function AddProspectPageInner() {
     if (!onboardingForm.candidateGender) missingSelf.push("Your Gender");
     if (!onboardingForm.candidateDob) missingSelf.push("Your DOB");
     if (!onboardingForm.candidateCity?.trim()) missingSelf.push("Your City");
-    if (!onboardingForm.relationshipStatus) missingSelf.push("Relationship Status");
     if (!onboardingForm.activity_level) missingSelf.push("Your Activity Level");
     if (!onboardingForm.drinking_habits) missingSelf.push("Your Drinking habits");
     if (!onboardingForm.smoking_habits) missingSelf.push("Your Smoking & Tobacco habits");
@@ -1097,7 +1096,6 @@ function AddProspectPageInner() {
         userRelation: onboardingForm.userRelation,
         userName: onboardingForm.userName || user.userName || user.name,
         candidateName: onboardingForm.candidateName,
-        relationshipStatus: onboardingForm.relationshipStatus,
         marriageTimeline: onboardingForm.marriageTimeline,
         menstrualCycle: onboardingForm.menstrualCycle
       };
@@ -1236,7 +1234,6 @@ function AddProspectPageInner() {
       if (prospectForm.meetingSource === 'Matrimonial Platform') {
         arr.push(choiceStep('Which platform?', MATRIMONIAL_PLATFORMS, prospectForm.platformName, (v) => setProspectForm({ ...prospectForm, platformName: v })));
       }
-      arr.push(choiceStep('Relationship Status', RELATIONSHIP_STATUSES, form.relationshipStatus, (v) => set({ relationshipStatus: v })));
     }
 
     return finalizeSteps(arr, advance);
