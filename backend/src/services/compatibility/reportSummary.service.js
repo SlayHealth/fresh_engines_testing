@@ -407,6 +407,26 @@ class ReportSummaryService {
       }
     }
 
+    // UX3-02/UX9-01: coupleStatus above only escalates off chronicState/mfrState
+    // (2 of the 5 composite domains) plus the STI gate — radiology severity and
+    // a confirmed both-carrier genetic finding were never consulted here, even
+    // though both already correctly lower coupleScore itself via the critical-
+    // domain floor / status-downgrade in reportGeneration.service.js. That gap
+    // let a couple whose real score was capped for a severe organ finding or a
+    // confirmed carrier pair still be told "Excellent — nothing here should
+    // give you pause." Falling back to the final, already-gated score itself
+    // closes this for every present or future severity source, rather than
+    // requiring each one to be separately wired into this status label too.
+    if (coupleStatus === 'Excellent' && coupleScore !== null && coupleScore < 60) {
+      coupleStatus = 'Action Advised';
+      coupleStatusDescription = 'One or more clinical domains in your combined report need a closer look — see the details below before drawing conclusions.';
+      coupleStatusColor = 'red';
+    } else if (coupleStatus === 'Excellent' && coupleScore !== null && coupleScore < 80) {
+      coupleStatus = 'Good';
+      coupleStatusDescription = 'Medically compatible overall. A few areas are worth checking with your doctor — see the details below.';
+      coupleStatusColor = 'yellow';
+    }
+
     const strengths = [];
     const opportunities = [];
 
