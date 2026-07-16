@@ -21,6 +21,25 @@ function onRefreshed(token) {
   refreshSubscribers = [];
 }
 
+// UX1-01/UX7-01/UX8-09: every auth/invite call site did `await res.json()`
+// straight into a try/catch and put the exception's own message on screen
+// via `err.message`. That's fine when the server always answers with JSON —
+// it doesn't when a rate limiter, dev-proxy hiccup, or unhandled backend
+// exception replies with a plain-text/HTML body instead, in which case the
+// user sees a raw SyntaxError like "Unexpected token 'I', "Internal S"...
+// is not valid JSON." Route every response through this instead of a bare
+// `res.json()` so a non-JSON body degrades to a normal, friendly error
+// object rather than throwing mid-parse.
+export async function safeJson(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { success: false, error: 'Something went wrong. Please try again in a moment.' };
+  }
+}
+
 /**
  * Custom fetch wrapper that appends JWT Authorization header and handles silent token refreshes automatically.
  * @param {string} url - API target endpoint.

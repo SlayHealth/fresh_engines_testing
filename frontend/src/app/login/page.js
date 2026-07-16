@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, RefreshCw, Phone, ClipboardPaste } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
-import { apiFetch, setAccessToken } from '../../utils/api';
+import { apiFetch, setAccessToken, safeJson } from '../../utils/api';
 import QuestionScreen from '../../components/wizard/QuestionScreen';
 import ChoiceList from '../../components/wizard/ChoiceList';
 import SplashScreen from '../../components/wizard/SplashScreen';
@@ -193,7 +193,7 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone_number: fullPhone })
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (data.success) {
         setIsNewUser(!!data.is_new_user);
         setCooldown(60);
@@ -218,7 +218,7 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone_number: authPhone })
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (data.success) {
         setCooldown(60);
       } else {
@@ -241,7 +241,7 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone_number: authPhone.trim(), otp: authOtp.trim() })
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!data.success) throw new Error(data.error || 'Verification failed');
 
       setAccessToken(data.accessToken);

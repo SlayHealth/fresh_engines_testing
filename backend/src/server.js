@@ -55,7 +55,12 @@ app.use(cookieParser());
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 60, // Limit each IP to 60 requests per `window` (here, per minute)
-  message: 'Too many requests from this IP, please try again after a minute',
+  // UX7-01: a bare string here made express-rate-limit send a plain-text/HTML
+  // body (Content-Type: text/html) — the single most common real-world
+  // trigger for the frontend's "raw JSON.parse error rendered to the user"
+  // bug class. Every API caller expects JSON; this keeps that contract even
+  // when the limit trips.
+  message: { success: false, error: 'Too many requests from this IP, please try again after a minute.' },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });

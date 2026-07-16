@@ -6,7 +6,7 @@ import {
   ShieldAlert, ShieldCheck, Heart, Sparkles, AlertCircle, CheckCircle, RefreshCw
 } from 'lucide-react';
 import { API_URL } from '../../../config/api';
-import { apiFetch } from '../../../utils/api';
+import { apiFetch, safeJson } from '../../../utils/api';
 import { toast } from '../../../components/Toast';
 import QuestionScreen from '../../../components/wizard/QuestionScreen';
 import ChoiceList from '../../../components/wizard/ChoiceList';
@@ -94,10 +94,10 @@ export default function ProspectOnboardingPage() {
       try {
         const res = await fetch(`${API_URL}/api/invite/validate/${token}`);
         if (!res.ok) {
-          const data = await res.json();
+          const data = await safeJson(res);
           throw new Error(data.error || 'Invitation link is invalid or expired.');
         }
-        const data = await res.json();
+        const data = await safeJson(res);
         setInvite(data.invite);
         const status = data.invite.status;
         if (status === 'consent_accepted') {
@@ -274,7 +274,7 @@ export default function ProspectOnboardingPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         throw new Error(data.error || 'Failed to submit questionnaire');
       }
 
