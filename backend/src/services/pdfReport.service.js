@@ -807,39 +807,49 @@ function generatePDFReportStream(matchData) {
   doc.fontSize(9.5).font('Times-Bold').fillColor(PALETTE.forestGreen).text('Genetic Carrier-Pair Overlap', 30, panelY);
   panelY += 14;
   
-  // A genuinely missing status (undefined, when carrier_pair_risk wasn't computed at
-  // all) previously satisfied `!== 'green'` just as a real 'red'/'yellow' finding
-  // would, which both mis-triggered this "overlap observed" card for a couple with no
-  // data at all, and then crashed below calling .toUpperCase() on the missing status.
-  const isRealNonGreen = (status) => !!status && status !== 'green';
-  const hasGen = isRealNonGreen(cpr.thalassemia?.male_status) || isRealNonGreen(cpr.thalassemia?.female_status) ||
-                 isRealNonGreen(cpr.hemoglobin_variant?.male_status) || isRealNonGreen(cpr.hemoglobin_variant?.female_status);
+  // UX3-03: previously classified ANY non-'green' status — including 'gray'
+  // (never tested) — as "hasGen", rendering the identical bold "CARRIER TRAIT
+  // OVERLAP OBSERVED" heading with raw enum tokens ("RED"/"GRAY") for both a
+  // confirmed both-carrier couple and a couple who was simply never tested.
+  // Reuses the already-computed headline/narrative/badge/clinical_footnote
+  // from evaluateThalassemiaCarrierRisk (reportSummary.service.js) — which
+  // already correctly distinguishes confirmed-carrier, borderline,
+  // one-carrier, untested, and all-clear — instead of re-deriving a second,
+  // independent (and here, cruder) classification.
+  const thal = cpr.thalassemia || {};
+  const isConfirmedConcern = ['Discuss with a specialist', 'Worth a look', 'Confirm with repeat test'].includes(thal.badge);
+  const isUntested = thal.badge === 'Needs testing';
 
-  if (hasGen) {
-    const genH = 68;
-    drawRoundedCard(doc, 30, panelY, confW, genH, 8);
-    drawCardAccentBorder(doc, 30, panelY, genH, PALETTE.gold);
+  const cardColor = isConfirmedConcern ? PALETTE.red : (isUntested ? PALETTE.textDim : PALETTE.forestGreen);
+  const cardHeading = isConfirmedConcern
+    ? (thal.headline || 'Carrier Risk Finding').toUpperCase()
+    : isUntested
+      ? 'CARRIER SCREENING NOT YET ASSESSED'
+      : 'ALL CLEAR — NO GENETIC CARRIER OVERLAPS';
+  const cardBody = (isConfirmedConcern || isUntested)
+    ? (thal.narrative || 'See your uploaded reports for details.')
+    : 'No common mutations or carrier indicators were detected for Thalassemia or other hemoglobinopathies.';
+  const cardFootnote = thal.clinical_footnote || cpr.genetic_note || 'Premarital carrier screening checks if both partners carry traits for the same genetic condition.';
+  // Hemoglobin variant (HbS/C/D/E) screening is a separate sub-check that is
+  // always "not yet interpreted" today (WS2-10) — noted informationally, not
+  // folded into thalassemia's severity/color, since it can't itself trigger a
+  // real finding yet.
+  const hbVariantNote = cpr.hemoglobin_variant?.narrative;
 
-    let riskStr = [];
-    if (isRealNonGreen(cpr.thalassemia?.male_status) || isRealNonGreen(cpr.thalassemia?.female_status)) {
-      riskStr.push(`Thalassemia: Male status is ${(cpr.thalassemia.male_status || 'unknown').toUpperCase()} | Female is ${(cpr.thalassemia.female_status || 'unknown').toUpperCase()}. ${cpr.thalassemia.summary || ''}`);
-    }
-    if (isRealNonGreen(cpr.hemoglobin_variant?.male_status) || isRealNonGreen(cpr.hemoglobin_variant?.female_status)) {
-      riskStr.push(`Hb Variant: Male is ${(cpr.hemoglobin_variant.male_status || 'unknown').toUpperCase()} | Female is ${(cpr.hemoglobin_variant.female_status || 'unknown').toUpperCase()}. ${cpr.hemoglobin_variant.summary || ''}`);
-    }
-    
-    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(PALETTE.text).text('CARRIER TRAIT OVERLAP OBSERVED', 42, panelY + 10);
-    doc.fontSize(7.5).font('Helvetica').fillColor(PALETTE.textMuted).text(cleanPDFText(riskStr.join(' \n ')), 42, panelY + 22, { width: confW - 32, lineGap: 1.5 });
-    doc.fontSize(6.5).font('Helvetica-Oblique').fillColor(PALETTE.textDim).text(cleanPDFText(cpr.genetic_note || 'Premarital carrier screening checks if both partners carry traits for the same genetic condition.'), 42, panelY + 50, { width: confW - 32 });
-  } else {
-    // Normal / green CPR
-    const genH = 50;
-    drawRoundedCard(doc, 30, panelY, confW, genH, 8);
-    drawCardAccentBorder(doc, 30, panelY, genH, PALETTE.forestGreen);
-    
-    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(PALETTE.forestGreen).text('ALL CLEAR — NO GENETIC CARRIER OVERLAPS', 42, panelY + 10);
-    doc.fontSize(7.5).font('Helvetica').fillColor(PALETTE.textMuted).text('No common mutations or carrier indicators were detected for Thalassemia or other hemoglobinopathies.', 42, panelY + 22, { width: confW - 32 });
-    doc.fontSize(6.5).font('Helvetica-Oblique').fillColor(PALETTE.textDim).text(cleanPDFText(cpr.genetic_note || 'Hereditary testing is clear. Consult a genetic counselor for complete panel overlays.'), 42, panelY + 36, { width: confW - 32 });
+  const genH = isConfirmedConcern ? 92 : (hbVariantNote ? 76 : 56);
+  drawRoundedCard(doc, 30, panelY, confW, genH, 8);
+  drawCardAccentBorder(doc, 30, panelY, genH, cardColor);
+
+  doc.fontSize(8.5).font('Helvetica-Bold').fillColor(cardColor).text(cardHeading, 42, panelY + 10, { width: confW - 32 });
+  doc.fontSize(7.5).font('Helvetica').fillColor(PALETTE.textMuted).text(cleanPDFText(cardBody), 42, panelY + 24, { width: confW - 32, lineGap: 1.5 });
+  let genNextY = panelY + (isConfirmedConcern ? 56 : 40);
+  if (isConfirmedConcern) {
+    doc.fontSize(7).font('Helvetica-Bold').fillColor(PALETTE.red).text('Talk to a genetic counselor before family planning.', 42, genNextY, { width: confW - 32 });
+    genNextY += 12;
+  }
+  doc.fontSize(6.5).font('Helvetica-Oblique').fillColor(PALETTE.textDim).text(cleanPDFText(cardFootnote), 42, genNextY, { width: confW - 32 });
+  if (hbVariantNote) {
+    doc.fontSize(6.5).font('Helvetica-Oblique').fillColor(PALETTE.textDim).text(cleanPDFText(hbVariantNote), 42, genNextY + 10, { width: confW - 32 });
   }
 
   // ════════════════════════════════════════════════════════
