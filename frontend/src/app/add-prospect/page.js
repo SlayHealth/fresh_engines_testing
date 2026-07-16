@@ -27,6 +27,7 @@ import {
 import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES, mentalCategoryProgress } from '../../constants/mentalHealthQuestions';
 import MentalSubHub from '../../components/wizard/MentalSubHub';
 import { deriveSubstanceConcern } from '../../utils/mentalAutofill';
+import { maxDobForLegalMarriageAge, isBelowLegalMarriageAge, legalMarriageAgeNotice } from '../../utils/legalMarriageAge';
 import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS, SUGGESTED_GENOMICS_TESTS } from '../../constants/suggestedTests';
 import { aboutProgress as aboutProgressShared, aboutCounts as aboutCountsShared, lifestyleProgress, lifestyleCounts, mentalProgress, mentalCounts, computeConfidence, RELIABLE_THRESHOLD } from '../../utils/healthProfileProgress';
 import { estimateTimeLeft } from '../../utils/estimateTime';
@@ -1066,6 +1067,11 @@ function AddProspectPageInner() {
       return;
     }
 
+    if (isBelowLegalMarriageAge(onboardingForm.candidateDob, onboardingForm.candidateGender)) {
+      setMatchError(legalMarriageAgeNotice(onboardingForm.candidateGender));
+      return;
+    }
+
     setIsSavingProfile(true);
     setMatchError(null);
     try {
@@ -1147,6 +1153,38 @@ function AddProspectPageInner() {
     canAdvance: !!(value && value.toString().trim())
   });
 
+  // Caps the picker at (and flags any manually-typed date past) the legal
+  // marriage age for the given gender — 18 for women, 21 for men in India —
+  // since a DOB that doesn't clear it isn't just unusual, it means this
+  // premarital check isn't legally actionable for that person yet.
+  const dobStep = (title, value, onChange, gender) => {
+    const tooYoung = isBelowLegalMarriageAge(value, gender);
+    return {
+      title,
+      kind: 'field',
+      content: (
+        <div>
+          <input
+            type="date"
+            max={maxDobForLegalMarriageAge(gender)}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+            autoFocus
+            className={fieldInputClass}
+            style={fieldInputStyle}
+          />
+          {tooYoung && (
+            <p className="text-xs mt-3 text-center leading-relaxed" style={{ color: 'var(--danger-d)' }}>
+              {legalMarriageAgeNotice(gender)}
+            </p>
+          )}
+        </div>
+      ),
+      canAdvance: !!value && !tooYoung
+    };
+  };
+
   const measurementStep = (title, measureType, value, onChange) => ({
     title,
     kind: 'measurement',
@@ -1219,7 +1257,7 @@ function AddProspectPageInner() {
       arr.push(fieldStep("What's their name?", form[nameField], (v) => set({ [nameField]: v }), { placeholder: 'Enter their name' }));
     }
     arr.push(choiceStep('Gender', GENDERS, form[genderField], (v) => set({ [genderField]: v })));
-    arr.push(fieldStep('Date of Birth', form[dobField], (v) => set({ [dobField]: v }), { type: 'date' }));
+    arr.push(dobStep('Date of Birth', form[dobField], (v) => set({ [dobField]: v }), form[genderField]));
     arr.push(cityStep('City', form[cityField], (v) => set({ [cityField]: v })));
     arr.push(measurementStep('Height', 'height', form.height, (v) => set({ height: v })));
     arr.push(measurementStep('Weight', 'weight', form.weight, (v) => set({ weight: v })));

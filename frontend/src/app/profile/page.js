@@ -12,6 +12,7 @@ import CityInput from '../../components/wizard/CityInput';
 import { GENDERS } from '../../constants/lifestyleOptions';
 import useIsMobile from '../../hooks/useIsMobile';
 import Ico from '../../components/mobile/Ico';
+import { maxDobForLegalMarriageAge, isBelowLegalMarriageAge, legalMarriageAgeNotice } from '../../utils/legalMarriageAge';
 
 const fieldClass = 'w-full p-3 border rounded-xl text-sm';
 const fieldStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
@@ -127,6 +128,10 @@ export default function ProfilePage() {
   const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
   const handleSave = async () => {
+    if (isBelowLegalMarriageAge(form.dob, form.gender)) {
+      toast.error(legalMarriageAgeNotice(form.gender));
+      return;
+    }
     setIsSaving(true);
     try {
       // updateProfile overwrites every field it's sent — this page only edits Personal
@@ -229,7 +234,12 @@ export default function ProfilePage() {
                     {GENDERS.map((g) => <option key={g.val} value={g.val}>{g.label}</option>)}
                   </select>
                 </Field>
-                <Field label="Date of Birth"><input type="date" value={form.dob} onChange={(e) => set({ dob: e.target.value })} className={fieldClass} style={fieldStyle} /></Field>
+                <Field label="Date of Birth">
+                  <input type="date" max={maxDobForLegalMarriageAge(form.gender)} value={form.dob} onChange={(e) => set({ dob: e.target.value })} className={fieldClass} style={fieldStyle} />
+                  {isBelowLegalMarriageAge(form.dob, form.gender) && (
+                    <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--danger-d)' }}>{legalMarriageAgeNotice(form.gender)}</p>
+                  )}
+                </Field>
                 <Field label="City"><CityInput value={form.city} onChange={(v) => set({ city: v })} /></Field>
                 <div className="grid grid-cols-3 gap-3">
                   <Field label="Height (cm)"><input type="number" value={form.height} onChange={(e) => set({ height: e.target.value })} className={fieldClass} style={fieldStyle} /></Field>
@@ -316,7 +326,10 @@ export default function ProfilePage() {
             </select>
           </Field>
           <Field label="Date of Birth">
-            <input type="date" value={form.dob} onChange={(e) => set({ dob: e.target.value })} className={fieldClass} style={fieldStyle} />
+            <input type="date" max={maxDobForLegalMarriageAge(form.gender)} value={form.dob} onChange={(e) => set({ dob: e.target.value })} className={fieldClass} style={fieldStyle} />
+            {isBelowLegalMarriageAge(form.dob, form.gender) && (
+              <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--danger-d)' }}>{legalMarriageAgeNotice(form.gender)}</p>
+            )}
           </Field>
           <Field label="City">
             <CityInput value={form.city} onChange={(v) => set({ city: v })} />

@@ -18,6 +18,7 @@ import {
 } from '../../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES } from '../../../constants/mentalHealthQuestions';
 import { estimateTimeLeft } from '../../../utils/estimateTime';
+import { maxDobForLegalMarriageAge, isBelowLegalMarriageAge, legalMarriageAgeNotice } from '../../../utils/legalMarriageAge';
 
 const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
@@ -225,6 +226,11 @@ export default function ProspectOnboardingPage() {
   const handleSubmit = async () => {
     if (!dob || !city || !gender || !height || !weight || !waist || !activityLevel || !drinkingHabits || !smokingHabits || !sleepCycle) {
       setSubmitError('Please answer all required metrics and lifestyle questions.');
+      return;
+    }
+
+    if (isBelowLegalMarriageAge(dob, gender)) {
+      setSubmitError(legalMarriageAgeNotice(gender));
       return;
     }
 
@@ -463,27 +469,6 @@ export default function ProspectOnboardingPage() {
     canAdvance: !!value
   });
 
-  const fieldStep = (title, value, onChange, extra = {}) => ({
-    title,
-    subtitle: extra.subtitle,
-    category: extra.category,
-    kind: 'field',
-    content: (
-      <input
-        type={extra.type || 'text'}
-        inputMode={extra.inputMode}
-        placeholder={extra.placeholder}
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
-        autoFocus
-        className={fieldInputClass}
-        style={fieldInputStyle}
-      />
-    ),
-    canAdvance: !!(value && value.toString().trim())
-  });
-
   const measurementStep = (title, measureType, value, onChange, category) => ({
     title,
     category,
@@ -492,10 +477,41 @@ export default function ProspectOnboardingPage() {
     canAdvance: true
   });
 
+  // Caps the picker at (and flags any manually-typed date past) the legal
+  // marriage age for the given gender — 18 for women, 21 for men in India.
+  const dobStep = (title, value, onChange, genderVal, category) => {
+    const tooYoung = isBelowLegalMarriageAge(value, genderVal);
+    return {
+      title,
+      category,
+      kind: 'field',
+      content: (
+        <div>
+          <input
+            type="date"
+            max={maxDobForLegalMarriageAge(genderVal)}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+            autoFocus
+            className={fieldInputClass}
+            style={fieldInputStyle}
+          />
+          {tooYoung && (
+            <p className="text-xs mt-3 text-center leading-relaxed" style={{ color: 'var(--danger-d)' }}>
+              {legalMarriageAgeNotice(genderVal)}
+            </p>
+          )}
+        </div>
+      ),
+      canAdvance: !!value && !tooYoung
+    };
+  };
+
   // 2. Questionnaire & File Upload wizard
   const steps = [
     choiceStep('Gender', GENDERS, gender, setGender, { category: 'about' }),
-    fieldStep('Date of Birth', dob, setDob, { type: 'date', category: 'about' }),
+    dobStep('Date of Birth', dob, setDob, gender, 'about'),
     {
       title: 'City',
       category: 'about',
