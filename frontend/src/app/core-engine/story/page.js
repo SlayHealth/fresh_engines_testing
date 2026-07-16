@@ -913,7 +913,7 @@ export default function YourStoryPage() {
               onChange={(e) => setSelectedYear(PROJECTION_YEARS[parseInt(e.target.value)])}
               aria-label="Select projection checkpoint, from today to 10 years out"
               aria-valuetext={selectedYear === 0 ? 'Today (Baseline)' : `Year ${selectedYear}`}
-              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none transition-all"
+              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer transition-all"
               style={{
                 background: `linear-gradient(to right, var(--teal) 0%, var(--teal) ${rangePercent}%, #E2E8F0 ${rangePercent}%, #E2E8F0 100%)`
               }}

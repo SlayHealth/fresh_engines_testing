@@ -20,7 +20,7 @@ const COUNTRIES = [
   { code: '+61', flag: '🇦🇺', name: 'Australia' }
 ];
 
-const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
+const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
 const STEP_ORDER_NEW = ['phone', 'otp', 'name', 'relation', 'eta'];
@@ -363,7 +363,7 @@ export default function LoginPage() {
           <select
             value={selectedCountry}
             onChange={(e) => setSelectedCountry(e.target.value)}
-            className="rounded-xl border outline-none px-3 shrink-0"
+            className="rounded-xl border px-3 shrink-0"
             style={{ ...fieldInputStyle, minWidth: '95px' }}
           >
             {COUNTRIES.map((c) => (

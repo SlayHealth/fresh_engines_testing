@@ -163,9 +163,11 @@ function CoreEngineLayoutInner({ children }) {
           <Sparkles size={20} className="text-(--teal)" />
           <span className="font-serif font-bold text-lg text-slate-800 tracking-tight">SlayHealth</span>
         </div>
-        <button 
+        <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 focus:outline-none"
+          className="p-1 rounded-lg hover:bg-slate-100 text-slate-600"
+          aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={isMobileMenuOpen}
         >
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -385,7 +387,9 @@ function CoreEngineLayoutInner({ children }) {
                   step="1"
                   value={Math.max(0, PROJECTION_YEARS.indexOf(selectedProjYear))}
                   onChange={(e) => setSelectedProjYear(PROJECTION_YEARS[parseInt(e.target.value)])}
-                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none"
+                  aria-label="Select projection checkpoint, from today to 10 years out"
+                  aria-valuetext={selectedProjYear === 0 ? 'Today (Baseline)' : `Year +${selectedProjYear}`}
+                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
                   style={{
                     background: `linear-gradient(to right, var(--teal) 0%, var(--teal) ${(Math.max(0, PROJECTION_YEARS.indexOf(selectedProjYear)) / (PROJECTION_YEARS.length - 1)) * 100}%, #E2E8F0 ${(Math.max(0, PROJECTION_YEARS.indexOf(selectedProjYear)) / (PROJECTION_YEARS.length - 1)) * 100}%, #E2E8F0 100%)`
                   }}

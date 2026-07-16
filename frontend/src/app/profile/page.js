@@ -13,7 +13,7 @@ import { GENDERS } from '../../constants/lifestyleOptions';
 import useIsMobile from '../../hooks/useIsMobile';
 import Ico from '../../components/mobile/Ico';
 
-const fieldClass = 'w-full p-3 border rounded-xl outline-none text-sm';
+const fieldClass = 'w-full p-3 border rounded-xl text-sm';
 const fieldStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
 // Draft persistence for in-progress profile edits — this form previously lived

@@ -93,6 +93,19 @@ body {
   box-sizing: border-box;
 }
 
+/* UX6-01/UX6-02: fieldInputClass (login/onboarding/add-prospect) and
+   wizard.module.css both strip the native focus outline with no
+   replacement, and the only fallback that existed (`.mshell
+   :focus-visible` in mobile-shell.css) doesn't cover those screens since
+   they aren't wrapped in `.mshell`. Promoted here to a true global rule so
+   every focusable element gets a visible ring by default regardless of
+   which shell/layout it lives under. */
+:focus-visible {
+  outline: 2px solid var(--teal-d);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 /* Minimal textured background for the questionnaire wizards — subtle paper
    grain + soft pink/teal corner tints, kept quiet so it reads as premium
    rather than decorative. */

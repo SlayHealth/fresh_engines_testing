@@ -10,7 +10,7 @@ import QuestionScreen from '../../components/wizard/QuestionScreen';
 import ChoiceList from '../../components/wizard/ChoiceList';
 import { RELATIONS, MARRIAGE_TIMELINES } from '../../constants/lifestyleOptions';
 
-const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
+const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
 export default function OnboardingPage() {

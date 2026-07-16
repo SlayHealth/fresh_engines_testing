@@ -67,7 +67,7 @@ const PROSPECT_MODE_OPTIONS = [
   { val: 'invite', label: 'Generate a link to send them', desc: "They fill in their own details — you copy and send the link yourself" }
 ];
 
-const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
+const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
 // Real, per-upload test coverage from the backend's ontology-based extraction

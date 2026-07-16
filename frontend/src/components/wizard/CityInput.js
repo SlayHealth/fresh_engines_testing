@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { CITIES } from '../../constants/lifestyleOptions';
 
-const fieldInputClass = 'w-full p-4 border rounded-xl outline-none text-base';
+const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
 export default function CityInput({ value, onChange }) {
