@@ -315,6 +315,31 @@ async function validateToken(req, res, next) {
   }
 }
 
+// UX8-03: rejecting consent after real data was already submitted means
+// something different than declining up front — the prospect is asking for
+// what they already gave to be taken back. Actually deletes the submitted
+// report(s) and profile fields (rather than just flipping a status flag)
+// so the "we will not collect your data" confirmation shown afterward is
+// true, not a false positive. Mirrors the account-holder-side cascade in
+// auth.controller.js's deleteAccount.
+async function purgeSubmittedProspectData(invite) {
+  if (invite.pathology_report_id) {
+    await db.query('DELETE FROM chat_sessions WHERE report_id = $1 OR partner_report_id = $1', [invite.pathology_report_id]);
+    await db.query('DELETE FROM reports WHERE id = $1', [invite.pathology_report_id]);
+  }
+  if (invite.radiology_report_id) {
+    await db.query('DELETE FROM radiology_reports WHERE id = $1', [invite.radiology_report_id]);
+  }
+  if (invite.prospect_user_id) {
+    // Cascades prospect_invites.prospect_user_id to NULL via its own FK.
+    await db.query('DELETE FROM users WHERE id = $1', [invite.prospect_user_id]);
+  }
+  await db.query(
+    `UPDATE prospect_invites SET pathology_report_id = NULL, radiology_report_id = NULL, mental_answers_json = NULL, erased_after_submission = TRUE WHERE id = $1`,
+    [invite.id]
+  );
+}
+
 /**
  * Handle consent acceptance or rejection
  */
@@ -334,10 +359,15 @@ async function updateConsent(req, res, next) {
       return res.status(400).json({ success: false, error: 'Invalid invite status' });
     }
 
+    const alreadySubmitted = ['questionnaire_submitted', 'processing'].includes(invite.status);
     const newStatus = accepted ? 'consent_accepted' : 'consent_rejected';
-    
+
+    if (!accepted && alreadySubmitted) {
+      await purgeSubmittedProspectData(invite);
+    }
+
     await db.query(
-      `UPDATE prospect_invites 
+      `UPDATE prospect_invites
        SET status = $1, consent_timestamp = CURRENT_TIMESTAMP, consent_ip = $2, consent_user_agent = $3
        WHERE id = $4`,
       [newStatus, ip, ua, invite.id]
@@ -345,10 +375,11 @@ async function updateConsent(req, res, next) {
 
     broadcastInviteUpdate(invite.user_id, invite.id, newStatus, {
       consent_timestamp: new Date(),
-      consent_ip: ip
+      consent_ip: ip,
+      erased_after_submission: !accepted && alreadySubmitted
     });
 
-    return res.json({ success: true, status: newStatus });
+    return res.json({ success: true, status: newStatus, erasedAfterSubmission: !accepted && alreadySubmitted });
   } catch (error) {
     next(error);
   }

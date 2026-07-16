@@ -173,6 +173,16 @@ async function initDB() {
       ADD COLUMN IF NOT EXISTS radiology_report_id TEXT DEFAULT NULL;
     `);
 
+    // UX8-03: distinguishes "declined before anything was collected" from
+    // "declined after real data was submitted, which has now been erased" —
+    // both land on the same consent_rejected status, but the account
+    // holder's own UI previously showed the same "nothing was shared" copy
+    // for either case, which was false for the second one.
+    await pool.query(`
+      ALTER TABLE prospect_invites
+      ADD COLUMN IF NOT EXISTS erased_after_submission BOOLEAN DEFAULT FALSE;
+    `);
+
     // Invites are now shared as a manually-copied link rather than sent via WhatsApp,
     // so a prospect phone number is no longer collected.
     await pool.query(`

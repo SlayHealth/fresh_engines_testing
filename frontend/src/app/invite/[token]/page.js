@@ -68,6 +68,14 @@ export default function ProspectOnboardingPage() {
   const [submitError, setSubmitError] = useState(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  // UX8-03: real post-submission withdrawal — previously reloading after
+  // submission re-showed the original consent gate, and rejecting there
+  // falsely claimed "no data collected" while the report/profile remained
+  // in the database untouched.
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawn, setWithdrawn] = useState(false);
+  const [withdrawError, setWithdrawError] = useState(null);
+
   // Progress persistence
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -91,12 +99,22 @@ export default function ProspectOnboardingPage() {
         }
         const data = await res.json();
         setInvite(data.invite);
-        if (data.invite.status === 'consent_accepted') {
+        const status = data.invite.status;
+        if (status === 'consent_accepted') {
           setConsentDecided(true);
           setConsentAccepted(true);
-        } else if (data.invite.status === 'consent_rejected') {
+        } else if (status === 'consent_rejected') {
           setConsentDecided(true);
           setConsentAccepted(false);
+        } else if (['questionnaire_submitted', 'processing', 'completed'].includes(status)) {
+          // UX8-03: any status this far along means real data was already
+          // submitted — must never fall through to the original consent gate
+          // again (previously only the two literal accept/reject strings were
+          // recognized here, so reloading after submission silently re-showed
+          // "Accept Consent / Reject Consent" as if nothing had happened).
+          setConsentDecided(true);
+          setConsentAccepted(true);
+          setSubmitSuccess(true);
         }
       } catch (err) {
         setValidationError(err.message);
@@ -179,6 +197,28 @@ export default function ProspectOnboardingPage() {
       toast.error(err.message || 'Error recording consent. Please try again.');
     } finally {
       setIsConsentSubmitting(false);
+    }
+  };
+
+  // UX8-03: a real withdrawal request after submission — the backend now
+  // actually deletes the submitted report(s) and profile fields for this
+  // exact same endpoint/payload shape once it sees the invite is past
+  // questionnaire_submitted, rather than just flipping a status flag.
+  const handleWithdrawAfterSubmission = async () => {
+    setIsWithdrawing(true);
+    setWithdrawError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/invite/consent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, accepted: false })
+      });
+      if (!res.ok) throw new Error('Failed to process your request. Please try again.');
+      setWithdrawn(true);
+    } catch (err) {
+      setWithdrawError(err.message || 'Failed to process your request. Please try again.');
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -275,6 +315,27 @@ export default function ProspectOnboardingPage() {
   }
 
   if (submitSuccess) {
+    // UX8-03: a real, working post-submission withdrawal — this actually
+    // deletes the submitted report(s) and profile data server-side, so this
+    // confirmation is true rather than a status flag with nothing behind it.
+    if (withdrawn) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-100 shadow-xl text-center space-y-6">
+            <div className="inline-flex p-4 bg-emerald-50 text-emerald-500 rounded-full mx-auto">
+              <CheckCircle size={48} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800">Your Data Has Been Deleted</h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Your submitted reports and profile details have been permanently removed from SlayHealth. No compatibility analysis will be run using your information.
+            </p>
+            <p className="text-[11px] text-slate-400">
+              You can close this tab now.
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-100 shadow-xl text-center space-y-6">
@@ -291,6 +352,21 @@ export default function ProspectOnboardingPage() {
           <p className="text-[11px] text-slate-400">
             You can close this tab now.
           </p>
+          <div className="pt-2 border-t border-slate-100">
+            <p className="text-[11px] text-slate-400 mb-2">
+              Changed your mind? You can ask SlayHealth to delete what you submitted.
+            </p>
+            <button
+              onClick={handleWithdrawAfterSubmission}
+              disabled={isWithdrawing}
+              className="text-xs font-semibold text-rose-500 hover:text-rose-600 disabled:opacity-50 cursor-pointer"
+            >
+              {isWithdrawing ? 'Deleting your data…' : 'Delete my submitted data'}
+            </button>
+            {withdrawError ? (
+              <p className="text-[11px] text-rose-500 mt-2">{withdrawError}</p>
+            ) : null}
+          </div>
         </div>
       </div>
     );

@@ -931,7 +931,14 @@ function AddProspectPageInner() {
 
         {status === 'consent_rejected' && (
           <div className="p-3.5 rounded-xl text-xs font-medium text-left" style={{ background: 'var(--soft-danger)', color: 'var(--danger-d)' }}>
-            <strong>Invitation Declined:</strong> The prospect has rejected consent to share their health data. You can revoke this link and send a new invite if desired.
+            {/* UX8-03: previously showed this same "nothing was shared" copy
+                even when the prospect had already submitted real data and
+                asked for it to be deleted afterward — false in that case. */}
+            {activeInvite.erased_after_submission ? (
+              <><strong>Data Deleted:</strong> Your prospect submitted their information, then asked SlayHealth to delete it. Their reports and profile have been removed — no compatibility analysis was run. You can revoke this link and send a new invite if desired.</>
+            ) : (
+              <><strong>Invitation Declined:</strong> The prospect has rejected consent to share their health data. You can revoke this link and send a new invite if desired.</>
+            )}
           </div>
         )}
 
