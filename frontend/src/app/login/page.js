@@ -248,9 +248,20 @@ export default function LoginPage() {
       if (data.refreshToken) localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
 
       if (isNewUser) {
-        // Name/relation/marriage-timeline still need to be collected — hold off on
-        // persisting/finalizing the session and continue the wizard instead. See
-        // completeSignup, called once those remaining steps are answered.
+        // Name/relation/marriage-timeline still need to be collected before
+        // completeSignup() writes the final slayhealth_user entry. UX1-02:
+        // previously nothing was persisted here, so a reload/interruption
+        // between OTP success and finishing the wizard left no synchronous
+        // evidence a session already existed — this mount effect's own
+        // localStorage read (above) would find nothing and render the blank
+        // phone-entry step, even though a valid refresh token and account
+        // already existed server-side. Writing a nameless slayhealth_user
+        // now means that same check already knows to route a reload to
+        // /onboarding (see the `parsed.name` branch above) instead of
+        // starting the whole phone+OTP sequence over. completeSignup()
+        // overwrites this with the final, complete user object once the
+        // wizard actually finishes.
+        localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
         setUser(data.user);
         setAuthStep('name');
         return;
