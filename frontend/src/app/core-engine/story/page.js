@@ -1150,7 +1150,10 @@ export default function YourStoryPage() {
 
       {/* Footer */}
       <footer className="text-center text-[10px] text-slate-400 leading-relaxed max-w-md mx-auto pt-8 mt-12 border-t border-(--line) font-sans">
-        An estimate, not a verdict — based on your reports. Biology varies couple to couple. Your data stays private to the two of you.
+        {/* UX8-02: was "...stays private to the two of you" — false; only the
+            account holder ever sees this report (Finding #0), the invited
+            partner does not. */}
+        An estimate, not a verdict — based on your reports. Biology varies couple to couple. Your data stays private and confidential.
       </footer>
     </div>
   );

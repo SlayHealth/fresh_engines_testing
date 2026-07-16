@@ -21,7 +21,10 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
   about: [
     "{name}, think of this as your app's 'nice to meet you' — small talk that actually matters later.",
     "There's no gold-star answer here, {name} — no one's grading on a curve.",
-    "{name}, your data isn't going on a billboard — just to you and your match, promise.",
+    // UX8-02: was "...just to you and your match, promise" — falsely implied
+    // the invited partner also gets mutual access/visibility to the result,
+    // which the app's account model (Finding #0) never provides.
+    "{name}, your data isn't going on a billboard — it's used only for this compatibility check, promise.",
     "We're going for an honest portrait here, {name}, not a dating-app profile pic.",
     "{name}, five seconds of honesty here beats five years of 'wait, you never told me that.'",
     "This tiny fact is doing more behind the scenes than it looks like, {name}.",
@@ -71,7 +74,8 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
     "Real emotional maturity starts with questions exactly like this one, {name}.",
     "{name}, we ask this because relationships are built on emotional patterns, not just chemistry.",
     "However you feel about this one, {name}, that feeling is useful information.",
-    "{name}, this stays between us and your match — not even our engineers are nosy enough to peek.",
+    // UX8-02: was "...between us and your match..." — same false mutual-access framing.
+    "{name}, this stays confidential — not even our engineers are nosy enough to peek.",
     "You're being remarkably thoughtful right now, {name} — that matters more than you know.",
     "{name}, understanding your own patterns is the first step to healthier ones.",
     "This is the kind of question a good therapist would ask, {name} — and you're getting it for the price of a tap.",
@@ -96,7 +100,10 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
 
   radiology: [
     "{name}, imaging reports like this fill in details blood work alone can't show.",
-    "This stays private and is only used for your own compatibility analysis, {name}.",
+    // UX8-02: was "...your own compatibility analysis..." — the invited
+    // partner never sees any analysis, so "your own" implied an ownership/
+    // access stake they don't actually have.
+    "This stays private and is only used for this compatibility analysis, {name}.",
     "{name}, most people don't think to share this before marriage — look at you, overachiever.",
     "Structural health matters just as much as lab numbers, {name}, and this is how we see it.",
     "{name}, this one detail can quietly resolve a lot of uncertainty.",
@@ -107,7 +114,10 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
 
   genomics: [
     "{name}, this is the kind of insight that can genuinely shape your family's future.",
-    "Genetic screening like this stays completely private to the two of you, {name}.",
+    // UX8-02: the sharpest instance of the false mutual-access claim — was
+    // "...completely private to the two of you..." for genetic/carrier data,
+    // the single most sensitive category in the app.
+    "Genetic screening like this stays completely confidential, {name}.",
     "{name}, understanding shared carrier risks now is one of the most protective things you can do.",
     "This isn't about fear, {name} — it's about informed, confident family planning.",
     "{name}, very few couples get this level of clarity before marriage.",
@@ -128,7 +138,8 @@ export const TRUST_MESSAGES_BY_CATEGORY = {
   general: [
     "{name}, fun fact: couples who sort this out early report way fewer 'wait, WHAT?' moments later.",
     "Every answer here brings your health story into sharper focus, {name}.",
-    "{name}, your answers stay private between you and your match — always.",
+    // UX8-02: was "...between you and your match..." — same false mutual-access framing.
+    "{name}, your answers stay private and confidential — always.",
     "Small, honest answers like this one are what make compatibility science actually useful, {name}.",
     "This is exactly the kind of clarity most couples wish they'd had before marriage, {name}.",
     "You're building something most people skip — real, honest health transparency, {name}.",
