@@ -108,12 +108,23 @@ export default function MobileBottomNav() {
 
   // Gating on a saved name (fully onboarded) rather than a route allow-list means
   // this naturally shows on every authenticated page — dashboard, questionnaire,
-  // analysis, profile, admin — while still staying off login/onboarding/invite
-  // links, where there either is no user yet or the name step isn't done.
+  // analysis, profile, admin — while still staying off login/onboarding, where
+  // there either is no user yet or the name step isn't done.
   // The Questionnaire flow (hub + every per-category step screen) owns the
   // whole viewport — a floating nav bar here would sit on top of forms,
   // uploads, and the primary action button.
-  if (!user?.name || pathname.startsWith('/add-prospect')) return null;
+  //
+  // The name-gate alone isn't enough on two routes that are meant to read as
+  // "outside the authenticated app" regardless of whether *this* browser
+  // happens to carry a real session: the public marketing landing page (a
+  // returning, already-logged-in visitor still lands here first, per
+  // page.js's own "Continue" shortcut) and the invite link (opened by a
+  // different person entirely — the invited partner — who has never
+  // authenticated in this flow at all, even if the account holder's own
+  // session is what's sitting in this browser's localStorage). Confirmed
+  // live: without this second check, an authenticated account holder's own
+  // Home/Health/Chat AI/Analysis tabs rendered on both pages.
+  if (!user?.name || pathname === '/' || pathname.startsWith('/invite/') || pathname.startsWith('/add-prospect')) return null;
 
   const isActive = (target) => pathname === target || pathname.startsWith(`${target}/`);
   const hasActiveAnalysis = !!(chronicResult && mfrResult);
