@@ -38,19 +38,27 @@ function shrinkCorrelatedLRs(lrs, exponent) {
   return max * Math.pow(product / max, exponent);
 }
 
-// NOTE: `smoking` and `sleep` below have the same class of bug `alcohol` had
-// until this fix — their keys ('Regular'/'Occasional'/'Never',
-// 'Night owl'/'Irregular'/'Early bird') don't match the actual frontend
-// option values (frontend/src/constants/lifestyleOptions.js's LIFESTYLE_SMOKING_TOBACCO
-// uses 'never'/'occasion'/'regular'/'chain'; LIFESTYLE_SLEEP uses 'Early Bird'/
+// NOTE: `sleep` below still has the same class of bug `alcohol`/`smoking` had
+// until this fix — its keys ('Night owl'/'Irregular'/'Early bird') don't
+// match the actual frontend option values (LIFESTYLE_SLEEP uses 'Early Bird'/
 // 'night owl'/'irregular'/'insomniac') — every lookup below silently falls
 // through to the neutral `|| 1.0` default (see getEffectiveLifestyleLR), so
-// smoking/sleep habits currently contribute nothing to chronic risk scoring
+// sleep habits currently contribute nothing to chronic risk scoring
 // regardless of what a user actually answers. Flagged here, not fixed here —
-// out of scope for the alcohol-specific fix this comment sits next to.
+// out of scope for the alcohol/smoking-specific fixes this comment sits next to.
 const LIFESTYLE_LRS = {
   diet: { Poor: 1.3, Mixed: 1.15, Healthy: 1.0 },
-  smoking: { Regular: 1.5, Occasional: 1.25, Never: 1.0 },
+  // Keys match LIFESTYLE_SMOKING_TOBACCO's `val`s exactly (frontend/src/constants/
+  // lifestyleOptions.js) — previously 'Regular'/'Occasional'/'Never' here could
+  // never match the frontend's actual lowercase 'regular'/'occasion'/'never'/
+  // 'chain' values (not even 'Never' vs 'never'), so every answer silently
+  // scored as risk-neutral (1.0) regardless of what a user actually selected.
+  // `Quit` ("Previously, but quit") is intentionally also 1.0, not a
+  // separate penalized tier, same reasoning as `alcohol`'s `Quit` below: no
+  // current use, and any residual lung/organ damage from past smoking is
+  // captured directly wherever the pathology/radiology panels assess it, not
+  // re-inferred here from a self-report category.
+  smoking: { Regularly: 1.5, Occasionally: 1.25, Quit: 1.0, Never: 1.0 },
   // Keys match LIFESTYLE_DRINKING's `val`s exactly (frontend/src/constants/
   // lifestyleOptions.js) — previously 'Regular'/'Occasional' here could never
   // match the frontend's actual 'socially'/'regularly'/'heavily' values, so

@@ -372,7 +372,11 @@ export default function MfrEnginePage() {
   if (!mfrResult) return null;
 
   const suggestions = [];
-  if (user.smoking_habits !== 'never' || prospectForm.smoking_habits !== 'never') suggestions.push("Quit smoking");
+  // 'Quit' shouldn't trigger a "quit smoking" suggestion alongside 'Never' —
+  // someone who has already stopped isn't a current smoker either. Value
+  // comparison also updated from lowercase 'never' to 'Never'.
+  const currentlySmokes = (habit) => habit && habit !== 'Never' && habit !== 'Quit';
+  if (currentlySmokes(user.smoking_habits) || currentlySmokes(prospectForm.smoking_habits)) suggestions.push("Quit smoking");
   const uBmi = userBmi;
   const pBmi = prospectBmi;
   if (uBmi > 25 || pBmi > 25) suggestions.push("Optimise body weight/BMI");

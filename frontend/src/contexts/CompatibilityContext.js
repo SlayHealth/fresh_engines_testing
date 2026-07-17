@@ -620,15 +620,20 @@ export function CompatibilityProvider({ children }) {
       history: { parentDiabetes: selfUser.parentDiabetes || 'None' }
     };
 
-    // Not currently drinking covers both 'Never' and 'Quit' — someone who has
-    // stopped isn't a current user, same reasoning as chronic.controller.js's
-    // LIFESTYLE_LRS.alcohol entry for 'Quit'.
+    // Not currently drinking/smoking covers both 'Never' and 'Quit' — someone
+    // who has stopped isn't a current user, same reasoning as
+    // chronic.controller.js's LIFESTYLE_LRS.alcohol/smoking 'Quit' entries.
     const notCurrentlyDrinking = (habit) => habit === 'Never' || habit === 'Quit';
+    const notCurrentlySmoking = (habit) => habit === 'Never' || habit === 'Quit';
 
     const sharedLifestyle = {
       diet: selfUser.drinking_habits === 'Never' && prospectForm.drinking_habits === 'Never' ? 'Healthy' : 'Mixed',
       activity: selfUser.activity_level === 'Sedentary' || prospectForm.activity_level === 'Sedentary' ? 'Sedentary' : 'Active',
-      smoking: selfUser.smoking_habits === 'never' && prospectForm.smoking_habits === 'never' ? 'Never' : 'Occasional',
+      // Value comparison updated from lowercase 'never' (LIFESTYLE_SMOKING_TOBACCO
+      // used to be lowercase-valued) to 'Never', and the else-branch value from
+      // the now-dead 'Occasional' (no longer a LIFESTYLE_LRS.smoking key) to
+      // 'Occasionally' — see chronic.controller.js's LIFESTYLE_LRS.smoking comment.
+      smoking: notCurrentlySmoking(selfUser.smoking_habits) && notCurrentlySmoking(prospectForm.smoking_habits) ? 'Never' : 'Occasionally',
       // Key renamed from 'drinking' to 'alcohol': chronic.controller.js's
       // getEffectiveLifestyleLR reads shared_lifestyle_data?.alcohol
       // specifically (LIFESTYLE_LRS.alcohol) — the old 'drinking' key was

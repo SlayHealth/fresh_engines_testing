@@ -15,7 +15,13 @@
 // since 'regularly' and 'heavily' both already collapsed into the same
 // combined>=2 'Elevated' branch.
 const DRINKING_RANK = { never: 0, quit: 0, occasionally: 1, frequently: 2 };
-const SMOKING_RANK = { never: 0, occasion: 1, regular: 2, chain: 3 };
+// Keys match LIFESTYLE_SMOKING_TOBACCO's `val`s exactly (lowercased) — see
+// lifestyleOptions.js. Same 'quit' ranks with 'never' (0) reasoning as
+// DRINKING_RANK above. 'occasionally'/'regularly' replace the old lowercase
+// 'occasion'/'regular'/'chain' set; 'regularly' alone reaching rank 2 (->
+// 'Elevated' below) matches the old behavior, since 'regular' and 'chain'
+// both already collapsed into the same combined>=2 'Elevated' branch.
+const SMOKING_RANK = { never: 0, quit: 0, occasionally: 1, regularly: 2 };
 
 export function deriveSubstanceConcern(drinkingHabits, smokingTobaccoHabits) {
   const dRank = DRINKING_RANK[(drinkingHabits || '').toLowerCase()];

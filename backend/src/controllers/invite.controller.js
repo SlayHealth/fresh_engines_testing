@@ -489,15 +489,19 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
       waist: classifyWaist(isInviterMale ? prospect.waist : inviter.waist, 'female')
     };
 
-    // Not currently drinking covers both 'Never' and 'Quit' — someone who has
-    // stopped isn't a current user, same reasoning as LIFESTYLE_LRS.alcohol's
-    // 'Quit' entry in chronic.controller.js.
+    // Not currently drinking/smoking covers both 'Never' and 'Quit' — someone
+    // who has stopped isn't a current user, same reasoning as
+    // LIFESTYLE_LRS.alcohol/smoking's 'Quit' entries in chronic.controller.js.
     const notCurrentlyDrinking = (habit) => habit === 'Never' || habit === 'Quit';
+    const notCurrentlySmoking = (habit) => habit === 'Never' || habit === 'Quit';
 
     const sharedLifestyle = {
       diet: inviter.drinking_habits === 'Never' && prospect.drinking_habits === 'Never' ? 'Healthy' : 'Mixed',
       activity: inviter.activity_level === 'Sedentary' || prospect.activity_level === 'Sedentary' ? 'Sedentary' : 'Active',
-      smoking: inviter.smoking_habits === 'never' && prospect.smoking_habits === 'never' ? 'Never' : 'Occasional',
+      // Value comparison updated from lowercase 'never' to 'Never', and the
+      // else-branch value from the now-dead 'Occasional' to 'Occasionally' —
+      // see chronic.controller.js's LIFESTYLE_LRS.smoking comment.
+      smoking: notCurrentlySmoking(inviter.smoking_habits) && notCurrentlySmoking(prospect.smoking_habits) ? 'Never' : 'Occasionally',
       // Key renamed from 'drinking' to 'alcohol' — chronic.controller.js's
       // getEffectiveLifestyleLR reads shared_lifestyle_data?.alcohol
       // specifically; the old 'drinking' key was never read at all, so this

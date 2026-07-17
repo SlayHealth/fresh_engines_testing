@@ -1,7 +1,7 @@
 import {
   Coffee, Footprints, Zap, Trophy,
   WineOff, Martini, Beer, Ban,
-  CigaretteOff, Cigarette, Package,
+  CigaretteOff, Cigarette,
   Sunrise, MoonStar, Shuffle, Eye,
   CalendarCheck, CalendarX, CalendarOff,
   ShieldCheck, User, Users
@@ -70,11 +70,18 @@ export const LIFESTYLE_DRINKING = [
 
 // Smoking and (smokeless) tobacco use — chewing tobacco, gutka, paan masala — asked as one
 // combined question rather than two, since both map to the same downstream risk signal.
+// `val`s are the literal keys backend/src/controllers/chronic.controller.js's
+// LIFESTYLE_LRS.smoking map looks up directly (getEffectiveLifestyleLR) — the two
+// previously drifted (this list used to read lowercase 'never'/'occasion'/'regular'/
+// 'chain', which never matched that map's 'Regular'/'Occasional'/'Never' keys at
+// all — not even 'never', since the map's key was capitalized 'Never' — so every
+// answer silently scored as risk-neutral regardless of what a user actually
+// selected). Keep both sides in sync if this list ever changes.
 export const LIFESTYLE_SMOKING_TOBACCO = [
-  { val: 'never', label: 'Never', desc: 'No smoking or tobacco use of any kind', icon: CigaretteOff },
-  { val: 'occasion', label: 'Occasional', desc: 'A few cigarettes or tobacco uses a month, mostly social settings', icon: Cigarette },
-  { val: 'regular', label: 'Regular', desc: 'Daily use, roughly 5-10 cigarettes or tobacco servings a day', icon: iconStack(Cigarette, 2) },
-  { val: 'chain', label: 'Heavy', desc: 'Heavy daily use — a pack (20+ cigarettes) or more, or equivalent tobacco intake', icon: Package }
+  { val: 'Never', label: 'Never', desc: 'No smoking or tobacco use of any kind', icon: CigaretteOff },
+  { val: 'Quit', label: 'Previously, but quit', desc: 'Used to smoke or use tobacco, but have stopped entirely', icon: Ban },
+  { val: 'Occasionally', label: 'Occasionally', desc: 'A few cigarettes or tobacco uses a month, mostly social settings', icon: Cigarette },
+  { val: 'Regularly', label: 'Regularly', desc: 'Daily use — cigarettes or other tobacco, roughly 5 or more servings a day', icon: iconStack(Cigarette, 2) }
 ];
 
 export const LIFESTYLE_SLEEP = [
