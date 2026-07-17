@@ -11,7 +11,7 @@ import { useCompatibility, buildOnboardingFormFromUser } from '../../contexts/Co
 import CategoryHub from '../../components/wizard/CategoryHub';
 import useIsMobile from '../../hooks/useIsMobile';
 import MobileHomeView from './MobileHomeView';
-import { aboutProgress, aboutCounts, lifestyleProgress, lifestyleCounts, mentalProgress, mentalCounts } from '../../utils/healthProfileProgress';
+import { aboutProgress, aboutCounts, lifestyleProgress, lifestyleCounts, mentalProgress, mentalCounts, computeConfidence } from '../../utils/healthProfileProgress';
 import { SUGGESTED_PATHOLOGY_TESTS, SUGGESTED_RADIOLOGY_TESTS, SUGGESTED_GENOMICS_TESTS } from '../../constants/suggestedTests';
 import styles from '../page.module.css';
 
@@ -34,7 +34,9 @@ export default function DashboardPage() {
     setOnboardingForm,
     prospectForm,
     userReport,
-    selfMentalAnswers
+    prospectReport,
+    selfMentalAnswers,
+    prospectMentalAnswers
   } = useCompatibility();
 
   // Auth / Onboarding Redirect Guard
@@ -119,6 +121,32 @@ export default function DashboardPage() {
     }
   ];
 
+  // Poor Discoverability of Saved Prospects: prospectForm/prospectReport/
+  // prospectMentalAnswers already survive a reload (CompatibilityContext's own
+  // draft), and add-prospect/page.js now resumes at the exact step/category —
+  // but neither surfaced anywhere on Home, so a user who navigated away had no
+  // visible way to find their way back. A named prospect with no completed
+  // match yet is treated as an active, resumable draft; the % reuses the same
+  // weighted confidence formula as the self health-profile gauge (About/
+  // Lifestyle/Mental/Pathology — Radiology is left at 0 here since its own
+  // upload state lives in add-prospect/page.js's local draft, not this
+  // Context, and this is meant as a quick approximate signal, not the source
+  // of truth add-prospect/page.js computes precisely once you're back in it).
+  const hasCompletedMatchForProspect = matchesList.some((m) => m.prospect?.name === prospectForm.name);
+  const hasResumableProspectDraft = !!(prospectForm.name && !hasCompletedMatchForProspect);
+  const prospectAdapter = {
+    form: prospectForm,
+    nameField: 'name', genderField: 'gender', dobField: 'dob', cityField: 'city',
+    needsNameStep: false
+  };
+  const prospectDraftConfidence = hasResumableProspectDraft ? computeConfidence([
+    { key: 'about', progress: aboutProgress(prospectAdapter) },
+    { key: 'lifestyle', progress: lifestyleProgress(prospectForm) },
+    { key: 'mental', progress: mentalProgress(prospectMentalAnswers) },
+    { key: 'pathology', progress: prospectReport ? 100 : 0 },
+    { key: 'radiology', progress: 0 }
+  ]) : 0;
+
   const isMobile = useIsMobile();
 
   if (!user) return null;
@@ -152,6 +180,9 @@ export default function DashboardPage() {
         mfrResult={mfrResult}
         restoreMatchSession={restoreMatchSession}
         router={router}
+        hasResumableProspectDraft={hasResumableProspectDraft}
+        prospectDraftName={prospectForm.name}
+        prospectDraftConfidence={prospectDraftConfidence}
       />
     );
   }
@@ -294,6 +325,34 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Resume banner — a named prospect with no completed match yet is an
+            active, unfinished draft. Clicking through lands back on the exact
+            step/category add-prospect/page.js's own wizard-position draft
+            resumes to. */}
+        {hasResumableProspectDraft && (
+          <button
+            onClick={() => router.push('/add-prospect')}
+            className="w-full flex items-center gap-3 rounded-2xl border p-4 mb-5 text-left transition-colors duration-150 hover:bg-black/2"
+            style={{ borderColor: 'var(--teal)', background: 'var(--soft-teal)' }}
+          >
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: 'var(--teal)' }}
+            >
+              <Clock className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Continue Your Last Draft</p>
+              <p className="text-xs truncate" style={{ color: 'var(--teal-d)' }}>
+                Prospect: {prospectForm.name} · {prospectDraftConfidence}% Complete
+              </p>
+            </div>
+            <span className="flex items-center gap-1 text-xs font-semibold shrink-0" style={{ color: 'var(--teal-d)' }}>
+              Continue <ChevronRight className="w-3.5 h-3.5" />
+            </span>
+          </button>
+        )}
 
         {/* Recent Activity — height-capped so history never pushes the page down */}
         <div className="rounded-2xl border overflow-hidden mb-5" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>

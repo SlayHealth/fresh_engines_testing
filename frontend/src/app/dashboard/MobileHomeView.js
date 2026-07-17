@@ -20,7 +20,10 @@ export default function MobileHomeView({
   scansLeft,
   chatsLeft,
   restoreMatchSession,
-  router
+  router,
+  hasResumableProspectDraft,
+  prospectDraftName,
+  prospectDraftConfidence
 }) {
   const sections = toMobileSections(healthProfileCategories);
   const weighted = weightedSections(sections);
@@ -100,6 +103,23 @@ export default function MobileHomeView({
             </button>
           )}
         </section>
+
+        {/* Resume banner — a named prospect with no completed match yet is an
+            active, unfinished draft. Clicking through lands back on the exact
+            step/category add-prospect/page.js's own wizard-position draft
+            resumes to. */}
+        {hasResumableProspectDraft && (
+          <button className="recent card" onClick={() => router.push('/add-prospect')} style={{ marginBottom: 14 }}>
+            <div className="nx-i" style={{ background: 'var(--t-teal)', color: 'var(--h-teal)' }}>
+              <Ico name="clock" />
+            </div>
+            <span className="r-t">
+              <b className="serif">Continue Your Last Draft</b>
+              <span className="r-m">Prospect: {prospectDraftName} · {prospectDraftConfidence}% Complete</span>
+            </span>
+            <Ico name="chev" className="chevron" />
+          </button>
+        )}
 
         {/* brand band: the money action */}
         <section className="match grain rise" style={{ animationDelay: '.12s' }}>
