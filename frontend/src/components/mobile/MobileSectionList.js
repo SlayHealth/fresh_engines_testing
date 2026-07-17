@@ -7,18 +7,33 @@ import MobileMiniRing from './MobileMiniRing';
 // One list row, ported from the mockup's renderList(). `section` shape:
 // { id, title, sub, weight, pct, duration, icon, tone, state, price, tests }
 // state ∈ 'progress' | 'todo' | 'locked' | 'soon'.
+//
+// `s.tone` is the section's own brand-identity hue (pink for About You, teal
+// for Lifestyle, etc.) — used for the icon tile, where it correctly answers
+// "which section is this." The completion ring/bar answer a different
+// question ("how done is it") and previously reused that same tone, so a
+// fully-completed About You card kept showing a magenta/red ring and
+// checkmark — reading as an error state rather than success. `statusTone`
+// maps completion, not section identity: amber while in progress, green
+// once done ('todo'/0% never reaches either — RowEnd renders a neutral
+// "Start" pill instead of a ring for that state).
+function statusToneFor(pct) {
+  return pct >= 100 ? 'moss' : 'gold';
+}
+
 function RowEnd({ s }) {
   if (s.state === 'locked') return <span className="pill pill-out"><Ico name="lock" sm /> Locked</span>;
   if (s.state === 'soon') return <span className="pill pill-ghost">Notify me</span>;
-  if (s.pct > 0) return <MobileMiniRing pct={s.pct} tone={s.tone} answered={s.answered} total={s.total} />;
+  if (s.pct > 0) return <MobileMiniRing pct={s.pct} tone={statusToneFor(s.pct)} answered={s.answered} total={s.total} />;
   return <span className="pill pill-out">Start</span>;
 }
 
 function Item({ s, onOpen, onUnlock, compact }) {
   const [open, setOpen] = useState(false);
   const disabled = s.state === 'soon';
+  const statusVar = s.pct > 0 ? `var(--h-${statusToneFor(s.pct)})` : 'var(--line)';
   return (
-    <li className={`item ${s.state === 'soon' ? 'soon' : ''}`} style={{ '--tint': `var(--t-${s.tone})`, '--hue': `var(--h-${s.tone})` }}>
+    <li className={`item ${s.state === 'soon' ? 'soon' : ''}`} style={{ '--tint': `var(--t-${s.tone})`, '--hue': `var(--h-${s.tone})`, '--status': statusVar }}>
       <button className="row" onClick={() => !disabled && onOpen?.(s)} disabled={disabled} style={{ cursor: disabled ? 'default' : 'pointer' }}>
         <span className="tile"><Ico name={s.icon} /></span>
         <span className="r-main">
