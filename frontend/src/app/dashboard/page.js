@@ -68,11 +68,7 @@ export default function DashboardPage() {
     needsNameStep: !!(onboardingForm.userRelation && onboardingForm.userRelation !== 'Self')
   };
 
-  // Mental Wellbeing sits last (before Genomics) rather than beside About/
-  // Lifestyle/Pathology — it's deferred/optional, not part of the core "get
-  // your first match" path, and this ordering de-emphasizes it as such
-  // without hiding it (every category always renders, see below).
-  const selfAboutCounts = aboutCounts(selfAdapter, prospectForm);
+  const selfAboutCounts = aboutCounts(selfAdapter);
   const selfLifestyleCounts = lifestyleCounts(onboardingForm);
   const rawSelfMentalCounts = mentalCounts(selfMentalAnswers);
 
@@ -94,7 +90,7 @@ export default function DashboardPage() {
   const healthProfileCategories = [
     {
       key: 'about', label: 'About You', desc: 'Basics, body & relationship context', icon: UserRound,
-      progress: aboutProgress(selfAdapter, prospectForm), answered: selfAboutCounts.answered, total: selfAboutCounts.total, required: true
+      progress: aboutProgress(selfAdapter), answered: selfAboutCounts.answered, total: selfAboutCounts.total, required: true
     },
     {
       key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,

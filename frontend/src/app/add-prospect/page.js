@@ -1246,7 +1246,7 @@ function AddProspectPageInner() {
 
   // ---- Category step builders (person-agnostic; take a form/setForm pair) ----
   const buildAboutSteps = (adapter, advance) => {
-    const { form, setForm, nameField, genderField, dobField, cityField, isSelfPerson, needsNameStep } = adapter;
+    const { form, setForm, nameField, genderField, dobField, cityField, needsNameStep } = adapter;
     const set = (patch) => setForm({ ...form, ...patch });
     const arr = [];
 
@@ -1262,17 +1262,6 @@ function AddProspectPageInner() {
     arr.push(measurementStep('Height', 'height', form.height, (v) => set({ height: v })));
     arr.push(measurementStep('Weight', 'weight', form.weight, (v) => set({ weight: v })));
     arr.push(measurementStep('Waist', 'waist', form.waist, (v) => set({ waist: v })));
-
-    if (isSelfPerson) {
-      arr.push(choiceStep('How did you meet?', MEETING_SOURCES, prospectForm.meetingSource, (v) => setProspectForm({
-        ...prospectForm,
-        meetingSource: v,
-        platformName: v !== 'Matrimonial Platform' ? '' : prospectForm.platformName
-      })));
-      if (prospectForm.meetingSource === 'Matrimonial Platform') {
-        arr.push(choiceStep('Which platform?', MATRIMONIAL_PLATFORMS, prospectForm.platformName, (v) => setProspectForm({ ...prospectForm, platformName: v })));
-      }
-    }
 
     return finalizeSteps(arr, advance);
   };
@@ -1476,6 +1465,19 @@ function AddProspectPageInner() {
     routingSteps.push(choiceStep('How will your prospect share their details?', PROSPECT_MODE_OPTIONS, prospectMode, (v) => setProspectMode(v)));
     if (prospectMode) {
       routingSteps.push(fieldStep("What's your prospect's name?", prospectForm.name, (v) => setProspectForm({ ...prospectForm, name: v }), { placeholder: 'Enter their name' }));
+      // Previously asked inside the self person's own "About You" section —
+      // which runs before any prospect exists at all (a user just exploring,
+      // or without a partner yet, would still be asked "how did you meet"
+      // someone they haven't named). Now that a specific prospect is named,
+      // asking about the two of you together has an actual referent.
+      routingSteps.push(choiceStep('How did you meet?', MEETING_SOURCES, prospectForm.meetingSource, (v) => setProspectForm({
+        ...prospectForm,
+        meetingSource: v,
+        platformName: v !== 'Matrimonial Platform' ? '' : prospectForm.platformName
+      })));
+      if (prospectForm.meetingSource === 'Matrimonial Platform') {
+        routingSteps.push(choiceStep('Which platform?', MATRIMONIAL_PLATFORMS, prospectForm.platformName, (v) => setProspectForm({ ...prospectForm, platformName: v })));
+      }
     }
     if (prospectMode === 'invite') {
       routingSteps.push({

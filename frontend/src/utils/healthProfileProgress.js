@@ -35,17 +35,16 @@ export function computeConfidence(categories) {
 // surfaced separately so the UI can show a concrete "4 of 6" instead of (or
 // alongside) an abstract percent. Each *Progress function is a thin wrapper
 // so the count and the percent can never drift apart.
-export function aboutCounts(adapter, prospectForm) {
-  const { form, nameField, genderField, dobField, cityField, isSelfPerson, needsNameStep } = adapter;
+export function aboutCounts(adapter) {
+  const { form, nameField, genderField, dobField, cityField, needsNameStep } = adapter;
   const fields = [form[genderField], form[dobField], form[cityField], form.height, form.weight, form.waist];
   if (needsNameStep) fields.push(form[nameField]);
-  if (isSelfPerson) fields.push(prospectForm?.meetingSource);
   const answered = fields.filter((f) => f !== undefined && f !== null && f !== '').length;
   return { answered, total: fields.length };
 }
 
-export function aboutProgress(adapter, prospectForm) {
-  const { answered, total } = aboutCounts(adapter, prospectForm);
+export function aboutProgress(adapter) {
+  const { answered, total } = aboutCounts(adapter);
   return total > 0 ? Math.round((answered / total) * 100) : 0;
 }
 
