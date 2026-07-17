@@ -489,11 +489,22 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
       waist: classifyWaist(isInviterMale ? prospect.waist : inviter.waist, 'female')
     };
 
+    // Not currently drinking covers both 'Never' and 'Quit' — someone who has
+    // stopped isn't a current user, same reasoning as LIFESTYLE_LRS.alcohol's
+    // 'Quit' entry in chronic.controller.js.
+    const notCurrentlyDrinking = (habit) => habit === 'Never' || habit === 'Quit';
+
     const sharedLifestyle = {
       diet: inviter.drinking_habits === 'Never' && prospect.drinking_habits === 'Never' ? 'Healthy' : 'Mixed',
       activity: inviter.activity_level === 'Sedentary' || prospect.activity_level === 'Sedentary' ? 'Sedentary' : 'Active',
       smoking: inviter.smoking_habits === 'never' && prospect.smoking_habits === 'never' ? 'Never' : 'Occasional',
-      drinking: inviter.drinking_habits === 'Never' && prospect.drinking_habits === 'Never' ? 'Never' : 'Occasional',
+      // Key renamed from 'drinking' to 'alcohol' — chronic.controller.js's
+      // getEffectiveLifestyleLR reads shared_lifestyle_data?.alcohol
+      // specifically; the old 'drinking' key was never read at all, so this
+      // fallback value never reached scoring regardless of either partner's
+      // real answer. Value also updated from the now-dead 'Occasional'
+      // (no longer a key in LIFESTYLE_LRS.alcohol) to 'Occasionally'.
+      alcohol: notCurrentlyDrinking(inviter.drinking_habits) && notCurrentlyDrinking(prospect.drinking_habits) ? 'Never' : 'Occasionally',
       sleep: inviter.sleep_cycle === 'irregular' || prospect.sleep_cycle === 'irregular' ? 'Irregular' : 'Normal',
       stress: 'Moderate'
     };
@@ -544,7 +555,7 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
           smoke: sharedLifestyle.smoking === 'Never' ? 0 : 0.5,
           bmi: isInviterMale ? (maleBmi > 25 ? 0.5 : 0) : (femaleBmi > 25 ? 0.5 : 0),
           act: sharedLifestyle.activity === 'Sedentary' ? 0.5 : 0,
-          alc: sharedLifestyle.drinking === 'Never' ? 0 : 0.5,
+          alc: sharedLifestyle.alcohol === 'Never' ? 0 : 0.5,
           stress: 0.2,
           freq: 0.92,
           lifestyle_index: 85

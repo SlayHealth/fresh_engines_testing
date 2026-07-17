@@ -222,7 +222,7 @@ export const TRUST_MESSAGES_BY_QUESTION = {
   ],
   'Alcohol Drinking Habits': [
     "{name}, drinking habits matter for liver markers and a few other things we'll be checking.",
-    "No judgment here, {name} — we've seen 'socially' mean everything from one glass to Fridays that start on Wednesday."
+    "No judgment here, {name} — we've seen 'occasionally' mean everything from one glass to Fridays that start on Wednesday."
   ],
   'Smoking Habits': [
     "{name}, this affects cardiovascular and respiratory risk more than almost anything else we ask.",

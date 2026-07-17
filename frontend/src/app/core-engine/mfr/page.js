@@ -377,7 +377,10 @@ export default function MfrEnginePage() {
   const pBmi = prospectBmi;
   if (uBmi > 25 || pBmi > 25) suggestions.push("Optimise body weight/BMI");
   if (user.activity_level === 'Sedentary' || prospectForm.activity_level === 'Sedentary') suggestions.push("Increase physical activity");
-  if (user.drinking_habits !== 'Never' || prospectForm.drinking_habits !== 'Never') suggestions.push("Reduce alcohol intake");
+  // 'Quit' shouldn't trigger a "reduce" suggestion alongside 'Never' — someone
+  // who has already stopped drinking isn't a current consumer either.
+  const currentlyDrinks = (habit) => habit && habit !== 'Never' && habit !== 'Quit';
+  if (currentlyDrinks(user.drinking_habits) || currentlyDrinks(prospectForm.drinking_habits)) suggestions.push("Reduce alcohol intake");
   suggestions.push("Increase intercourse frequency");
 
   const hasOptimisation = suggestions.length > 0;

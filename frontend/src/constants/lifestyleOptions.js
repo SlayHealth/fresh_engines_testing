@@ -1,6 +1,6 @@
 import {
   Coffee, Footprints, Zap, Trophy,
-  WineOff, Martini, Beer, BottleWine,
+  WineOff, Martini, Beer, Ban,
   CigaretteOff, Cigarette, Package,
   Sunrise, MoonStar, Shuffle, Eye,
   CalendarCheck, CalendarX, CalendarOff,
@@ -55,11 +55,17 @@ export const FAMILY_HISTORY_DIABETES = [
   { val: 'Both', label: 'Both parents', desc: 'Both parents diagnosed with diabetes', icon: Users }
 ];
 
+// `val`s here are the literal keys backend/src/controllers/chronic.controller.js's
+// LIFESTYLE_LRS.alcohol map looks up directly (getEffectiveLifestyleLR) — the two
+// previously drifted (this list used to read 'socially'/'regularly'/'heavily',
+// which never matched that map's 'Occasional'/'Regular' keys at all, silently
+// scoring every non-abstinent answer as risk-neutral). Keep both sides in sync
+// if this list ever changes.
 export const LIFESTYLE_DRINKING = [
   { val: 'Never', label: 'Never', desc: 'No alcohol consumption at all', icon: WineOff },
-  { val: 'socially', label: 'Socially', desc: 'Occasional drinks with company, roughly 1-2 times a month', icon: Martini },
-  { val: 'regularly', label: 'Regularly', desc: 'Regular drinking, roughly 2-3 times a week', icon: iconCluster(Beer, 2) },
-  { val: 'heavily', label: 'Heavily', desc: 'Frequent or binge drinking, 4 or more times a week', icon: BottleWine }
+  { val: 'Quit', label: 'Previously, but quit', desc: 'Used to drink, but have stopped entirely', icon: Ban },
+  { val: 'Occasionally', label: 'Occasionally', desc: 'Occasional drinks with company, roughly 1-2 times a month', icon: Martini },
+  { val: 'Frequently', label: 'Frequently', desc: 'Regular or frequent drinking, 2 or more times a week', icon: iconCluster(Beer, 2) }
 ];
 
 // Smoking and (smokeless) tobacco use — chewing tobacco, gutka, paan masala — asked as one

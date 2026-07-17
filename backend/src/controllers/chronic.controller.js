@@ -38,10 +38,32 @@ function shrinkCorrelatedLRs(lrs, exponent) {
   return max * Math.pow(product / max, exponent);
 }
 
+// NOTE: `smoking` and `sleep` below have the same class of bug `alcohol` had
+// until this fix — their keys ('Regular'/'Occasional'/'Never',
+// 'Night owl'/'Irregular'/'Early bird') don't match the actual frontend
+// option values (frontend/src/constants/lifestyleOptions.js's LIFESTYLE_SMOKING_TOBACCO
+// uses 'never'/'occasion'/'regular'/'chain'; LIFESTYLE_SLEEP uses 'Early Bird'/
+// 'night owl'/'irregular'/'insomniac') — every lookup below silently falls
+// through to the neutral `|| 1.0` default (see getEffectiveLifestyleLR), so
+// smoking/sleep habits currently contribute nothing to chronic risk scoring
+// regardless of what a user actually answers. Flagged here, not fixed here —
+// out of scope for the alcohol-specific fix this comment sits next to.
 const LIFESTYLE_LRS = {
   diet: { Poor: 1.3, Mixed: 1.15, Healthy: 1.0 },
   smoking: { Regular: 1.5, Occasional: 1.25, Never: 1.0 },
-  alcohol: { Regular: 1.2, Occasional: 1.1, Never: 1.0 },
+  // Keys match LIFESTYLE_DRINKING's `val`s exactly (frontend/src/constants/
+  // lifestyleOptions.js) — previously 'Regular'/'Occasional' here could never
+  // match the frontend's actual 'socially'/'regularly'/'heavily' values, so
+  // every non-abstinent answer silently scored as risk-neutral (1.0, same as
+  // Never). `Quit` ("Previously, but quit") is intentionally also 1.0, not a
+  // separate penalized tier: the person isn't currently consuming, so the
+  // forward-looking behavioral risk this factor models doesn't apply: any
+  // organ-level residual damage from past drinking is already captured
+  // directly by the pathology panel's own liver-enzyme scoring rather than
+  // inferred a second time here from a self-report category, and there's no
+  // validated, citable time-decay curve for "risk since quitting" to apply
+  // instead of just guessing one.
+  alcohol: { Frequently: 1.2, Occasionally: 1.1, Quit: 1.0, Never: 1.0 },
   sleep: { 'Night owl': 1.2, Irregular: 1.1, 'Early bird': 1.0 },
   stress: { High: 1.2, Moderate: 1.1, Normal: 1.0 }
 };
@@ -534,5 +556,11 @@ Respond ONLY with JSON matching the schema: { "conversation_needed_summary": "..
 }
 
 module.exports = {
-  analyzeChronic
+  analyzeChronic,
+  // Exported for direct unit testing (see __tests__/lifestyle-lr-mapping.test.js)
+  // rather than only reachable through the full analyzeChronic req/res flow —
+  // this is exactly the surface where the alcohol val<->key mismatch bug lived
+  // undetected, since nothing exercised getEffectiveLifestyleLR directly.
+  LIFESTYLE_LRS,
+  getEffectiveLifestyleLR
 };
