@@ -63,6 +63,32 @@ function loadRadiologyDraft() {
   return cachedRadiologyDraft;
 }
 
+// The actual form/report/mental-answer *data* already survives a reload via
+// CompatibilityContext's own draft (onboardingForm/prospectForm/etc.) and
+// loadRadiologyDraft above — but *where in the wizard* the user was (which
+// person, which category, mid-routing-flow choosing self-entry vs. invite,
+// which step) is separate, purely-local component state that reset to its
+// defaults on every fresh mount. A user who hit Back (or just reloaded) after
+// starting a prospect had their answers intact but no way to tell — landing
+// back on their own already-complete hub with no visible trace they'd been
+// partway into adding a prospect. Same draft pattern as radiology above.
+let cachedWizardPositionDraft;
+
+function wizardPositionDraftKey() {
+  return `slayhealth_prospect_wizard_position_${getStoredUserId() || 'anon'}`;
+}
+
+function loadWizardPositionDraft() {
+  if (cachedWizardPositionDraft !== undefined) return cachedWizardPositionDraft;
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(wizardPositionDraftKey()) : null;
+    cachedWizardPositionDraft = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    cachedWizardPositionDraft = null;
+  }
+  return cachedWizardPositionDraft;
+}
+
 const PROSPECT_MODE_OPTIONS = [
   { val: 'self', label: "I'll enter their details myself", desc: 'Fill in your prospect’s information right now' },
   { val: 'invite', label: 'Generate a link to send them', desc: "They fill in their own details — you copy and send the link yourself" }
@@ -136,11 +162,11 @@ function AddProspectPageInner() {
   // Whether the paid Radiology engine has been unlocked for this session. There's no
   // payment gateway wired up yet — this just tracks the demo "Unlock" click from the hub.
   const [radiologyUnlocked, setRadiologyUnlocked] = useState(false);
-  const [activePerson, setActivePerson] = useState('self'); // 'self' | 'prospect'
-  const [activeCategory, setActiveCategory] = useState(null); // null = hub view
-  const [showRouting, setShowRouting] = useState(false); // the "how will your prospect share" transition screen
+  const [activePerson, setActivePerson] = useState(() => loadWizardPositionDraft()?.activePerson || 'self'); // 'self' | 'prospect'
+  const [activeCategory, setActiveCategory] = useState(() => loadWizardPositionDraft()?.activeCategory || null); // null = hub view
+  const [showRouting, setShowRouting] = useState(() => loadWizardPositionDraft()?.showRouting || false); // the "how will your prospect share" transition screen
 
-  const [prospectMode, setProspectMode] = useState(null); // 'self' | 'invite' | null
+  const [prospectMode, setProspectMode] = useState(() => loadWizardPositionDraft()?.prospectMode || null); // 'self' | 'invite' | null
   const [activeInvite, setActiveInvite] = useState(null);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [inviteError, setInviteError] = useState(null);
@@ -154,9 +180,9 @@ function AddProspectPageInner() {
   const [isRunningMatch, setIsRunningMatch] = useState(false);
   const [matchRunError, setMatchRunError] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0); // index within the active category / routing sub-flow
+  const [stepIndex, setStepIndex] = useState(() => loadWizardPositionDraft()?.stepIndex || 0); // index within the active category / routing sub-flow
   const [cameFromDeepLink, setCameFromDeepLink] = useState(false); // entered directly from a Dashboard health-profile card
-  const [activeMentalSubcategory, setActiveMentalSubcategory] = useState(null); // null = show the mental sub-hub cards
+  const [activeMentalSubcategory, setActiveMentalSubcategory] = useState(() => loadWizardPositionDraft()?.activeMentalSubcategory || null); // null = show the mental sub-hub cards
   const isMobile = useIsMobile();
 
   const fillByProspect = prospectMode === 'invite';
@@ -222,6 +248,23 @@ function AddProspectPageInner() {
       // Storage full/unavailable — draft persistence is best-effort only.
     }
   }, [userRadiology, prospectRadiology]);
+
+  // Mirrors wizard *position* into localStorage on every change (see
+  // loadWizardPositionDraft above) — so an accidental Back, a reload, or the
+  // phone backgrounding the tab mid-flow lands the user back exactly where
+  // they left off instead of their own already-complete hub with no visible
+  // sign they'd started adding a prospect. selfEntryConsentConfirmed is
+  // deliberately not included — that's an explicit trust/consent gate and
+  // should require a fresh confirmation, not silently carry over a session gap.
+  useEffect(() => {
+    try {
+      localStorage.setItem(wizardPositionDraftKey(), JSON.stringify({
+        activePerson, activeCategory, showRouting, prospectMode, stepIndex, activeMentalSubcategory
+      }));
+    } catch (e) {
+      // Storage full/unavailable — draft persistence is best-effort only.
+    }
+  }, [activePerson, activeCategory, showRouting, prospectMode, stepIndex, activeMentalSubcategory]);
 
   // Refs
   const userFileInputRef = useRef(null);
