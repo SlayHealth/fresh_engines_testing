@@ -1393,7 +1393,7 @@ function AddProspectPageInner() {
       // category list. It's still optional in behaviour (never gates match
       // creation); this is display order only.
       {
-        key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
+        key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 27 quick questions', icon: Brain,
         progress: hasMentalEvidence ? 100 : (isSelfTurn ? mentalProgress(selfMentalAnswers) : mentalProgress(prospectMentalAnswers)),
         answered: mentalC.answered, total: mentalC.total
       },

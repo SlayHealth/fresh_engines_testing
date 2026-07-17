@@ -101,7 +101,7 @@ export default function DashboardPage() {
     // Order mirrors the mockup (Mental sits third). It stays optional in behaviour —
     // it never gates match creation — the position here is display only.
     {
-      key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
+      key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 27 quick questions', icon: Brain,
       progress: hasMentalEvidence ? 100 : mentalProgress(selfMentalAnswers), answered: selfMentalCounts.answered, total: selfMentalCounts.total
     },
     {

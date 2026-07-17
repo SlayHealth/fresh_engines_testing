@@ -1,6 +1,6 @@
 export const ABOUT_LIFESTYLE_FIELDS = ['activity_level', 'drinking_habits', 'smoking_habits', 'sleep_cycle'];
 
-export const MENTAL_QUESTION_COUNT = 21;
+export const MENTAL_QUESTION_COUNT = 27;
 
 // How much each section moves the needle on the overall analysis, shown to users as
 // "The Full Picture" so filling in a section has a visible, motivating payoff. Roughly

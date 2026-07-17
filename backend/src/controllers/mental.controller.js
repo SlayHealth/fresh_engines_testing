@@ -23,20 +23,52 @@ const scaleAgreeablenessConscientiousness = (val) => {
 // Helper to get average
 const average = (arr) => arr.reduce((p, c) => p + c, 0) / arr.length;
 
-// All 21 questions the mental-health survey asks. Every answer below has an
-// `|| 4` (or `|| 'Secure'`/`|| 'Low'`) fallback purely so the *math* doesn't throw
-// on a missing key — that fallback must never be reached for a real submission.
-// This list is how we tell "a real, fully-answered survey" apart from "an empty or
-// partial one that would otherwise silently score as if everyone answered
-// positively across the board".
+// v2.0 (see contexts/mental_health_engine_update.md): preference items (life
+// goals / family & parenting) aren't "higher = healthier" — someone who is
+// firmly career-first and someone who firmly isn't are both making a clear,
+// legitimate choice. What predicts friction is not having settled on a stance
+// at all. clarity() scores distance from the undecided midpoint (3), so a
+// confident 1 or 5 both score 100 and the genuine "still figuring it out"
+// middle scores 0 — direction is left entirely to the couple-agreement |A-B|
+// diff, not baked into individual quality.
+const clarity = (val) => {
+  const v = parseFloat(val ?? 3);
+  if (isNaN(v)) return 0;
+  return Math.max(0, Math.min(100, (Math.abs(v - 3) / 2) * 100));
+};
+
+// All 27 questions the mental-health survey asks. Every answer below has an
+// `|| 4` (or `|| 3` for the six dimensional attachment items, or `|| 'Low'`)
+// fallback purely so the *math* doesn't throw on a missing key — that
+// fallback must never be reached for a real submission. This list is how we
+// tell "a real, fully-answered survey" apart from "an empty or partial one
+// that would otherwise silently score as if everyone answered positively
+// across the board".
 const REQUIRED_MENTAL_FIELDS = [
   'emotional_wellbeing', 'stress_worry', 'life_stress_capacity',
   'personality_openness', 'personality_conscientiousness', 'personality_extraversion', 'personality_agreeableness', 'personality_stability',
-  'attachment_style',
+  'attachment_anxiety_1', 'attachment_anxiety_2', 'attachment_anxiety_3',
+  'attachment_avoidance_1', 'attachment_avoidance_2', 'attachment_avoidance_3',
   'readiness_communication', 'readiness_conflict', 'readiness_trust', 'readiness_commitment', 'readiness_support',
-  'career_alignment', 'financial_alignment', 'lifestyle_alignment',
+  'career_alignment', 'relocation_openness', 'financial_alignment', 'lifestyle_alignment',
   'family_expectations', 'parenting_alignment',
   'substance_concern', 'anger_regulation'
+];
+
+// The couple-agreement field set (§2.5) — every 1-5 Likert item EXCEPT the 6
+// attachment items, which are compared via attachmentCompatibility's
+// dimensional model instead of a raw |A-B| (see computeMentalResult). Pulled
+// out as its own top-level constant (rather than inlined in the function) so
+// its exact membership/count is directly testable — this is exactly the field
+// whose length going wrong (19 or 21 instead of 20) would silently mis-weight
+// every couple's agreement score.
+const NUMERIC_AGREEMENT_FIELDS = [
+  'emotional_wellbeing', 'stress_worry', 'life_stress_capacity',
+  'personality_openness', 'personality_conscientiousness', 'personality_extraversion', 'personality_agreeableness', 'personality_stability',
+  'readiness_communication', 'readiness_conflict', 'readiness_trust', 'readiness_commitment', 'readiness_support',
+  'career_alignment', 'relocation_openness', 'financial_alignment', 'lifestyle_alignment',
+  'family_expectations', 'parenting_alignment',
+  'anger_regulation'
 ];
 
 function isMentalQuestionnaireComplete(answers) {
@@ -98,52 +130,81 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   // ────────────────────────────────────────────────────────
   // PILLAR 2: Personality & Attachment (20%)
   // ────────────────────────────────────────────────────────
-  // Big Five comparison + Attachment styles
+  // Big Five comparison + Attachment (dimensional, v2.0)
   // WS1C02: openness/extraversion dropped from this per-partner QUALITY average —
   // the research doc this app itself cites (Malouff et al. 2010) finds no robust
   // link from either trait to marital satisfaction, so scoring "more of the trait"
   // as "healthier" here wasn't supported. Both remain in the couple-AGREEMENT
   // index below (fieldsToCompare) unaffected — comparing how similarly two
   // partners answered is a different question than scoring one answer "better."
-  const b5A = {
+  const traitQualityA = average([
+    scaleAgreeablenessConscientiousness(pA.personality_conscientiousness || 4),
+    scaleAgreeablenessConscientiousness(pA.personality_agreeableness || 4),
+    scaleTo100(pA.personality_stability || 4)
+  ]);
+  const traitQualityB = average([
+    scaleAgreeablenessConscientiousness(pB.personality_conscientiousness || 4),
+    scaleAgreeablenessConscientiousness(pB.personality_agreeableness || 4),
+    scaleTo100(pB.personality_stability || 4)
+  ]);
+  const traitsA = {
     conscientiousness: scaleAgreeablenessConscientiousness(pA.personality_conscientiousness || 4),
     agreeableness: scaleAgreeablenessConscientiousness(pA.personality_agreeableness || 4),
     stability: scaleTo100(pA.personality_stability || 4)
   };
-  const b5B = {
+  const traitsB = {
     conscientiousness: scaleAgreeablenessConscientiousness(pB.personality_conscientiousness || 4),
     agreeableness: scaleAgreeablenessConscientiousness(pB.personality_agreeableness || 4),
     stability: scaleTo100(pB.personality_stability || 4)
   };
 
-  const b5AvgA = average(Object.values(b5A));
-  const b5AvgB = average(Object.values(b5B));
+  // v2.0: the old single forced Secure/Anxious/Avoidant/Disorganized attachment
+  // pick is replaced entirely by 6 indirect agree/disagree items scored as two
+  // continuous dimensions (Experiences in Close Relationships-style: anxiety,
+  // avoidance), per the psychologist review — a forced category couldn't tell a
+  // mildly anxious partner from a severely anxious one, and collapsed two
+  // independent axes into one label.
+  //
+  // A missing item defaults to the scale midpoint (3), never to 1 ("not like me
+  // at all" — the most SECURE-reading answer) — an unanswered question must never
+  // score as if it were the best possible case.
+  const anxietyA = scaleTo100(average([pA.attachment_anxiety_1 || 3, pA.attachment_anxiety_2 || 3, pA.attachment_anxiety_3 || 3]));
+  const avoidanceA = scaleTo100(average([pA.attachment_avoidance_1 || 3, pA.attachment_avoidance_2 || 3, pA.attachment_avoidance_3 || 3]));
+  const insecurityA = (anxietyA + avoidanceA) / 2;
+  const securityA = 100 - insecurityA; // per-partner attachment quality, used in the personality pillar below
 
-  // Attachment compatibility scoring
-  // WS1C06: a missing attachment_style previously defaulted to 'Secure' (the
-  // best-case tier), so an unanswered question silently scored as a fully secure
-  // pairing. Defaulting to null (a value that can never equal 'Secure') routes a
-  // missing style through the same pessimistic else-branch below that already
-  // handles a genuinely mismatched/unrecognized style, instead of rewarding an
-  // unknown with the healthiest read.
-  const styleA = pA.attachment_style || null;
-  const styleB = pB.attachment_style || null;
-  let attachmentCompatibility = 80;
-  let attachmentInsight = '';
+  const anxietyB = scaleTo100(average([pB.attachment_anxiety_1 || 3, pB.attachment_anxiety_2 || 3, pB.attachment_anxiety_3 || 3]));
+  const avoidanceB = scaleTo100(average([pB.attachment_avoidance_1 || 3, pB.attachment_avoidance_2 || 3, pB.attachment_avoidance_3 || 3]));
+  const insecurityB = (anxietyB + avoidanceB) / 2;
+  const securityB = 100 - insecurityB;
 
-  if (styleA === 'Secure' && styleB === 'Secure') {
-    attachmentCompatibility = 100;
-    attachmentInsight = 'Secure relationship anchor with mutual emotional safety.';
-  } else if (styleA === 'Secure' || styleB === 'Secure') {
-    attachmentCompatibility = 75;
-    attachmentInsight = 'The secure partner provides a stable foundation to co-regulate relationship concerns.';
+  // Couple-level attachment compatibility: a baseline from mutual security, with
+  // an extra penalty when one partner runs anxious while the other runs
+  // avoidant — the specific "pursue-withdraw" combination that drives friction
+  // more than either trait alone, distinct from two partners who are both
+  // simply somewhat insecure in the same direction.
+  // ATTACHMENT_PURSUE_WITHDRAW_WEIGHT and the anxiety/avoidance mean used above
+  // are tunable starting points (per the spec), kept as named constants rather
+  // than inlined magic numbers so they're easy to retune from real outcome data
+  // later without hunting through the formula.
+  const ATTACHMENT_PURSUE_WITHDRAW_WEIGHT = 0.25;
+  const baseSecurity = 100 - (insecurityA + insecurityB) / 2;
+  const pursueWithdraw = Math.max(anxietyA * avoidanceB, anxietyB * avoidanceA) / 100;
+  const attachmentCompatibility = Math.max(0, Math.min(100, baseSecurity - ATTACHMENT_PURSUE_WITHDRAW_WEIGHT * pursueWithdraw));
+
+  let attachmentInsight;
+  if (pursueWithdraw >= 50) {
+    attachmentInsight = 'A pursue-withdraw pattern shows up here — one partner tends to seek closeness or reassurance while the other tends to create distance under stress. Naming this dynamic out loud, with explicit reassurance on one side and agreed space-with-a-return-plan on the other, tends to help.';
+  } else if (baseSecurity >= 75) {
+    attachmentInsight = 'Both partners lean secure — comfortable with closeness and able to self-regulate, which gives the relationship a stable emotional foundation.';
+  } else if (baseSecurity >= 55) {
+    attachmentInsight = 'A mostly secure attachment dynamic overall, with some room to build consistency and reassurance.';
   } else {
-    attachmentCompatibility = 50;
-    attachmentInsight = 'Complementary attachment dynamics; potential pursue-withdraw patterns. Focus on building emotional reassurance.';
+    attachmentInsight = 'Elevated attachment insecurity on one or both sides. Open conversation about the need for closeness versus space — rather than assuming it — tends to reduce friction here.';
   }
 
-  const personalityScoreA = b5AvgA * 0.6 + attachmentCompatibility * 0.4;
-  const personalityScoreB = b5AvgB * 0.6 + attachmentCompatibility * 0.4;
+  const personalityScoreA = traitQualityA * 0.5 + securityA * 0.5;
+  const personalityScoreB = traitQualityB * 0.5 + securityB * 0.5;
 
   // ────────────────────────────────────────────────────────
   // PILLAR 3: Marriage Readiness (25%)
@@ -167,27 +228,41 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   // ────────────────────────────────────────────────────────
   // PILLAR 4: Life & Career Alignment (15%)
   // ────────────────────────────────────────────────────────
+  // v2.0: these are PREFERENCE items, not "more = healthier" items — quality is
+  // scored as clarity() (distance from the undecided midpoint), not scaleTo100().
+  // Using scaleTo100() here would score someone who's genuinely, validly not
+  // career-focused as low-quality, then unfairly cap the couple headline via the
+  // min() in the readiness calc below. relocation_openness is new in v2.0, split
+  // out of the old combined career_alignment item so career focus and
+  // willingness to relocate can be judged (and mismatched) independently.
   const lifeScoreA = average([
-    scaleTo100(pA.career_alignment || 4),
-    scaleTo100(pA.financial_alignment || 4),
-    scaleTo100(pA.lifestyle_alignment || 4)
+    clarity(pA.career_alignment || 3),
+    clarity(pA.relocation_openness || 3),
+    clarity(pA.financial_alignment || 3),
+    clarity(pA.lifestyle_alignment || 3)
   ]);
   const lifeScoreB = average([
-    scaleTo100(pB.career_alignment || 4),
-    scaleTo100(pB.financial_alignment || 4),
-    scaleTo100(pB.lifestyle_alignment || 4)
+    clarity(pB.career_alignment || 3),
+    clarity(pB.relocation_openness || 3),
+    clarity(pB.financial_alignment || 3),
+    clarity(pB.lifestyle_alignment || 3)
   ]);
 
   // ────────────────────────────────────────────────────────
   // PILLAR 5: Family & Parenting Alignment (15%)
   // ────────────────────────────────────────────────────────
+  // v2.0: also preference items — clarity(), not scaleTo100(), for the same
+  // reason as Pillar 4. parenting_alignment now runs on a directional stance
+  // (definitely-no ... definitely-yes) instead of a confusing "certainty of an
+  // undecided position" scale, so a firm "I don't want children" (1) correctly
+  // scores as high-clarity, not as if it were a poorly-answered question.
   const famScoreA = average([
-    scaleTo100(pA.family_expectations || 4),
-    scaleTo100(pA.parenting_alignment || 4)
+    clarity(pA.family_expectations || 3),
+    clarity(pA.parenting_alignment || 3)
   ]);
   const famScoreB = average([
-    scaleTo100(pB.family_expectations || 4),
-    scaleTo100(pB.parenting_alignment || 4)
+    clarity(pB.family_expectations || 3),
+    clarity(pB.parenting_alignment || 3)
   ]);
 
   // ────────────────────────────────────────────────────────
@@ -244,14 +319,16 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   // Couple Alignment index based on absolute differences in answers
   // WS1C05: anger_regulation is numeric (1-5, like every field below) but was
   // deliberately left out of this comparison — added here as one more field.
-  const fieldsToCompare = [
-    'emotional_wellbeing', 'stress_worry', 'life_stress_capacity',
-    'personality_openness', 'personality_conscientiousness', 'personality_extraversion', 'personality_agreeableness', 'personality_stability',
-    'readiness_communication', 'readiness_conflict', 'readiness_trust', 'readiness_commitment', 'readiness_support',
-    'career_alignment', 'financial_alignment', 'lifestyle_alignment',
-    'family_expectations', 'parenting_alignment',
-    'anger_regulation'
-  ];
+  // v2.0: relocation_openness (new item) joins NUMERIC_AGREEMENT_FIELDS above;
+  // the 6 attachment items are deliberately excluded from it — they're compared
+  // via attachmentCompatibility's dimensional model below instead of a raw
+  // |A-B|, since two partners who both answer "3" on every attachment item
+  // aren't actually in agreement about anything meaningful the way two
+  // partners both answering "3" on, say, financial_alignment are. This is
+  // exactly 20 fields (see acceptance check §5.7 in the spec) — 3 emotional +
+  // 5 personality + 5 readiness + 4 life/career + 2 family + 1 anger,
+  // deliberately not 19 or 21.
+  const fieldsToCompare = NUMERIC_AGREEMENT_FIELDS;
   let totalDiff = 0;
   fieldsToCompare.forEach(f => {
     const valA = parseFloat(pA[f] || 4);
@@ -262,19 +339,22 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
   const avgDiff = totalDiff / fieldsToCompare.length;
   const numericAgreementIndex = Math.max(0, 100 - avgDiff * 20);
 
-  // WS1C04/05: attachment_style and substance_concern are categorical, so they can't
-  // join the |A-B| numeric diff above — but excluding them entirely from the headline
-  // meant the single best-replicated relationship predictor in the underlying research
-  // doc (attachment style, per Li & Chan 2012) and a substance-use mismatch both moved
-  // nothing a user sees: an Anxious+Avoidant couple and a Secure+Secure couple with
-  // identical numeric answers both scored compatibilityIndex=100. attachmentCompatibility
-  // (computed above: 100 both-Secure / 75 one-Secure / 50 neither) is already a 0-100
-  // couple-agreement score, used here directly. substanceAgreement is the equivalent
-  // couple-level construct for substance_concern: a linear 0-100 scale over ordinal
-  // distance between tiers (same tier -> 100, adjacent tier -> 50, opposite ends,
-  // e.g. Low vs Elevated -> 0) — unrecognized/missing values rank as 'Elevated' (the
-  // worst tier), matching WS1C06's fail-safe-for-risk-fields policy rather than
-  // silently reading as agreement.
+  // WS1C04/05: attachment and substance_concern can't join the |A-B| numeric
+  // diff above (attachment is now a dimensional model, not a single number;
+  // substance_concern is categorical) — but excluding them entirely from the
+  // headline meant the single best-replicated relationship predictor in the
+  // underlying research doc (attachment style, per Li & Chan 2012) and a
+  // substance-use mismatch both moved nothing a user sees: an anxious+avoidant
+  // couple and a fully-secure couple with identical numeric answers both scored
+  // compatibilityIndex=100. attachmentCompatibility (computed above in Pillar 2,
+  // §2.3 of the spec — mutual security with a pursue-withdraw penalty) is
+  // already a 0-100 couple-agreement score, reused here directly rather than
+  // re-deriving a second attachment number. substanceAgreement is the
+  // equivalent couple-level construct for substance_concern: a linear 0-100
+  // scale over ordinal distance between tiers (same tier -> 100, adjacent tier
+  // -> 50, opposite ends, e.g. Low vs Elevated -> 0) — unrecognized/missing
+  // values rank as 'Elevated' (the worst tier), matching WS1C06's
+  // fail-safe-for-risk-fields policy rather than silently reading as agreement.
   const SUBSTANCE_RANK = { Low: 0, Moderate: 1, Elevated: 2 };
   const MAX_SUBSTANCE_RANK_DIFF = 2;
   const subRankA = SUBSTANCE_RANK[pA.substance_concern] ?? SUBSTANCE_RANK.Elevated;
@@ -322,7 +402,7 @@ async function computeMentalResult(partner_A_answers, partner_B_answers, { cache
         role: "user",
         content: `Please analyze this couple's mental wellbeing and relationship readiness:
 Overall Alignment Label: ${overallLabel} (Compatibility Index: ${compatibilityIndex}/100)
-Attachment Styles: Partner A is ${styleA}, Partner B is ${styleB}
+Attachment Pattern: Partner A anxiety ${Math.round(anxietyA)}/100, avoidance ${Math.round(avoidanceA)}/100; Partner B anxiety ${Math.round(anxietyB)}/100, avoidance ${Math.round(avoidanceB)}/100. Pursue-withdraw dynamic ${pursueWithdraw >= 50 ? 'is present (one partner anxious, the other avoidant)' : 'is not prominent'}.
 Emotional Health Scores: Partner A (${Math.round(emoScoreA)}/100), Partner B (${Math.round(emoScoreB)}/100)
 Marriage Readiness: Partner A (${Math.round(readScoreA)}/100), Partner B (${Math.round(readScoreB)}/100)
 Life & Career Alignment: Partner A (${Math.round(lifeScoreA)}/100), Partner B (${Math.round(lifeScoreB)}/100)
@@ -392,14 +472,14 @@ Generate the JSON response according to the schema: { "strengths": [], "discussi
     individual_profiles: {
       partner_A: {
         emotional_health: emoLabelsA,
-        personality: b5A,
-        attachment_style: styleA,
+        personality: traitsA,
+        attachment: { anxiety: Math.round(anxietyA), avoidance: Math.round(avoidanceA), security: Math.round(securityA) },
         raw_answers: pA
       },
       partner_B: {
         emotional_health: emoLabelsB,
-        personality: b5B,
-        attachment_style: styleB,
+        personality: traitsB,
+        attachment: { anxiety: Math.round(anxietyB), avoidance: Math.round(avoidanceB), security: Math.round(securityB) },
         raw_answers: pB
       }
     },
@@ -420,7 +500,7 @@ async function analyzeMental(req, res, next) {
     if (!isMentalQuestionnaireComplete(partner_A_answers) || !isMentalQuestionnaireComplete(partner_B_answers)) {
       return res.status(400).json({
         success: false,
-        error: 'Complete questionnaire responses (all 21 questions) for both partners are required.'
+        error: 'Complete questionnaire responses (all 27 questions) for both partners are required.'
       });
     }
 
@@ -485,5 +565,10 @@ async function analyzeMental(req, res, next) {
 module.exports = {
   analyzeMental,
   computeMentalResult,
-  isMentalQuestionnaireComplete
+  isMentalQuestionnaireComplete,
+  REQUIRED_MENTAL_FIELDS,
+  NUMERIC_AGREEMENT_FIELDS,
+  scaleTo100,
+  scaleAgreeablenessConscientiousness,
+  clarity
 };

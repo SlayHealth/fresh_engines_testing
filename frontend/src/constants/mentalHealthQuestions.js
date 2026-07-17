@@ -1,19 +1,27 @@
-// Mirrors contexts/mental_health_questions.md — ids match the field names
+// v2.0 (see contexts/mental_health_engine_update.md) — ids match the field names
 // backend/src/controllers/mental.controller.js expects on partner_A_answers/partner_B_answers.
 //
 // Wording is deliberately plain/conversational (not clinical) — this is a
 // self-report survey a normal person fills out mid-onboarding, not a form a
 // doctor reads. Option ORDER must stay worst-to-best (index 0 = val 1) since
-// the scoring engine treats a higher value as healthier/more aligned —
-// rewrite the wording, never the order or the `val`.
+// the scoring engine treats a higher value as more of what's asked, never the
+// reverse — whether more/less/middle is "healthy" is decided in scoring, never
+// shown to the user (this is what lets peaked/preference/clarity scoring work
+// under the hood while the scale itself stays one consistent direction).
+// Rewrite the wording, never the order or the `val`.
 //
 // `category` is a short key into MENTAL_HEALTH_CATEGORIES below, used to
-// group the 21 questions into 5 visible sub-sections with their own
-// progress segment instead of one long flat 1-of-21 counter.
+// group the 27 questions into 5 visible sub-sections with their own
+// progress segment instead of one long flat 1-of-27 counter.
 
 import { Zap, Sparkles, Users, Compass, Wind } from 'lucide-react';
 
 const scale = (labels) => labels.map((label, i) => ({ val: i + 1, label }));
+
+// Shared 5-point agreement scale for the 6 attachment items (indirect,
+// agree/disagree framing rather than a direct "how much anxiety do you feel"
+// question) — same 1..5 direction convention as every other Likert item here.
+const agreementScale = () => scale(['Not like me at all', 'A little like me', 'Somewhat like me', 'Mostly like me', 'Very like me']);
 
 // Five shades, only from the brand's pink and teal — alternating hue with
 // varied depth (bright / bright / deep / deep / light) so all 5 stay
@@ -22,154 +30,189 @@ const scale = (labels) => labels.map((label, i) => ({ val: i + 1, label }));
 // sub-hub's card grid (one card per category, tappable in any order).
 export const MENTAL_HEALTH_CATEGORIES = [
   { key: 'feelings', label: 'Feelings & Energy', desc: 'Your everyday mood, energy & stress', icon: Zap, color: '#18CC96', soft: '#E3F9F0' },
-  { key: 'personality', label: 'Your Personality', desc: 'How you think, socialize & handle change', icon: Sparkles, color: '#DE457D', soft: '#FCE8EF' },
+  { key: 'personality', label: 'Your Personality', desc: 'How you think, bond & handle change', icon: Sparkles, color: '#DE457D', soft: '#FCE8EF' },
   { key: 'together', label: 'Building Together', desc: 'Trust, communication & commitment', icon: Users, color: '#0A6B52', soft: '#DCEEE9' },
   { key: 'lifeGoals', label: 'Life & Family Goals', desc: 'Career, money, family & kids', icon: Compass, color: '#B8305F', soft: '#F5E1E8' },
   { key: 'habits', label: 'Habits & Calm', desc: 'Substance habits & anger control', icon: Wind, color: '#4FD1A5', soft: '#E4FBF3' }
 ];
 
 export const MENTAL_HEALTH_QUESTIONS = [
-  // 1. Feelings & Energy
+  // 1. Feelings & Energy — recency-framed (past two weeks) to reduce the
+  // social-desirability pull of an unbounded "how are you generally" stem.
   {
     id: 'emotional_wellbeing',
     category: 'feelings',
-    title: "How's your everyday energy?",
-    desc: 'Just your usual mood on a normal day — no big events, just regular life.',
-    options: scale(['Pretty low most days', 'Runs out of steam sometimes', 'Feels normal, ups and downs', 'Good energy most days', 'Full of drive, always going'])
+    title: 'Over the past two weeks, how has your energy been on a normal day?',
+    desc: 'Your usual mood on an ordinary day — no big events, just regular life.',
+    options: scale(['Low most days', 'Ran out of steam fairly often', 'Normal — the usual ups and downs', 'Good most days', 'High — full of drive throughout'])
   },
   {
     id: 'stress_worry',
     category: 'feelings',
-    title: 'How do you handle everyday stress?',
-    desc: 'Think normal pressure — deadlines, traffic, small annoyances.',
-    options: scale(['Gets overwhelmed fast', 'Worries a lot, most days', 'Stressed sometimes, manageable', 'Stays pretty calm', 'Rarely rattled, very chill'])
+    title: 'Over the past two weeks, how often did everyday pressure get to you?',
+    desc: 'Normal pressure — deadlines, traffic, small annoyances.',
+    options: scale(['Overwhelmed easily, most days', 'Worried or on edge fairly often', 'Stressed sometimes, but manageable', 'Mostly stayed calm', 'Rarely rattled, very composed'])
   },
   {
     id: 'life_stress_capacity',
     category: 'feelings',
-    title: 'How well do you bounce back from tough stuff?',
+    title: 'When something knocks you off course, how do you usually bounce back?',
     desc: 'Sudden changes, setbacks, or hard times — how do you usually cope?',
-    options: scale(['Gets knocked down easily', 'Struggles when things change', 'Copes okay, takes some time', 'Bounces back pretty well', 'Adapts fast, hard to shake'])
+    options: scale(['Knocked down easily, takes a long while', 'Struggle when things change', 'Cope okay, takes some time', 'Bounce back fairly well', 'Adapt fast, hard to shake'])
   },
-  // 2. Your Personality
+  // 2. Your Personality — 5 trait items (unchanged constructs, reworded for a
+  // clean low->high gradient) + 6 new dimensional attachment items replacing
+  // the old single-choice attachment_style.
   {
     id: 'personality_openness',
     category: 'personality',
-    title: 'Set in your ways, or open to new things?',
-    desc: 'New ideas, new places, switching up your routine — how do you feel about that?',
-    options: scale(['Like sticking to what I know', 'Prefer familiar over new', 'Open to new things sometimes', 'Love trying new stuff', 'Always chasing something new'])
+    title: 'How do you feel about new things — new ideas, places, or changing up your routine?',
+    desc: 'Set in your ways, or open to whatever comes?',
+    options: scale(['Prefer sticking to what I know', 'Lean towards the familiar', 'Open to new things now and then', 'Enjoy trying new things', 'Always seeking something new'])
   },
   {
     id: 'personality_conscientiousness',
     category: 'personality',
-    title: 'Planner, or go-with-the-flow?',
+    title: 'How do you approach planning and organisation?',
     desc: 'Think to-do lists, deadlines, keeping things organized.',
-    options: scale(['Totally spontaneous', 'A bit of both', 'Usually organized', 'Big on planning ahead', 'Everything scheduled, no surprises'])
+    options: scale(['Very spontaneous, little planning', 'A bit of both', 'Usually organised', 'Big on planning ahead', 'Everything scheduled, tightly structured'])
   },
   {
     id: 'personality_extraversion',
     category: 'personality',
-    title: 'Do people energize you, or drain you?',
+    title: 'How do social situations affect you?',
     desc: 'Big groups and socializing vs. quiet time alone — what feels more like you?',
-    options: scale(['Quiet, keep to myself', 'Small groups over big ones', 'A healthy mix of both', 'Love being social', 'The more people, the better'])
+    options: scale(['Prefer quiet, keep to myself', 'Small groups over big ones', 'A mix of both', 'Enjoy being social', 'The more people, the better'])
   },
   {
     id: 'personality_agreeableness',
     category: 'personality',
-    title: 'Go with the flow, or speak your mind?',
-    desc: "When there's disagreement, how do you usually show up?",
-    options: scale(['Blunt, say it like it is', 'Set clear boundaries', 'Usually easy to get along with', 'Warm, like keeping the peace', 'Always put others first'])
+    title: 'In a disagreement, how do you usually show up?',
+    desc: 'The most extreme answer is not automatically the healthiest one here — a strong-but-balanced middle ground is scored highest.',
+    options: scale(["Direct — I say it plainly, even if it stings", 'Firm — I hold my ground', 'Balanced — I give and take', 'Accommodating — I lean towards keeping the peace', 'Selfless — I put others first, almost always'])
   },
   {
     id: 'personality_stability',
     category: 'personality',
-    title: 'How steady are your moods?',
-    desc: "In tense moments or arguments, how much do your emotions swing?",
-    options: scale(['Small things affect me a lot', 'Moods shift pretty fast', 'Mostly even-keeled', 'Rarely rattled', "Nothing really shakes me"])
+    title: 'In tense moments or arguments, how steady are your emotions?',
+    desc: 'How much your mood swings under pressure, not how you feel privately.',
+    options: scale(['Small things affect me a lot', 'My mood shifts fairly quickly', 'Mostly even-keeled', 'Rarely rattled', 'Almost nothing shakes me'])
+  },
+  // Attachment — 6 statements, indirect agree/disagree framing rather than a
+  // single self-classification. Scored dimensionally (anxiety/avoidance),
+  // not as a forced category — see mental.controller.js §2.3.
+  {
+    id: 'attachment_anxiety_1',
+    category: 'personality',
+    title: "I worry that someone I'm close to might not care about me as much as I care about them.",
+    desc: 'A few statements — rate how much each sounds like you.',
+    options: agreementScale()
   },
   {
-    id: 'attachment_style',
+    id: 'attachment_anxiety_2',
     category: 'personality',
-    title: 'How do you usually bond in relationships?',
-    desc: "Pick whichever sounds most like you when you're close to someone.",
-    options: [
-      { val: 'Secure', label: 'Secure & easygoing', desc: "Comfortable being close, okay with space too — trust comes naturally." },
-      { val: 'Anxious', label: 'Craves closeness', desc: 'Wants to feel close a lot, can worry when a partner needs space.' },
-      { val: 'Avoidant', label: 'Values independence', desc: 'Likes personal space, can pull back emotionally when things get intense.' },
-      { val: 'Fearful', label: 'Wants closeness, cautious', desc: "Wants to be close, but trusting and opening up doesn't come easy." }
-    ]
+    title: 'When someone I\'m close to needs space, I start to feel uneasy.',
+    options: agreementScale()
+  },
+  {
+    id: 'attachment_anxiety_3',
+    category: 'personality',
+    title: "I often want more closeness or reassurance than the other person seems to want.",
+    options: agreementScale()
+  },
+  {
+    id: 'attachment_avoidance_1',
+    category: 'personality',
+    title: "I find it hard to fully open up, even to people I'm close to.",
+    options: agreementScale()
+  },
+  {
+    id: 'attachment_avoidance_2',
+    category: 'personality',
+    title: 'I prefer to keep some emotional distance, and I pull back when things get intense.',
+    options: agreementScale()
+  },
+  {
+    id: 'attachment_avoidance_3',
+    category: 'personality',
+    title: "I'd rather rely on myself than depend on someone else.",
+    options: agreementScale()
   },
   // 3. Building Together
   {
     id: 'readiness_communication',
     category: 'together',
-    title: 'How easily do you open up?',
-    desc: "Sharing what you're really feeling, not just the surface stuff.",
-    options: scale(['Hard for me to open up', 'Stick to easy topics', 'Share the basics', 'Pretty open about feelings', 'An open book, always'])
+    title: "How easily do you open up about what you're really feeling?",
+    desc: 'Sharing what you\'re really feeling, not just the surface stuff.',
+    options: scale(['Hard for me to open up', 'I stick to easy topics', 'I share the basics', "I'm fairly open about feelings", "I'm an open book"])
   },
   {
     id: 'readiness_conflict',
     category: 'together',
-    title: 'How do you handle arguments?',
-    desc: 'When you and a partner disagree, what usually happens?',
-    options: scale(['I shut down or avoid it', 'Arguments happen a lot', 'We work it out, some friction', 'We talk it through calmly', 'We solve it together, no drama'])
+    title: 'When you and a partner disagree, how does it usually go?',
+    options: scale(['I shut down or avoid it', 'It turns into frequent arguments', 'We work it out, with some friction', 'We talk it through calmly', 'We solve it together, no drama'])
   },
   {
     id: 'readiness_trust',
     category: 'together',
-    title: 'How much do you trust a partner?',
-    desc: 'Feeling safe, believed, and like you can count on each other.',
-    options: scale(['Trust is hard for me', 'Takes time to trust', 'Trust comes fairly easily', 'I feel safe and secure', 'Trust is never a question'])
+    title: 'When a relationship is still new, how easily does trust come to you?',
+    desc: 'Think of the early days of a relationship in general — not one particular person.',
+    options: scale(['Trust is hard for me at first', 'It takes me a while to trust', 'Trust comes fairly easily', 'I trust and feel secure pretty quickly', 'I trust almost right away'])
   },
   {
     id: 'readiness_commitment',
     category: 'together',
-    title: "How 'all in' are you for the long haul?",
-    desc: 'When things get hard, are you the type to stick it out?',
-    options: scale(['Taking it one day at a time', 'Happy for now, unsure long-term', 'Thinking long-term', 'Deeply committed', 'In it for life, no matter what'])
+    title: "When you enter a new relationship, how 'all in' do you tend to be?",
+    desc: 'Your usual pattern at the start of something — not one particular person.',
+    options: scale(['I take it one day at a time', 'I stay in the moment, unsure long-term', 'I start thinking long-term', 'I invest deeply early on', "I'm all in from the start"])
   },
   {
     id: 'readiness_support',
     category: 'together',
-    title: "How do you show up when your partner's struggling?",
-    desc: "When they're having a rough day, what's your instinct?",
-    options: scale(["I don't always know how to help", 'I help if they ask', 'I usually check in', "I'm there for them, always", 'I show up no matter what'])
+    title: 'When a partner is having a hard time, what do you tend to do?',
+    desc: "What you actually do, not just what you'd want to do.",
+    options: scale(['I tend to give them space and stay out of it', 'I help only if they ask', 'I check in now and then', 'I make a point of being there', 'I drop things to show up for them'])
   },
-  // 4. Life & Family Goals
+  // 4. Life & Family Goals — Life & Career half (preference items: quality is
+  // scored on how CLEAR the stance is, not which direction it points).
   {
     id: 'career_alignment',
     category: 'lifeGoals',
-    title: 'How do you feel about career & moving for work?',
-    desc: 'Ambition, long hours, relocating for a job — where do you stand?',
-    options: scale(["Career isn't a big focus", 'Depends on the situation', 'Fairly career-focused', 'Career matters a lot to me', 'Career comes first, always'])
+    title: 'How central is your career to your life?',
+    options: scale(["Career isn't a big focus for me", "It matters, but it's not the priority", 'Fairly career-focused', 'Career matters a lot to me', 'Career comes first, almost always'])
+  },
+  {
+    id: 'relocation_openness',
+    category: 'lifeGoals',
+    title: 'How open are you to moving for work — a new city, or relocating for a job?',
+    options: scale(["I'd rather not move at all", "Only if there's no other option", 'Open to it if it makes sense', 'Fairly willing to move', 'Happy to move whenever it helps my career'])
   },
   {
     id: 'financial_alignment',
     category: 'lifeGoals',
-    title: "What's your money style?",
-    desc: 'Spending, saving, budgeting — how do you handle money day to day?',
-    options: scale(["I spend freely, don't track much", 'Loose with a budget', 'Balance spending & saving', 'Careful saver, budget-focused', 'Very disciplined about money'])
+    title: "What's your money style, day to day?",
+    options: scale(["I spend freely, don't track much", 'Loose with a budget', 'I balance spending and saving', 'Careful saver, budget-focused', 'Very disciplined about money'])
   },
   {
     id: 'lifestyle_alignment',
     category: 'lifeGoals',
-    title: "What's your day-to-day rhythm like?",
-    desc: 'Sleep schedule, free time, how social you are — day to day.',
-    options: scale(['Pretty chaotic, no real routine', 'Routine varies a lot', 'Fairly steady routine', 'Pretty structured days', 'Very consistent, same rhythm daily'])
+    title: "What's your day-to-day rhythm like — sleep, free time, routine?",
+    options: scale(['Pretty chaotic, no set routine', 'My routine varies a lot', 'A fairly steady routine', 'Pretty structured days', 'Very consistent, same rhythm daily'])
   },
+  // Family & Parenting half (also preference items — see above).
   {
     id: 'family_expectations',
     category: 'lifeGoals',
-    title: 'How involved should extended family be?',
-    desc: 'In-laws, living arrangements, how much say family gets in your life together.',
-    options: scale(['Prefer a lot of independence', 'Some involvement is okay', 'Comfortable with regular involvement', 'Family plays a big role', 'Family is central to everything'])
+    title: 'How much day-to-day involvement would you like your families — in-laws and immediate family — to have?',
+    desc: 'Your parents and in-laws, siblings — not distant relatives.',
+    options: scale(['Live independently, meet once a year or two', 'Occasional visits, mainly for festivals', 'Regular contact, meet often', 'Very involved, frequent contact', 'Live together, family involved day-to-day'])
   },
   {
     id: 'parenting_alignment',
     category: 'lifeGoals',
-    title: 'Where do you stand on having kids?',
-    desc: 'Whether, when, and how many — and what kind of parent you want to be.',
-    options: scale(['Not sure / big differences here', 'Still figuring it out', 'Have a general idea', 'Pretty clear on timeline', 'Very clear vision for our family'])
+    title: 'Where do you stand on having children?',
+    desc: 'Whether, and how strongly, children are part of your plan.',
+    options: scale(["I don't want children", "I'm leaning towards no", "I'm still figuring it out", 'I want children, flexible on the details', 'I definitely want children, with a clear vision'])
   },
   // 5. Habits & Calm
   {
@@ -186,14 +229,14 @@ export const MENTAL_HEALTH_QUESTIONS = [
   {
     id: 'anger_regulation',
     category: 'habits',
-    title: 'How do you handle anger?',
-    desc: "When you're really upset, how do you usually react?",
-    options: scale(['I get loud / say things I regret', 'I get pretty irritated', 'I keep it together, mostly', 'I stay calm and in control', 'Nothing really gets me angry'])
+    title: "When you're really angry, how does it usually come out?",
+    desc: 'Not how you feel it privately — how it actually shows.',
+    options: scale(['I get loud or say things I regret', 'I get visibly irritated', 'I mostly keep it in check', 'I stay calm and in control', 'Almost nothing makes me angry'])
   }
 ];
 
-// Precompute each question's place within its 5-question sub-section once,
-// so every consumer (add-prospect wizard, invite-link wizard) shows the same
+// Precompute each question's place within its sub-section once, so every
+// consumer (add-prospect wizard, invite-link wizard) shows the same
 // "Feelings & Energy · 2 of 3" style progress without recomputing it.
 const sectionLengths = MENTAL_HEALTH_QUESTIONS.reduce((acc, q) => {
   acc[q.category] = (acc[q.category] || 0) + 1;

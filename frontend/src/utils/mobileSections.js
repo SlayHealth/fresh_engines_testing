@@ -7,7 +7,7 @@ import { SECONDS_BY_KIND, formatDuration } from './estimateTime';
 const META = {
   about:     { title: 'About you',         sub: 'Basics, body & relationship context', tone: 'mag',  icon: 'user' },
   lifestyle: { title: 'Lifestyle & habits', sub: 'Activity, sleep, drinking & more',    tone: 'teal', icon: 'pulse' },
-  mental:    { title: 'Mental wellbeing',   sub: 'Optional · 21 quick questions',        tone: 'sea',  icon: 'mind' },
+  mental:    { title: 'Mental wellbeing',   sub: 'Optional · 27 quick questions',        tone: 'sea',  icon: 'mind' },
   pathology: { title: 'Pathology reports',  sub: 'Bloodwork — upload or book at home',   tone: 'moss', icon: 'flask', duration: '2 min' },
   radiology: { title: 'Radiology reports',  sub: 'Scans — upload or book at a centre',   tone: 'gold', icon: 'scan' },
   genomics:  { title: 'Genomics report',    sub: 'Carrier & hereditary risk screening',  tone: 'mute', icon: 'dna' }
@@ -25,7 +25,7 @@ const META = {
 const CATEGORY_STEP_KINDS = {
   about: ['choice', 'field', 'city', 'measurement', 'measurement', 'measurement', 'choice', 'choice'],
   lifestyle: ['choice', 'choice', 'choice', 'choice'],
-  mental: Array.from({ length: 21 }, () => 'choice')
+  mental: Array.from({ length: 27 }, () => 'choice')
 };
 
 function categoryDuration(key) {
