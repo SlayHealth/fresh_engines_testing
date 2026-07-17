@@ -1356,6 +1356,15 @@ function AddProspectPageInner() {
         key: 'lifestyle', label: 'Lifestyle & Habits', desc: 'Activity, sleep, drinking & more', icon: HeartPulse,
         progress: lifestyleProgress(adapter.form), answered: lifestyleC.answered, total: lifestyleC.total
       },
+      // PRD/mockup order (About, Lifestyle, Mental, Pathology, Radiology,
+      // Genomics) — Mental sits third, matching dashboard/page.js's own
+      // category list. It's still optional in behaviour (never gates match
+      // creation); this is display order only.
+      {
+        key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
+        progress: hasMentalEvidence ? 100 : (isSelfTurn ? mentalProgress(selfMentalAnswers) : mentalProgress(prospectMentalAnswers)),
+        answered: mentalC.answered, total: mentalC.total
+      },
       {
         key: 'pathology', label: 'Pathology Reports', desc: `Blood work for ${label}`, icon: FlaskConical,
         progress: isSelfTurn ? ((userReport || hasPathologyEvidence) ? 100 : 0) : (prospectReport ? 100 : 0),
@@ -1367,15 +1376,6 @@ function AddProspectPageInner() {
         locked: !radiologyUnlocked,
         price: '₹999',
         suggestedTests: SUGGESTED_RADIOLOGY_TESTS
-      },
-      // Deferred/optional, not part of the core "get your first match" path —
-      // sits last (before Genomics) rather than beside About/Lifestyle so it
-      // isn't implied to be a required step; still always tappable here or
-      // from the Analysis screen's own "Add Mental Wellbeing" pull-back CTA.
-      {
-        key: 'mental', label: 'Mental Wellbeing', desc: 'Optional — 21 quick questions', icon: Brain,
-        progress: hasMentalEvidence ? 100 : (isSelfTurn ? mentalProgress(selfMentalAnswers) : mentalProgress(prospectMentalAnswers)),
-        answered: mentalC.answered, total: mentalC.total
       },
       {
         key: 'genomics', label: 'Genomics Report', desc: 'Carrier & hereditary risk screening', icon: Dna,
