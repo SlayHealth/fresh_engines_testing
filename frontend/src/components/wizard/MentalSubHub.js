@@ -57,7 +57,7 @@ export default function MentalSubHub({ answers, onEnter, onDone, allDone, hasEvi
         <p className="text-sm mt-1.5" style={{ color: 'var(--muted)' }}>
           {totalRemaining === 0
             ? `All ${totalQuestions} of ${totalQuestions} answered — nice work.`
-            : `${totalAnswered} of ${totalQuestions} answered${overallEta ? ` · ${overallEta}` : ''}. Pick up wherever you like.`}
+            : `${totalAnswered} of ${totalQuestions} answered${overallEta ? ` ${overallEta}` : ''}. Pick up wherever you like.`}
         </p>
       </div>
 

@@ -26,7 +26,7 @@ function Item({ s, onOpen, onUnlock, compact }) {
             {s.title}{' '}
             {s.weight ? <span className="tag">+{s.weight}%</span> : <span className="tag">Soon</span>}
           </span>
-          <span className="r-sub">{s.sub}{s.duration ? ` · ≈${s.duration}` : ''}</span>
+          <span className="r-sub">{s.sub}{s.duration ? ` ≈${s.duration}` : ''}</span>
           {s.pct > 0 && <span className="bar"><i style={{ width: `${Math.min(100, s.pct)}%` }} /></span>}
         </span>
         <span className="r-end">
