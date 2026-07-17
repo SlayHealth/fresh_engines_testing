@@ -345,7 +345,7 @@ export default function DashboardPage() {
             <div className="flex-1 min-w-0">
               <p className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>Continue Your Last Draft</p>
               <p className="text-xs truncate" style={{ color: 'var(--teal-d)' }}>
-                Prospect: {prospectForm.name} · {prospectDraftConfidence}% Complete
+                Partner: {prospectForm.name} · {prospectDraftConfidence}% Complete
               </p>
             </div>
             <span className="flex items-center gap-1 text-xs font-semibold shrink-0" style={{ color: 'var(--teal-d)' }}>
@@ -385,7 +385,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>
-                        {match.user?.name || user.name} & {match.prospect?.name || 'Prospect'}
+                        {match.user?.name || user.name} & {match.prospect?.name || 'Partner'}
                       </p>
                       <div className="flex items-center gap-1.5 text-[10.5px]" style={{ color: 'var(--muted)' }}>
                         <Calendar className="w-3 h-3" />

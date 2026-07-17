@@ -146,8 +146,8 @@ export default function ChronicEnginePage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 text-left">
-        {[{ tag: chronicResult.partner_A.name || "Prospect 1", s: chronicTimeline.sA, band: chronicTimeline.bandObjA, age: chronicResult.partner_A.age + selectedProjYear, origData: chronicResult.partner_A },
-          { tag: chronicResult.partner_B.name || "Prospect 2", s: chronicTimeline.sB, band: chronicTimeline.bandObjB, age: chronicResult.partner_B.age + selectedProjYear, origData: chronicResult.partner_B }].map(({ tag, s, band, age, origData }) => (
+        {[{ tag: chronicResult.partner_A.name || "Partner 1", s: chronicTimeline.sA, band: chronicTimeline.bandObjA, age: chronicResult.partner_A.age + selectedProjYear, origData: chronicResult.partner_A },
+          { tag: chronicResult.partner_B.name || "Partner 2", s: chronicTimeline.sB, band: chronicTimeline.bandObjB, age: chronicResult.partner_B.age + selectedProjYear, origData: chronicResult.partner_B }].map(({ tag, s, band, age, origData }) => (
           <div key={tag} className="rounded-xl border-l-4 border-teal-600 bg-white p-4 ring-1 ring-slate-200">
             <div className="flex items-baseline justify-between">
               <span className="text-xs font-semibold text-slate-600">{tag} <span className="font-normal text-slate-400">(Age {age})</span></span>
@@ -180,7 +180,7 @@ export default function ChronicEnginePage() {
               <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
                 <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-2">What this means today</div>
                 <p className="text-xs text-slate-600">
-                  {tag === (chronicResult.partner_A.name || "Prospect 1")
+                  {tag === (chronicResult.partner_A.name || "Partner 1")
                     ? chronicResult.dynamic_insights?.partnerA_insight?.what_it_means
                     : chronicResult.dynamic_insights?.partnerB_insight?.what_it_means}
                 </p>
@@ -190,7 +190,7 @@ export default function ChronicEnginePage() {
               <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
                 <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-2">What drove it</div>
                 <p className="text-xs text-slate-600">
-                  {tag === (chronicResult.partner_A.name || "Prospect 1")
+                  {tag === (chronicResult.partner_A.name || "Partner 1")
                     ? chronicResult.dynamic_insights?.partnerA_insight?.what_drove_it
                     : chronicResult.dynamic_insights?.partnerB_insight?.what_drove_it}
                 </p>
@@ -200,7 +200,7 @@ export default function ChronicEnginePage() {
               <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
                 <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-2">What to do next</div>
                 <p className="text-xs text-slate-600">
-                  {tag === (chronicResult.partner_A.name || "Prospect 1")
+                  {tag === (chronicResult.partner_A.name || "Partner 1")
                     ? chronicResult.dynamic_insights?.partnerA_insight?.what_to_do_next
                     : chronicResult.dynamic_insights?.partnerB_insight?.what_to_do_next}
                 </p>
@@ -343,10 +343,10 @@ export default function ChronicEnginePage() {
                       Household Optimised Index: <strong style={{ color: '#34D399' }}>{Math.round(data.optimized)}</strong>
                     </div>
                     <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                      {chronicResult.partner_A.name || 'Prospect 1'} IDRS: <strong style={{ color: '#2dd4bf' }}>{Math.round(data.A)}</strong>
+                      {chronicResult.partner_A.name || 'Partner 1'} IDRS: <strong style={{ color: '#2dd4bf' }}>{Math.round(data.A)}</strong>
                     </div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                      {chronicResult.partner_B.name || 'Prospect 2'} IDRS: <strong style={{ color: '#a78bfa' }}>{Math.round(data.B)}</strong>
+                      {chronicResult.partner_B.name || 'Partner 2'} IDRS: <strong style={{ color: '#a78bfa' }}>{Math.round(data.B)}</strong>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', fontSize: '10px', marginTop: '5px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '5px', justifyContent: 'center', opacity: 0.9 }}>
                       <span>F-Age: <strong>{femaleAge}</strong></span>
@@ -365,8 +365,8 @@ export default function ChronicEnginePage() {
               <Line type="monotone" dataKey="current" name="Household Current Baseline" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }} />
               <Line type="monotone" dataKey="optimized" name="Household Optimised Routines" stroke="#10B981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 3 }} />
               
-              <Line type="stepAfter" dataKey="A" name={`${chronicResult.partner_A.name || 'Prospect 1'} IDRS`} stroke="#0d9488" strokeWidth={2} dot={false} />
-              <Line type="stepAfter" dataKey="B" name={`${chronicResult.partner_B.name || 'Prospect 2'} IDRS`} stroke="#7c3aed" strokeWidth={2} dot={false} />
+              <Line type="stepAfter" dataKey="A" name={`${chronicResult.partner_A.name || 'Partner 1'} IDRS`} stroke="#0d9488" strokeWidth={2} dot={false} />
+              <Line type="stepAfter" dataKey="B" name={`${chronicResult.partner_B.name || 'Partner 2'} IDRS`} stroke="#7c3aed" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

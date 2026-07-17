@@ -110,7 +110,7 @@ async function createInvite(req, res, next) {
   try {
     const { prospectName, mentalAnswers, appOrigin } = req.body;
     if (!prospectName) {
-      return res.status(400).json({ success: false, error: 'Prospect Name is required' });
+      return res.status(400).json({ success: false, error: "Partner's name is required" });
     }
 
     // Generate secure random token (32 bytes)
@@ -175,7 +175,7 @@ async function logSelfEntryConsent(req, res, next) {
   try {
     const { prospectName } = req.body;
     if (!prospectName) {
-      return res.status(400).json({ success: false, error: 'Prospect name is required' });
+      return res.status(400).json({ success: false, error: "Partner's name is required" });
     }
     const id = uuidv4();
     const ip = req.ip || req.headers['x-forwarded-for'] || null;
@@ -419,11 +419,11 @@ async function processCompatibilityBackground(invite, explicitInviterPathologyId
       // Never fabricate clinical data to fill this gap — a couple's real compatibility
       // result must never be partly computed from invented lab values. Fail clearly so
       // the inviter is prompted to complete their own real pathology report.
-      throw new Error('Your pathology report must be uploaded and completed before you can run a compatibility match with your prospect.');
+      throw new Error('Your pathology report must be uploaded and completed before you can run a compatibility match with your partner.');
     }
 
     if (!pathologyReportId) {
-      throw new Error('Prospect Pathology report must be present to compute compatibility');
+      throw new Error("Partner's pathology report must be present to compute compatibility");
     }
 
     const matchId = uuidv4();

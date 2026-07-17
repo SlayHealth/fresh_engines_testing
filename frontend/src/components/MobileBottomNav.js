@@ -72,7 +72,7 @@ function ChatMatchPicker({ isLoading, matches, onSelect, onStartNew, onClose }) 
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>
-                    {match.user?.name || 'You'} & {match.prospect?.name || 'Prospect'}
+                    {match.user?.name || 'You'} & {match.prospect?.name || 'Partner'}
                   </p>
                   <div className="flex items-center gap-1.5 text-[10.5px]" style={{ color: 'var(--muted)' }}>
                     <Calendar className="w-3 h-3" />

@@ -90,7 +90,7 @@ function loadWizardPositionDraft() {
 }
 
 const PROSPECT_MODE_OPTIONS = [
-  { val: 'self', label: "I'll enter their details myself", desc: 'Fill in your prospect’s information right now' },
+  { val: 'self', label: "I'll enter their details myself", desc: 'Fill in your partner’s information right now' },
   { val: 'invite', label: 'Generate a link to send them', desc: "They fill in their own details — you copy and send the link yourself" }
 ];
 
@@ -413,7 +413,7 @@ function AddProspectPageInner() {
 
     if (isProspect) {
       if (!prospectForm.name || !prospectForm.gender || !prospectForm.dob) {
-        toast.error("Please enter the prospect's Name, Gender, and DOB first so we can parse and store their radiology report correctly.");
+        toast.error("Please enter your partner's Name, Gender, and DOB first so we can parse and store their radiology report correctly.");
         return;
       }
     } else {
@@ -470,7 +470,7 @@ function AddProspectPageInner() {
   const triggerMockRadiology = async (isProspect) => {
     if (isProspect) {
       if (!prospectForm.name || !prospectForm.gender || !prospectForm.dob) {
-        toast.error("Please enter the prospect's Name, Gender, and DOB first.");
+        toast.error("Please enter your partner's Name, Gender, and DOB first.");
         return;
       }
     } else {
@@ -756,7 +756,7 @@ function AddProspectPageInner() {
 
   const handleCreateInviteLink = async () => {
     if (!prospectForm.name) {
-      setInviteError("Please enter the prospect's name first.");
+      setInviteError("Please enter your partner's name first.");
       return;
     }
 
@@ -899,16 +899,16 @@ function AddProspectPageInner() {
 
     const timelineSteps = [
       { key: 'sent', label: 'Link Generated', desc: 'Ready to share', activeStates: ['sent', 'delivered', 'opened', 'consent_pending', 'consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
-      { key: 'opened', label: 'Opened', desc: 'Prospect opened the invite link', activeStates: ['opened', 'consent_pending', 'consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
+      { key: 'opened', label: 'Opened', desc: 'Partner opened the invite link', activeStates: ['opened', 'consent_pending', 'consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
       { key: 'consent', label: 'Consent Decision', desc: status === 'consent_rejected' ? 'Consent Rejected ✗' : 'Consent Accepted ✓', activeStates: ['consent_accepted', 'consent_rejected', 'questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'], isError: status === 'consent_rejected' },
-      { key: 'started', label: 'Filling Form', desc: 'Prospect is answering questions', activeStates: ['questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
+      { key: 'started', label: 'Filling Form', desc: 'Partner is answering questions', activeStates: ['questionnaire_started', 'questionnaire_submitted', 'processing', 'completed'] },
       { key: 'submitted', label: 'Form Submitted', desc: 'Details and reports received', activeStates: ['questionnaire_submitted', 'processing', 'completed'] }
     ];
 
     return (
       <div className="space-y-5">
         <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--soft-pink)', border: '1px solid var(--pink)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--pink-d)' }}>Your invite link — copy and send it to {activeInvite.prospectName || 'your prospect'}</p>
+          <p className="text-xs font-semibold" style={{ color: 'var(--pink-d)' }}>Your invite link — copy and send it to {activeInvite.prospectName || 'your partner'}</p>
           <div className="p-2.5 rounded-lg text-xs break-all" style={{ background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--line)' }}>
             {link}
           </div>
@@ -1358,7 +1358,7 @@ function AddProspectPageInner() {
   const buildCategories = (person) => {
     const isSelfTurn = person === 'self';
     const adapter = isSelfTurn ? selfAdapter : prospectAdapter;
-    const label = isSelfTurn ? 'you' : (prospectForm.name || 'your prospect');
+    const label = isSelfTurn ? 'you' : (prospectForm.name || 'your partner');
 
     const aboutC = aboutCounts(adapter);
     const lifestyleC = lifestyleCounts(adapter.form);
@@ -1380,7 +1380,7 @@ function AddProspectPageInner() {
 
     return [
       {
-        key: 'about', label: isSelfTurn ? 'About You' : `About ${prospectForm.name || 'Your Prospect'}`,
+        key: 'about', label: isSelfTurn ? 'About You' : `About ${prospectForm.name || 'Your Partner'}`,
         desc: 'Basics, body & relationship context', icon: UserRound,
         progress: aboutProgress(adapter), answered: aboutC.answered, total: aboutC.total, required: true
       },
@@ -1431,7 +1431,7 @@ function AddProspectPageInner() {
     }
     if (categoryKey === 'pathology') {
       return [uploadStep({
-        title: isSelfTurn ? 'Upload your Pathology Report' : "Upload prospect's Pathology Report",
+        title: isSelfTurn ? 'Upload your Pathology Report' : "Upload your partner's Pathology Report",
         subtitle: 'PDF with parameters like HbA1c, Lipids, AMH or Semen readings',
         isUploading: isSelfTurn ? isUserUploading : isProspectUploading,
         error: isSelfTurn ? userUploadError : prospectUploadError,
@@ -1445,7 +1445,7 @@ function AddProspectPageInner() {
     }
     if (categoryKey === 'radiology') {
       return [uploadStep({
-        title: isSelfTurn ? 'Upload your Radiology Report' : "Upload prospect's Radiology Report",
+        title: isSelfTurn ? 'Upload your Radiology Report' : "Upload your partner's Radiology Report",
         subtitle: 'USG, TVS, Echo, or DEXA scans',
         isUploading: isSelfTurn ? isUserRadUploading : isProspectRadUploading,
         error: isSelfTurn ? userRadError : prospectRadError,
@@ -1503,11 +1503,11 @@ function AddProspectPageInner() {
     // Distinct from the initial "New Compatibility Check" engine-selection screen —
     // reusing that title here made it look like the flow was restarting from scratch
     // partway through the same session.
-    headerTitle = 'Add Your Prospect';
+    headerTitle = 'Add Your Partner';
     const routingSteps = [];
-    routingSteps.push(choiceStep('How will your prospect share their details?', PROSPECT_MODE_OPTIONS, prospectMode, (v) => setProspectMode(v)));
+    routingSteps.push(choiceStep('How will your partner share their details?', PROSPECT_MODE_OPTIONS, prospectMode, (v) => setProspectMode(v)));
     if (prospectMode) {
-      routingSteps.push(fieldStep("What's your prospect's name?", prospectForm.name, (v) => setProspectForm({ ...prospectForm, name: v }), { placeholder: 'Enter their name' }));
+      routingSteps.push(fieldStep("What's your partner's name?", prospectForm.name, (v) => setProspectForm({ ...prospectForm, name: v }), { placeholder: 'Enter their name' }));
       // Previously asked inside the self person's own "About You" section —
       // which runs before any prospect exists at all (a user just exploring,
       // or without a partner yet, would still be asked "how did you meet"
@@ -1548,7 +1548,7 @@ function AddProspectPageInner() {
     // This step requires an explicit, logged confirmation first.
     if (prospectMode === 'self') {
       routingSteps.push({
-        title: `Before you enter ${prospectForm.name || "your prospect's"} details…`,
+        title: `Before you enter ${prospectForm.name || "your partner's"} details…`,
         subtitle: `You're about to enter health information on ${prospectForm.name || 'their'} behalf, including sensitive results (STI screening, fertility markers, mental wellbeing).`,
         canAdvance: selfEntryConsentConfirmed && !isLoggingSelfEntryConsent,
         nextLabel: isLoggingSelfEntryConsent ? 'Confirming…' : 'Confirm & Continue',
@@ -1563,7 +1563,7 @@ function AddProspectPageInner() {
                 className="mt-1"
               />
               <span className="text-sm" style={{ color: 'var(--ink)' }}>
-                I confirm I have {prospectForm.name || "my prospect's"}'s permission to enter their health information.
+                I confirm I have {prospectForm.name || "my partner's"}'s permission to enter their health information.
               </span>
             </label>
             {selfEntryConsentError ? (
@@ -1648,7 +1648,7 @@ function AddProspectPageInner() {
     const quotaExceeded = runsUsed >= 1;
     const ready = isPersonReady(activePerson);
     const categoriesForHub = buildCategories(activePerson);
-    headerTitle = activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Prospect'}'s Health Profile`;
+    headerTitle = activePerson === 'self' ? 'Your Health Profile' : `${prospectForm.name || 'Partner'}'s Health Profile`;
     const primaryLabel = activePerson === 'self'
       ? 'Continue'
       : isSavingProfile ? 'Saving…' : isMatching ? 'Generating…' : 'Generate Insights';
@@ -1682,7 +1682,7 @@ function AddProspectPageInner() {
               <span style={{ transform: 'scaleX(-1)', display: 'inline-flex' }}><Ico name="chev" sm /></span>
               Dashboard
             </button>
-            <h1 className="vtitle serif">{activePerson === 'self' ? 'Health profile' : `${prospectForm.name || 'Prospect'}'s profile`}</h1>
+            <h1 className="vtitle serif">{activePerson === 'self' ? 'Health profile' : `${prospectForm.name || 'Partner'}'s profile`}</h1>
             <p className="vsub">Five sections. The engine weighs them differently — finish the heavy ones first.</p>
 
             <div className="target card">
@@ -1728,7 +1728,7 @@ function AddProspectPageInner() {
         categories={categoriesForHub}
         onEnter={enterCategory}
         onUnlock={(key) => { if (key === 'radiology') setRadiologyUnlocked(true); }}
-        confidenceLabel={activePerson === 'self' ? 'Your Confidence' : `${prospectForm.name || 'Prospect'}'s Confidence`}
+        confidenceLabel={activePerson === 'self' ? 'Your Confidence' : `${prospectForm.name || 'Partner'}'s Confidence`}
         primaryLabel={primaryLabel}
         primaryDisabled={primaryDisabled}
         primaryHint={primaryHint}

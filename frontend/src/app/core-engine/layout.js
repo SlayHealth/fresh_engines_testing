@@ -420,7 +420,7 @@ function CoreEngineLayoutInner({ children }) {
               className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl px-5 py-2.5 font-bold font-sans text-xs transition-all duration-300 cursor-pointer shadow-sm inline-flex items-center gap-1.5"
             >
               <RotateCcw size={14} />
-              Scan Another Prospect
+              Scan Another Partner
             </button>
           </div>
         </div>

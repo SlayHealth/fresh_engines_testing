@@ -115,7 +115,7 @@ export default function MobileHomeView({
             </div>
             <span className="r-t">
               <b className="serif">Continue Your Last Draft</b>
-              <span className="r-m">Prospect: {prospectDraftName} · {prospectDraftConfidence}% Complete</span>
+              <span className="r-m">Partner: {prospectDraftName} · {prospectDraftConfidence}% Complete</span>
             </span>
             <Ico name="chev" className="chevron" />
           </button>
@@ -140,7 +140,7 @@ export default function MobileHomeView({
           <button className="recent card" onClick={() => { restoreMatchSession(recentMatch); router.push('/core-engine/story'); }}>
             <MobileMiniRing pct={recentMatch.score || 0} tone="moss" />
             <span className="r-t">
-              <b className="serif">{recentMatch.user?.name || user.name} &amp; {recentMatch.prospect?.name || 'Prospect'}</b>
+              <b className="serif">{recentMatch.user?.name || user.name} &amp; {recentMatch.prospect?.name || 'Partner'}</b>
               <span className="r-m">
                 <Ico name="heart" sm />
                 {recentMatch.prospect?.meetingSource || 'Compatibility check'}

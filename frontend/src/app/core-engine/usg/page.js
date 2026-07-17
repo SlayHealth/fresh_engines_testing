@@ -98,7 +98,7 @@ export default function UsgPage() {
     // upload with a fabricated default (WS6-05: the restore path can leave these
     // unset even though a fresh match cannot).
     if (!sexVal || !ageVal) {
-      toast.error(`${isProspect ? "Your prospect's" : "Your"} sex and date of birth need to be on file before uploading a radiology report — they directly affect the scoring. Please add them under "About You" first.`);
+      toast.error(`${isProspect ? "Your partner's" : "Your"} sex and date of birth need to be on file before uploading a radiology report — they directly affect the scoring. Please add them under "About You" first.`);
       return;
     }
 
@@ -145,7 +145,7 @@ export default function UsgPage() {
     const nameVal = isProspect ? prospectForm.name : user.name;
 
     if (!sexVal || !ageVal) {
-      toast.error(`${isProspect ? "Your prospect's" : "Your"} sex and date of birth need to be on file before generating a mock report — they directly affect the scoring. Please add them under "About You" first.`);
+      toast.error(`${isProspect ? "Your partner's" : "Your"} sex and date of birth need to be on file before generating a mock report — they directly affect the scoring. Please add them under "About You" first.`);
       return;
     }
 
@@ -298,7 +298,7 @@ export default function UsgPage() {
 
         <div className="grid grid-cols-2 gap-4 text-left">
           <div className="p-4 border border-dashed border-slate-300 rounded-xl space-y-3 bg-slate-50/50">
-            <span className="text-xs font-bold text-slate-700 block">{isUserMale ? user?.name || 'Your' : prospectForm?.name || 'Prospect'}'s Radiology PDF</span>
+            <span className="text-xs font-bold text-slate-700 block">{isUserMale ? user?.name || 'Your' : prospectForm?.name || 'Partner'}'s Radiology PDF</span>
             <button
               type="button"
               onClick={() => userFileInputRef.current.click()}
@@ -319,7 +319,7 @@ export default function UsgPage() {
           </div>
 
           <div className="p-4 border border-dashed border-slate-300 rounded-xl space-y-3 bg-slate-50/50">
-            <span className="text-xs font-bold text-slate-700 block">{isUserMale ? prospectForm?.name || 'Prospect' : user?.name || 'Your'}'s Radiology PDF</span>
+            <span className="text-xs font-bold text-slate-700 block">{isUserMale ? prospectForm?.name || 'Partner' : user?.name || 'Your'}'s Radiology PDF</span>
             <button
               type="button"
               onClick={() => prospectFileInputRef.current.click()}

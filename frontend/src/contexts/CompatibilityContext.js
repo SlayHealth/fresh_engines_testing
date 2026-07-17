@@ -540,16 +540,16 @@ export function CompatibilityProvider({ children }) {
     }
 
     const missing = [];
-    if (!prospectForm.name.trim()) missing.push("Prospect's Name");
-    if (!prospectForm.dob) missing.push("Prospect's DOB");
-    if (!prospectForm.city.trim()) missing.push("Prospect's City");
-    if (!prospectForm.activity_level) missing.push("Prospect's Activity Level");
-    if (!prospectForm.drinking_habits) missing.push("Prospect's Drinking habits");
-    if (!prospectForm.smoking_habits) missing.push("Prospect's Smoking & Tobacco habits");
-    if (!prospectForm.sleep_cycle) missing.push("Prospect's Sleep cycle");
-    if (!prospectForm.height) missing.push("Prospect's Height");
-    if (!prospectForm.weight) missing.push("Prospect's Weight");
-    if (!prospectForm.waist) missing.push("Prospect's Waist size");
+    if (!prospectForm.name.trim()) missing.push("Partner's Name");
+    if (!prospectForm.dob) missing.push("Partner's DOB");
+    if (!prospectForm.city.trim()) missing.push("Partner's City");
+    if (!prospectForm.activity_level) missing.push("Partner's Activity Level");
+    if (!prospectForm.drinking_habits) missing.push("Partner's Drinking habits");
+    if (!prospectForm.smoking_habits) missing.push("Partner's Smoking & Tobacco habits");
+    if (!prospectForm.sleep_cycle) missing.push("Partner's Sleep cycle");
+    if (!prospectForm.height) missing.push("Partner's Height");
+    if (!prospectForm.weight) missing.push("Partner's Weight");
+    if (!prospectForm.waist) missing.push("Partner's Waist size");
     if (!prospectForm.meetingSource) missing.push("How you met");
     if (prospectForm.meetingSource === 'Matrimonial Platform' && !prospectForm.platformName) missing.push("Matrimonial platform name");
 
