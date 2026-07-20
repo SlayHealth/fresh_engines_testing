@@ -357,13 +357,24 @@ export default function ChronicEnginePage() {
                 );
               }} />
               
-              <ReferenceLine y={60} stroke="#f43f5e" strokeDasharray="4 4" label={{ value: "high risk ≥60", fontSize: 10, fill: "#f43f5e", position: "right" }} />
-              <ReferenceLine y={30} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "mod risk ≥30", fontSize: 10, fill: "#f59e0b", position: "right" }} />
-              
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              
-              <Line type="monotone" dataKey="current" name="Household Current Baseline" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="optimized" name="Household Optimised Routines" stroke="#10B981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 3 }} />
+              {/* position="right" renders the label OUTSIDE the plot area, to the
+                  right of the last tick — with only 12px of right margin (and far
+                  less actual pixel width on a phone-width ResponsiveContainer),
+                  that text was clipped by the container instead of shrinking to
+                  fit. "insideBottomRight"/"insideTopRight" keep the label inside
+                  the plot's own bounds, so it can never be cut off regardless of
+                  viewport width. */}
+              <ReferenceLine y={60} stroke="#f43f5e" strokeDasharray="4 4" label={{ value: "high risk ≥60", fontSize: 10, fill: "#f43f5e", position: "insideBottomRight" }} />
+              <ReferenceLine y={30} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "mod risk ≥30", fontSize: 10, fill: "#f59e0b", position: "insideBottomRight" }} />
+
+              <Legend wrapperStyle={{ fontSize: 11 }} iconSize={10} />
+
+              {/* Shortened from "Household Current/Optimised Baseline/Routines" —
+                  the repeated "Household" in every legend entry was the main
+                  reason it wrapped to 3 lines on a narrow phone width, eating
+                  into the plot's own vertical space inside the fixed-height box. */}
+              <Line type="monotone" dataKey="current" name="Current Baseline" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="optimized" name="Optimised Routines" stroke="#10B981" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 3 }} />
               
               <Line type="stepAfter" dataKey="A" name={`${chronicResult.partner_A.name || 'Partner 1'} IDRS`} stroke="#0d9488" strokeWidth={2} dot={false} />
               <Line type="stepAfter" dataKey="B" name={`${chronicResult.partner_B.name || 'Partner 2'} IDRS`} stroke="#7c3aed" strokeWidth={2} dot={false} />
