@@ -104,16 +104,6 @@ export default function MfrEnginePage() {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
         <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-          <defs>
-            <linearGradient id="mfr-line-grad-core" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={chartHeight}>
-              <stop offset={`${(getYCoord(100) / chartHeight) * 100}%`} stopColor="#10B981" />
-              <stop offset={`${(getYCoord(85) / chartHeight) * 100}%`} stopColor="#10B981" />
-              <stop offset={`${(getYCoord(72.5) / chartHeight) * 100}%`} stopColor="#d97706" />
-              <stop offset={`${(getYCoord(60) / chartHeight) * 100}%`} stopColor="#EF4444" />
-              <stop offset={`${(getYCoord(0) / chartHeight) * 100}%`} stopColor="#EF4444" />
-            </linearGradient>
-          </defs>
-
           {/* Background Shading / Bands */}
           <rect x={paddingLeft} y={getYCoord(100)} width={chartWidth - paddingLeft - paddingRight} height={getYCoord(85) - getYCoord(100)} fill="rgba(16, 185, 129, 0.05)" />
           <rect x={paddingLeft} y={getYCoord(85)} width={chartWidth - paddingLeft - paddingRight} height={getYCoord(60) - getYCoord(85)} fill="rgba(245, 158, 11, 0.05)" />
@@ -201,20 +191,28 @@ export default function MfrEnginePage() {
             <line x1={hoveredPoint.cx} y1={paddingTop} x2={hoveredPoint.cx} y2={chartHeight - paddingBottom} stroke="#e2e8f0" strokeWidth="1.2" strokeDasharray="3,3" />
           )}
 
-          {/* Projections */}
-          <polyline 
-            fill="none" 
-            stroke="url(#mfr-line-grad-core)" 
-            strokeWidth="3.5" 
-            strokeDasharray="5,4" 
-            points={currentPoints} 
+          {/* Projections — each line keeps its own fixed, legend-matching
+              color (Current: amber, Optimised: teal) instead of both sharing
+              one value-based gradient. That shared gradient colored a line by
+              its Y-position/zone, not by which series it was, so whenever
+              both curves sat in the same zone (the common case — an
+              optimised lifestyle rarely swings a couple into a different
+              risk band) they rendered in an identical color, and the thinner
+              dashed "Current" line became nearly invisible against the solid
+              "Optimised" one, contradicting the legend directly below. */}
+          <polyline
+            fill="none"
+            stroke="#d97706"
+            strokeWidth="3.5"
+            strokeDasharray="5,4"
+            points={currentPoints}
             style={{ transition: 'stroke-width 0.2s' }}
           />
-          <polyline 
-            fill="none" 
-            stroke="url(#mfr-line-grad-core)" 
-            strokeWidth="3.5" 
-            points={optimisedPoints} 
+          <polyline
+            fill="none"
+            stroke="#0f766e"
+            strokeWidth="3.5"
+            points={optimisedPoints}
             style={{ transition: 'stroke-width 0.2s' }}
           />
 
