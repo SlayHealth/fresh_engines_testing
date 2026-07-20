@@ -65,6 +65,18 @@ export default function ReportChatDrawer({
   const messagesEndRef = useRef(null);
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
+  // initializeSession() calling setActiveSessionId() below re-triggers the
+  // next effect (activeSessionId is one of its dependencies) — without this
+  // guard, every fresh session immediately fired a second, redundant
+  // fetchChatHistory() right after initializeSession() had just populated
+  // the welcome message and suggestions. That was always wasteful (two
+  // network calls for one drawer-open), but harmless when both were fast DB
+  // reads; now that fetchChatHistory's suggestions are also LLM-generated,
+  // the redundant call meant two real sequential LLM round-trips every open,
+  // and the second one reset isInitializing back to true right as the first
+  // had just cleared it — visible as the drawer getting stuck on "Analyzing
+  // reports..." well past when real data had already arrived.
+  const justInitializedRef = useRef(false);
 
   // Sync prop sessionId to state
   useEffect(() => {
@@ -75,12 +87,15 @@ export default function ReportChatDrawer({
 
   // Handle open drawer actions
   useEffect(() => {
-    if (isOpen) {
-      if (activeSessionId) {
-        fetchChatHistory(activeSessionId);
-      } else {
-        initializeSession();
+    if (!isOpen) return;
+    if (activeSessionId) {
+      if (justInitializedRef.current) {
+        justInitializedRef.current = false;
+        return;
       }
+      fetchChatHistory(activeSessionId);
+    } else {
+      initializeSession();
     }
   }, [isOpen, activeSessionId]);
 
@@ -141,6 +156,7 @@ export default function ReportChatDrawer({
         throw new Error(data.error || 'Failed to initialize session');
       }
 
+      justInitializedRef.current = true;
       setActiveSessionId(data.sessionId);
       if (onSessionCreated) {
         onSessionCreated(data.sessionId);
