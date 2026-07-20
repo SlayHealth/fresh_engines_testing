@@ -666,16 +666,24 @@ export function CompatibilityProvider({ children }) {
             userId: selfUser.id,
             male_report_id: isUserMale ? userReport.report_metadata.report_id : prospectReport.report_metadata.report_id,
             female_report_id: isUserMale ? prospectReport.report_metadata.report_id : userReport.report_metadata.report_id,
+            // semenQuality/ovarianReserve used to be hardcoded 'Normal' here —
+            // mfr.controller.js resolves them as
+            // `male_manual_data.semenQuality || calculatedSemen?.category || 'Not Assessed'`
+            // (manual data checked FIRST), so that literal always won outright over
+            // calculatedSemen/calculatedReserve, the REAL classification the backend
+            // computes from this exact match's uploaded pathology report a few lines
+            // above — discarding it every time, for every couple, regardless of what
+            // was actually uploaded. Omitting these fields entirely lets that real,
+            // per-couple classification (or the backend's own honest 'Not Assessed'
+            // when no report/marker is present) reach the score, the barrier gate,
+            // and the AI-generated findings/summary.
             male_manual_data: {
               name: maleManual.name,
-              age: maleManual.age,
-              semenQuality: 'Normal',
-              scrotalFinding: 'Normal'
+              age: maleManual.age
             },
             female_manual_data: {
               name: femaleManual.name,
-              age: femaleManual.age,
-              ovarianReserve: 'Normal'
+              age: femaleManual.age
             },
             shared_lifestyle: {
               smoke: sharedLifestyle.smoking === 'Never' ? 0 : 0.5,
