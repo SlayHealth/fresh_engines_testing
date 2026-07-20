@@ -153,12 +153,16 @@ function CoreEngineLayoutInner({ children }) {
     { id: 'genomics', label: 'Genetics Risk', icon: Dna, action: () => handleTabClick('genomics') },
   ];
 
-  // Same list, plus a Chat AI entry, for the mobile section nav below —
-  // MobileBottomNav.js steps aside entirely on /core-engine routes (its own
-  // Chat AI trigger included), so this is mobile's only way into the report
-  // chat drawer here.
-  const mobileNavItems = [...menuItems, { id: 'chat', label: 'Chat AI', icon: MessageSquare, action: () => setIsChatOpen(true) }];
-  const activeNavItem = mobileNavItems.find((item) => item.id === selectedTab) || mobileNavItems[0];
+  // Mobile bottom bar (below) is 3 parts: Dashboard and Chat AI as their own
+  // standalone, always-reachable buttons, and everything else — the actual
+  // medical engines/sections — grouped behind one collapsible toggle rather
+  // than each getting their own permanent slot. MobileBottomNav.js steps
+  // aside entirely on /core-engine routes (its own Chat AI trigger included),
+  // so this is mobile's only way into the report chat drawer here.
+  const engineItems = menuItems.filter((item) => item.id !== 'dashboard');
+  const dashboardItem = menuItems.find((item) => item.id === 'dashboard');
+  const chatItem = { id: 'chat', label: 'Chat AI', icon: MessageSquare, action: () => setIsChatOpen(true) };
+  const activeEngineItem = engineItems.find((item) => item.id === selectedTab) || engineItems.find((item) => item.id === 'chronic');
 
   if (!user || !chronicResult || !mfrResult) return null;
 
@@ -455,14 +459,14 @@ function CoreEngineLayoutInner({ children }) {
         />
       </main>
 
-      {/* Report section nav (mobile) — MobileBottomNav.js steps aside entirely
-          on /core-engine routes (see its own gate) since this report has 7
-          sections plus chat, too many for the rest of the app's fixed 2-4 tab
-          bar. Collapsed by default to one row (current section + a chevron);
-          tapping it expands the full list upward, matching the desktop
-          sidebar / mobile hamburger drawer's own list+styling above. z-20,
-          below the drawer overlay's z-30, so it sits under (not clickable
-          through) that drawer on the rare chance both are open at once. */}
+      {/* Report nav (mobile) — MobileBottomNav.js steps aside entirely on
+          /core-engine routes (see its own gate). Three parts: Dashboard and
+          Chat AI are standalone, always-reachable buttons; the 6 actual
+          medical engines/sections are grouped behind one collapsible toggle
+          (middle button, shows the current engine) instead of each getting
+          a permanent slot. z-20, below the drawer overlay's z-30, so it sits
+          under (not clickable through) that drawer on the rare chance both
+          are open at once. */}
       <div className="lg:hidden fixed left-0 right-0 bottom-0 z-20 font-sans" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {/* Painted first, so plain DOM order (not z-index tricks) puts the
             panel below on top of it — same pattern as the hamburger drawer's
@@ -488,12 +492,13 @@ function CoreEngineLayoutInner({ children }) {
         >
           {/* The expanding part: grid-template-rows 0fr->1fr animates height
               smoothly without measuring pixel heights by hand, and collapses
-              cleanly back to exactly 0 every time. */}
+              cleanly back to exactly 0 every time. Only the 6 engine items —
+              Dashboard/Chat AI live in the row below instead. */}
           <div style={{ display: 'grid', gridTemplateRows: isSectionNavOpen ? '1fr' : '0fr', transition: 'grid-template-rows 320ms cubic-bezier(0.16,1,0.3,1)' }}>
             <div style={{ overflow: 'hidden' }}>
-              <nav className="px-3 pt-3 pb-1 space-y-1" aria-label="Report sections">
-                {mobileNavItems.map((item) => {
-                  const isItemActive = item.id !== 'chat' && selectedTab === item.id;
+              <nav className="px-3 pt-3 pb-1 space-y-1" aria-label="Medical engines">
+                {engineItems.map((item) => {
+                  const isItemActive = selectedTab === item.id;
                   return (
                     <button
                       key={item.id}
@@ -511,24 +516,43 @@ function CoreEngineLayoutInner({ children }) {
             </div>
           </div>
 
-          {/* Always-visible collapsed row — the toggle itself. */}
-          <button
-            type="button"
-            onClick={() => setIsSectionNavOpen((v) => !v)}
-            className="w-full flex items-center justify-between px-5 cursor-pointer"
-            style={{ height: 60 }}
-            aria-expanded={isSectionNavOpen}
-            aria-label={isSectionNavOpen ? 'Collapse report sections' : 'Expand report sections'}
-          >
-            <span className="flex items-center gap-2.5 text-sm font-bold" style={{ color: '#1e293b' }}>
-              <activeNavItem.icon size={18} style={{ color: 'var(--pink)' }} />
-              {activeNavItem.label}
-            </span>
-            <ChevronUp
-              size={18}
-              style={{ color: '#94a3b8', transform: isSectionNavOpen ? 'rotate(180deg)' : 'none', transition: 'transform 300ms ease' }}
-            />
-          </button>
+          {/* Always-visible row: Dashboard | Engines (toggle) | Chat AI. */}
+          <div className="flex items-stretch" style={{ height: 60 }}>
+            <button
+              type="button"
+              onClick={() => { setIsSectionNavOpen(false); dashboardItem.action(); }}
+              className="flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer"
+              style={{ color: '#64748b' }}
+            >
+              <dashboardItem.icon size={18} />
+              <span className="text-[10px] font-bold">{dashboardItem.label}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSectionNavOpen((v) => !v)}
+              className="flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer"
+              style={{ color: 'var(--pink)' }}
+              aria-expanded={isSectionNavOpen}
+              aria-label={isSectionNavOpen ? 'Collapse medical engines' : 'Expand medical engines'}
+            >
+              <activeEngineItem.icon size={18} />
+              <span className="flex items-center gap-0.5 text-[10px] font-bold">
+                {activeEngineItem.label}
+                <ChevronUp size={11} style={{ transform: isSectionNavOpen ? 'rotate(180deg)' : 'none', transition: 'transform 300ms ease' }} />
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setIsSectionNavOpen(false); chatItem.action(); }}
+              className="flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer"
+              style={{ color: '#64748b' }}
+            >
+              <chatItem.icon size={18} />
+              <span className="text-[10px] font-bold">{chatItem.label}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
