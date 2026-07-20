@@ -383,7 +383,15 @@ export default function MfrEnginePage() {
   // who has already stopped drinking isn't a current consumer either.
   const currentlyDrinks = (habit) => habit && habit !== 'Never' && habit !== 'Quit';
   if (currentlyDrinks(user.drinking_habits) || currentlyDrinks(prospectForm.drinking_habits)) suggestions.push("Reduce alcohol intake");
-  suggestions.push("Increase intercourse frequency");
+  // "Increase intercourse frequency" used to be pushed unconditionally here,
+  // every time, for every couple — real dummy data hiding among 4 genuinely
+  // conditional suggestions. There's no bug to condition it on: the backend's
+  // frequency multiplier (mfr.controller.js's freqVal) is never fed by a real
+  // user input anywhere in the app either — CompatibilityContext.js's shared
+  // lifestyle payload hardcodes freq: 0.92 (the same silent default the
+  // backend itself falls back to), so this suggestion could never have
+  // reflected anything real about a specific couple. Removed rather than
+  // faked into looking conditional.
 
   const hasOptimisation = suggestions.length > 0;
   const currentCurve = mfrResult.projection.current || [];
