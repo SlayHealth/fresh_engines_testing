@@ -60,7 +60,7 @@ export default function AnalysisLoadingScreen({
           const isLast = i === steps.length - 1;
 
           return (
-            <div key={step.label} className="flex items-start gap-3.5">
+            <div key={step.label} className="flex items-stretch gap-3.5">
               <div className="flex flex-col items-center">
                 <div
                   className="relative flex items-center justify-center w-8 h-8 rounded-full shrink-0 transition-colors duration-300"
