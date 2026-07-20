@@ -111,6 +111,7 @@ function CoreEngineLayoutInner({ children }) {
     if (pathname.includes('/mfr')) return 'mfr';
     if (pathname.includes('/usg')) return 'usg';
     if (pathname.includes('/genomics')) return 'genomics';
+    if (pathname.includes('/mental')) return 'mental';
     return 'chronic';
   }, [pathname]);
 
@@ -144,11 +145,11 @@ function CoreEngineLayoutInner({ children }) {
     { id: 'story', label: 'Partner Sync', icon: HeartPulse, action: () => handleTabClick('story') },
     { id: 'mfr', label: 'Fertility Timeline', icon: Heart, action: () => handleTabClick('mfr') },
     { id: 'chronic', label: 'Chronic Risk', icon: Activity, action: () => handleTabClick('chronic') },
-    // Not a core-engine tab like the others — routes into the real Mental
-    // Wellbeing questionnaire (the same sub-hub the mobile "Add Mental
-    // Wellbeing" CTA uses), which merges into this active match on completion
-    // via the existing activeMatchId-aware advance logic in add-prospect.
-    { id: 'mental', label: 'Stress Resilience', icon: Brain, action: () => { setIsMobileMenuOpen(false); router.push('/add-prospect?enter=mental'); } },
+    // Routes to its own results tab (pillar scores, attachment insight,
+    // couple analysis) same as every other engine — that page itself shows
+    // a "complete the questionnaire" prompt (routing into the real Mental
+    // Wellbeing sub-hub) when mentalResult isn't populated yet.
+    { id: 'mental', label: 'Stress Resilience', icon: Brain, action: () => handleTabClick('mental') },
     { id: 'usg', label: 'Organ Wellness', icon: ShieldCheck, action: () => handleTabClick('usg') },
     { id: 'genomics', label: 'Genetics Risk', icon: Dna, action: () => handleTabClick('genomics') },
   ];
