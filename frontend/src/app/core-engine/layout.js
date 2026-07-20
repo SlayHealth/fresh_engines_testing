@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
   Sparkles, Settings, Activity, MessageSquare, HeartPulse,
   ShieldCheck, ArrowLeft, RotateCcw, Brain, Download,
-  LayoutDashboard, Heart, Dna, HelpCircle, Menu, X
+  LayoutDashboard, Heart, Dna, HelpCircle, Menu, X, ChevronUp
 } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
@@ -58,6 +58,7 @@ function CoreEngineLayoutInner({ children }) {
   } = useCompatibility();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSectionNavOpen, setIsSectionNavOpen] = useState(false);
   const [hydrationAttempted, setHydrationAttempted] = useState(false);
 
   // WS8-01: report pages previously read match data ONLY from in-memory context,
@@ -157,6 +158,7 @@ function CoreEngineLayoutInner({ children }) {
   // Chat AI trigger included), so this is mobile's only way into the report
   // chat drawer here.
   const mobileNavItems = [...menuItems, { id: 'chat', label: 'Chat AI', icon: MessageSquare, action: () => setIsChatOpen(true) }];
+  const activeNavItem = mobileNavItems.find((item) => item.id === selectedTab) || mobileNavItems[0];
 
   if (!user || !chronicResult || !mfrResult) return null;
 
@@ -456,36 +458,79 @@ function CoreEngineLayoutInner({ children }) {
       {/* Report section nav (mobile) — MobileBottomNav.js steps aside entirely
           on /core-engine routes (see its own gate) since this report has 7
           sections plus chat, too many for the rest of the app's fixed 2-4 tab
-          bar. Horizontally scrollable so every section (the same list the
-          desktop sidebar / mobile hamburger drawer above already show) stays
-          one tap away. z-20, below the drawer overlay's z-30, so it sits
-          under (not clickable through) the drawer when that's open. */}
-      <nav
-        className="lg:hidden fixed left-0 right-0 bottom-0 z-20 flex items-center gap-0.5 overflow-x-auto px-2 pt-2 font-sans"
-        style={{
-          paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)',
-          background: 'rgba(255,255,255,0.94)',
-          backdropFilter: 'blur(20px) saturate(1.6)',
-          borderTop: '1px solid var(--line)'
-        }}
-        aria-label="Report sections"
-      >
-        {mobileNavItems.map((item) => {
-          const isItemActive = item.id !== 'chat' && selectedTab === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={item.action}
-              className="flex flex-col items-center gap-1 shrink-0 px-2.5 py-1.5 rounded-xl transition-colors duration-150 cursor-pointer"
-              style={{ color: isItemActive ? 'var(--pink)' : '#94a3b8' }}
-            >
-              <item.icon size={18} />
-              <span className="text-[10px] font-bold whitespace-nowrap">{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+          bar. Collapsed by default to one row (current section + a chevron);
+          tapping it expands the full list upward, matching the desktop
+          sidebar / mobile hamburger drawer's own list+styling above. z-20,
+          below the drawer overlay's z-30, so it sits under (not clickable
+          through) that drawer on the rare chance both are open at once. */}
+      <div className="lg:hidden fixed left-0 right-0 bottom-0 z-20 font-sans" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {/* Painted first, so plain DOM order (not z-index tricks) puts the
+            panel below on top of it — same pattern as the hamburger drawer's
+            own backdrop above. */}
+        {isSectionNavOpen && (
+          <div
+            className="fixed inset-0 transition-opacity duration-300"
+            style={{ background: 'rgba(15,23,42,0.35)' }}
+            onClick={() => setIsSectionNavOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        <div
+          className="rounded-t-3xl overflow-hidden"
+          style={{
+            background: 'rgba(255,255,255,0.98)',
+            backdropFilter: 'blur(20px) saturate(1.6)',
+            borderTop: '1px solid var(--line)',
+            boxShadow: isSectionNavOpen ? '0 -12px 32px -8px rgba(15,23,42,0.18)' : 'none',
+            transition: 'box-shadow 300ms ease'
+          }}
+        >
+          {/* The expanding part: grid-template-rows 0fr->1fr animates height
+              smoothly without measuring pixel heights by hand, and collapses
+              cleanly back to exactly 0 every time. */}
+          <div style={{ display: 'grid', gridTemplateRows: isSectionNavOpen ? '1fr' : '0fr', transition: 'grid-template-rows 320ms cubic-bezier(0.16,1,0.3,1)' }}>
+            <div style={{ overflow: 'hidden' }}>
+              <nav className="px-3 pt-3 pb-1 space-y-1" aria-label="Report sections">
+                {mobileNavItems.map((item) => {
+                  const isItemActive = item.id !== 'chat' && selectedTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { item.action(); setIsSectionNavOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold text-xs transition-colors duration-150 cursor-pointer"
+                      style={{ background: isItemActive ? 'var(--pink)' : 'transparent', color: isItemActive ? '#fff' : '#64748b' }}
+                    >
+                      <item.icon size={16} style={{ color: isItemActive ? '#fff' : '#94a3b8' }} />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+
+          {/* Always-visible collapsed row — the toggle itself. */}
+          <button
+            type="button"
+            onClick={() => setIsSectionNavOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-5 cursor-pointer"
+            style={{ height: 60 }}
+            aria-expanded={isSectionNavOpen}
+            aria-label={isSectionNavOpen ? 'Collapse report sections' : 'Expand report sections'}
+          >
+            <span className="flex items-center gap-2.5 text-sm font-bold" style={{ color: '#1e293b' }}>
+              <activeNavItem.icon size={18} style={{ color: 'var(--pink)' }} />
+              {activeNavItem.label}
+            </span>
+            <ChevronUp
+              size={18}
+              style={{ color: '#94a3b8', transform: isSectionNavOpen ? 'rotate(180deg)' : 'none', transition: 'transform 300ms ease' }}
+            />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
