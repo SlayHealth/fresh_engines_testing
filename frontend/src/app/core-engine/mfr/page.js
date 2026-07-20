@@ -579,7 +579,16 @@ export default function MfrEnginePage() {
         <p className="text-xs text-slate-500 mb-6">
           Year-by-year monthly conception chance, current vs optimised lifestyle.
         </p>
-        <div className="w-full h-[460px] bg-white rounded-xl p-4 border border-slate-100 flex items-center justify-center">
+        {/* A fixed h-[460px] here left most of the box empty on narrow
+            viewports: the SVG's viewBox is 800x420 (~1.9:1, wide/short), and
+            its default preserveAspectRatio="xMidYMid meet" scales to fit the
+            *narrower* constraint — on a ~360px-wide phone that's width, so
+            the rendered chart content shrank to ~190px tall and sat centered
+            inside 460px of mostly dead space. Matching the container's own
+            aspect ratio to the chart's native one means there's no longer a
+            mismatched dimension to shrink-to-fit against — the chart now
+            fills whatever width it's given at a proportional height. */}
+        <div className="w-full bg-white rounded-xl p-4 border border-slate-100" style={{ aspectRatio: '800 / 420' }}>
           {renderSvgChart(currentCurve, optimizedCurve)}
         </div>
         <div className="flex justify-center gap-6 mt-4 text-xs font-semibold text-slate-600">
