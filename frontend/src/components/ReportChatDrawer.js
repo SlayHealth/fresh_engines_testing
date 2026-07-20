@@ -4,6 +4,11 @@ import styles from './ReportChatDrawer.module.css';
 import { API_URL } from '../config/api';
 import { apiFetch } from '../utils/api';
 
+// Backend-generated suggestions (grounded in this couple's real report data
+// and — once there's a conversation — what's already been asked, see
+// chat.controller.js's generateSuggestions) are always preferred. This
+// static list is only a last-resort UI fallback for the brief window before
+// that first response lands, or if the backend ever returns none.
 const DEFAULT_SUGGESTIONS = {
   chronic: [
     "Explain my glycemic risk simply",
@@ -52,6 +57,10 @@ export default function ReportChatDrawer({
   const [isInitializing, setIsInitializing] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
+  // Starts on the static per-engine fallback so chips aren't empty on the
+  // very first paint, then gets replaced by the backend's real,
+  // report-grounded suggestions as soon as any API call returns them.
+  const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS[engineType] || []);
 
   const messagesEndRef = useRef(null);
   const drawerRef = useRef(null);
@@ -144,6 +153,9 @@ export default function ReportChatDrawer({
           content: getWelcomeMessage(engineType)
         }
       ]);
+      if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+      }
     } catch (err) {
       console.error('Error initializing chat session:', err);
       setError('Could not start a conversation session. Please try again.');
@@ -171,6 +183,9 @@ export default function ReportChatDrawer({
             content: getWelcomeMessage(engineType)
           }
         ]);
+      }
+      if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
       }
     } catch (err) {
       console.error('Error loading chat history:', err);
@@ -222,6 +237,9 @@ export default function ReportChatDrawer({
       }
 
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+      }
     } catch (err) {
       console.error('Error sending message:', err);
       setError('Failed to send message or fetch AI reply. Please try again.');
@@ -235,8 +253,6 @@ export default function ReportChatDrawer({
       handleSend();
     }
   };
-
-  const suggestions = DEFAULT_SUGGESTIONS[engineType] || [];
 
   return (
     <>

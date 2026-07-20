@@ -3,6 +3,80 @@ const openRouter = require('../services/llm/openrouter.service');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 
+// Only reached if the LLM call itself fails (no API key, network error,
+// malformed JSON) — the real suggestions are always generated fresh per
+// request by generateSuggestions() below, grounded in this specific
+// couple's actual report data and conversation so far, not this static list.
+const SUGGESTION_FALLBACKS = {
+  chronic: [
+    "Explain my glycemic risk simply",
+    "What lifestyle next-steps will help me?",
+    "Can you explain HbA1c vs IDRS?",
+    "Is my cholesterol level alarming?"
+  ],
+  mfr: [
+    "Explain our Fecundability Index simply",
+    "How can we improve our fertility score?",
+    "What do our semen parameters mean?",
+    "Explain AMH and ovarian reserve"
+  ],
+  usg: [
+    "What does Fatty Liver Grade mean?",
+    "Are there any signs of concern in my kidneys?",
+    "Explain USG findings in plain terms",
+    "What diet changes will help my liver health?"
+  ]
+};
+
+function engineNameFor(engineType) {
+  if (engineType === 'chronic') return 'Chronic Health Risk and Compatibility';
+  if (engineType === 'mfr') return 'Fertility & Fecundability (MFR)';
+  if (engineType === 'usg') return 'Abdominal Ultrasound (USG)';
+  return 'Premarital Health';
+}
+
+function transcriptToText(messages) {
+  return messages.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
+}
+
+// Generates the "Suggested Questions" chips shown under the chat — the whole
+// point of this call (as opposed to just reusing SUGGESTION_FALLBACKS) is
+// that these must be grounded in THIS couple's real report numbers/findings
+// and must never repeat a question already asked, so they stay genuinely
+// useful (and tap-worthy) as the conversation moves forward rather than
+// showing the same 4 generic chips forever.
+async function generateSuggestions({ metadata, transcriptMessages, engineType }) {
+  const engineName = engineNameFor(engineType);
+  const hasTranscript = Array.isArray(transcriptMessages) && transcriptMessages.length > 0;
+
+  const systemInstruction = `You write short "suggested question" chips for a premarital health chat assistant's ${engineName} section. These are NOT things the assistant says — they are questions the USER (someone planning their marriage) could tap to ask, written in their own first-person voice, as a full natural sentence a real person would actually say out loud.
+
+Rules:
+1. Ground every question in a REAL, SPECIFIC value or finding from the report JSON you're given — never a generic question like "What does my report mean?" or "Tell me more". Name the actual metric, organ, or number.
+2. Write natural, complete, tempting sentences — not clipped keyword fragments. A real person asks "Wait, is my glucose of 118 something to actually worry about?", not "Why 118 glucose?". Keep the subject and verb; don't strip words just to save space.
+   - Bad (too generic): "Tell me about my cholesterol"
+   - Bad (keyword fragment, not a real sentence): "Why 118 glucose?"
+   - Good (specific + a real sentence + creates stakes): "Should I be worried my glucose is 118?"
+3. Create genuine curiosity or personal stakes — lean on "wait", "should I", "is this normal", "what does this mean for us/for kids" framing where it fits naturally.
+4. Aim for roughly 6-12 words — long enough to read as a real question, short enough to sit on one tappable chip.
+5. Never invent a data point that isn't present in the JSON provided.
+6. ${hasTranscript ? 'A conversation transcript is included below. Every question must be a genuinely NEW angle — never repeat or lightly reword anything already asked in it.' : 'No conversation has happened yet — these are the opening chips, so lead with whatever in the data is most likely to make someone want an explanation immediately.'}
+7. Return ONLY valid JSON, no markdown, in exactly this shape: {"suggestions": ["...", "...", "..."]} with exactly 3 items.`;
+
+  const prompt = `Report data:\n${JSON.stringify(metadata, null, 2)}${hasTranscript ? `\n\nConversation so far:\n${transcriptToText(transcriptMessages)}` : ''}`;
+
+  try {
+    const result = await openRouter.extractJSON(prompt, systemInstruction);
+    const suggestions = Array.isArray(result?.suggestions)
+      ? result.suggestions.filter((s) => typeof s === 'string' && s.trim()).slice(0, 3)
+      : [];
+    if (suggestions.length > 0) return suggestions;
+  } catch (err) {
+    logger.error(`[Chat] Suggestion generation failed, using static fallback: ${err.message}`);
+  }
+  return SUGGESTION_FALLBACKS[engineType] || [];
+}
+
 async function createChatSession(req, res, next) {
   try {
     const { report_id, partner_report_id, engine_type, context_metadata } = req.body;
@@ -21,17 +95,21 @@ async function createChatSession(req, res, next) {
       [report_id || null, partner_report_id || null, engine_type]
     );
 
+    const metadataForSuggestions = context_metadata && typeof context_metadata === 'object' ? context_metadata : {};
+
     if (existingRes.rows.length > 0) {
+      const suggestions = await generateSuggestions({ metadata: metadataForSuggestions, transcriptMessages: [], engineType: engine_type });
       return res.status(200).json({
         success: true,
         sessionId: existingRes.rows[0].id,
-        message: 'Resumed existing chat session'
+        message: 'Resumed existing chat session',
+        suggestions
       });
     }
 
     const sessionId = uuidv4();
-    const contextMetadataStr = typeof context_metadata === 'object' 
-      ? JSON.stringify(context_metadata) 
+    const contextMetadataStr = typeof context_metadata === 'object'
+      ? JSON.stringify(context_metadata)
       : (context_metadata || '{}');
 
     await db.query(
@@ -40,10 +118,13 @@ async function createChatSession(req, res, next) {
       [sessionId, report_id || null, partner_report_id || null, engine_type, contextMetadataStr]
     );
 
+    const suggestions = await generateSuggestions({ metadata: metadataForSuggestions, transcriptMessages: [], engineType: engine_type });
+
     res.status(201).json({
       success: true,
       sessionId,
-      message: 'Chat session initialized successfully'
+      message: 'Chat session initialized successfully',
+      suggestions
     });
   } catch (error) {
     logger.error(`Error creating chat session: ${error.message}`);
@@ -59,15 +140,32 @@ async function getChatHistory(req, res, next) {
     if (sessionRes.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Chat session not found' });
     }
+    const session = sessionRes.rows[0];
+    let metadata = {};
+    try {
+      metadata = JSON.parse(session.context_metadata || '{}');
+    } catch (e) {
+      metadata = {};
+    }
 
     const messagesRes = await db.query(
       'SELECT role, content, created_at FROM chat_messages WHERE session_id = $1 ORDER BY id ASC',
       [sessionId]
     );
 
+    // Reopening a session with real history should suggest genuinely NEW
+    // questions, grounded in what's already been asked — not the same
+    // opening chips every time the drawer is reopened.
+    const suggestions = await generateSuggestions({
+      metadata,
+      transcriptMessages: messagesRes.rows,
+      engineType: session.engine_type
+    });
+
     res.json({
       success: true,
-      messages: messagesRes.rows
+      messages: messagesRes.rows,
+      suggestions
     });
   } catch (error) {
     logger.error(`Error retrieving chat history: ${error.message}`);
@@ -115,10 +213,7 @@ async function sendChatMessage(req, res, next) {
     const slidingWindow = fullHistory.slice(-10); // Take last 10 messages
 
     // 5. Construct the system prompt using the metadata and persona instructions
-    let engineName = 'Premarital Health';
-    if (engineType === 'chronic') engineName = 'Chronic Health Risk and Compatibility';
-    if (engineType === 'mfr') engineName = 'Fertility & Fecundability (MFR)';
-    if (engineType === 'usg') engineName = 'Abdominal Ultrasound (USG)';
+    const engineName = engineNameFor(engineType);
 
     const systemPrompt = `You are a friendly, highly empathetic, and human-like premarital health counselor for SlayHealth, specializing in explaining results for the ${engineName} engine. You are talking to a couple (or an individual) planning their life together.
 
@@ -156,10 +251,20 @@ Please respond to the user's message now, keeping these rules in mind.`;
       [sessionId, 'assistant', reply]
     );
 
-    // 8. Return response
+    // 8. Refresh the suggested-question chips so they build on what was just
+    // discussed instead of showing the same static list all conversation
+    // long — grounded in the real report data plus this exchange.
+    const suggestions = await generateSuggestions({
+      metadata,
+      transcriptMessages: [...slidingWindow, { role: 'assistant', content: reply }],
+      engineType
+    });
+
+    // 9. Return response
     res.json({
       success: true,
-      reply
+      reply,
+      suggestions
     });
   } catch (error) {
     logger.error(`Error in sendChatMessage: ${error.message}`);
