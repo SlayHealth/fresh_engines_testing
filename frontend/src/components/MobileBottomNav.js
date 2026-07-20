@@ -114,29 +114,23 @@ export default function MobileBottomNav() {
   // whole viewport — a floating nav bar here would sit on top of forms,
   // uploads, and the primary action button.
   //
-  // The name-gate alone isn't enough on two routes that are meant to read as
-  // "outside the authenticated app" regardless of whether *this* browser
-  // happens to carry a real session: the public marketing landing page (a
-  // returning, already-logged-in visitor still lands here first, per
-  // page.js's own "Continue" shortcut) and the invite link (opened by a
-  // different person entirely — the invited partner — who has never
-  // authenticated in this flow at all, even if the account holder's own
-  // session is what's sitting in this browser's localStorage). Confirmed
-  // live: without this second check, an authenticated account holder's own
-  // Home/Health/Chat AI/Analysis tabs rendered on both pages.
-  if (!user?.name || pathname === '/' || pathname.startsWith('/invite/') || pathname.startsWith('/add-prospect')) return null;
+  // The name-gate alone isn't enough on three routes that are meant to read
+  // as "outside the authenticated app" (or that own their own nav)
+  // regardless of whether *this* browser happens to carry a real session:
+  // the public marketing landing page (a returning, already-logged-in
+  // visitor still lands here first, per page.js's own "Continue" shortcut),
+  // the invite link (opened by a different person entirely — the invited
+  // partner — who has never authenticated in this flow at all, even if the
+  // account holder's own session is what's sitting in this browser's
+  // localStorage), and the report itself (core-engine/layout.js renders its
+  // own dedicated, scrollable section nav — see the "Report section nav"
+  // block there — covering everything this bar would otherwise offer,
+  // including a Dashboard tab and its own Chat AI trigger). Confirmed live:
+  // without the invite/landing-page check, an authenticated account holder's
+  // own Home/Health/Chat AI/Analysis tabs rendered on both those pages.
+  if (!user?.name || pathname === '/' || pathname.startsWith('/invite/') || pathname.startsWith('/add-prospect') || pathname.startsWith('/core-engine')) return null;
 
   const isActive = (target) => pathname === target || pathname.startsWith(`${target}/`);
-  // The report itself (core-engine/layout.js) already has its own nav for
-  // "Health"/"Analysis"-equivalent destinations — a top-header hamburger
-  // (mobile) / always-visible sidebar (desktop) listing Dashboard, Partner
-  // Sync, Fertility Timeline, Chronic Risk, Stress Resilience, Organ
-  // Wellness, and Genetics Risk. Showing this global bar's own Health
-  // (-> /add-prospect) and Analysis (-> here) tabs on top of that is
-  // redundant at best and confusing at worst (Analysis pointing at the page
-  // already on screen). Home and Chat AI still make sense as an escape
-  // hatch / the report's own counselor feature, so only those two stay.
-  const inReport = pathname.startsWith('/core-engine');
   const hasActiveAnalysis = !!(chronicResult && mfrResult);
   // The FAB treatment (elevated, colored) implies "there's something worth
   // discussing" — that's only true once at least one compatibility check
@@ -203,11 +197,9 @@ export default function MobileBottomNav() {
         <button type="button" className={`tab${isActive('/dashboard') ? ' on' : ''}`} onClick={() => router.push('/dashboard')}>
           <Ico name="home" /><span>Home</span>
         </button>
-        {!inReport && (
-          <button type="button" className={`tab${isActive('/add-prospect') ? ' on' : ''}`} onClick={() => router.push('/add-prospect')}>
-            <Ico name="clip" /><span>Health</span>
-          </button>
-        )}
+        <button type="button" className={`tab${isActive('/add-prospect') ? ' on' : ''}`} onClick={() => router.push('/add-prospect')}>
+          <Ico name="clip" /><span>Health</span>
+        </button>
         {hasCompletedAnalysis ? (
           <button type="button" className="tab fab" onClick={openChat} aria-label="Chat with AI assistant">
             <span className="b"><Ico name="chat" /></span><span>Chat AI</span>
@@ -222,16 +214,14 @@ export default function MobileBottomNav() {
             the one interaction that's supposed to explain why it's muted.
             It stays a real, always-actionable button; only the label and
             opacity communicate "not yet". */}
-        {!inReport && (
-          <button
-            type="button"
-            className={`tab${hasCompletedAnalysis && isActive('/core-engine') ? ' on' : ''}${hasCompletedAnalysis ? '' : ' disabled'}`}
-            onClick={handleAnalysisTap}
-            aria-label={hasCompletedAnalysis ? undefined : 'Analysis — locked until your first compatibility check is complete'}
-          >
-            <Ico name="chart" /><span>Analysis</span>
-          </button>
-        )}
+        <button
+          type="button"
+          className={`tab${hasCompletedAnalysis && isActive('/core-engine') ? ' on' : ''}${hasCompletedAnalysis ? '' : ' disabled'}`}
+          onClick={handleAnalysisTap}
+          aria-label={hasCompletedAnalysis ? undefined : 'Analysis — locked until your first compatibility check is complete'}
+        >
+          <Ico name="chart" /><span>Analysis</span>
+        </button>
       </nav>
 
       {isPickerOpen && (

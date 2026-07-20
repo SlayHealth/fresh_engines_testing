@@ -152,6 +152,12 @@ function CoreEngineLayoutInner({ children }) {
     { id: 'genomics', label: 'Genetics Risk', icon: Dna, action: () => handleTabClick('genomics') },
   ];
 
+  // Same list, plus a Chat AI entry, for the mobile section nav below —
+  // MobileBottomNav.js steps aside entirely on /core-engine routes (its own
+  // Chat AI trigger included), so this is mobile's only way into the report
+  // chat drawer here.
+  const mobileNavItems = [...menuItems, { id: 'chat', label: 'Chat AI', icon: MessageSquare, action: () => setIsChatOpen(true) }];
+
   if (!user || !chronicResult || !mfrResult) return null;
 
   return (
@@ -446,6 +452,40 @@ function CoreEngineLayoutInner({ children }) {
           contextMetadata={combinedContextMetadata}
         />
       </main>
+
+      {/* Report section nav (mobile) — MobileBottomNav.js steps aside entirely
+          on /core-engine routes (see its own gate) since this report has 7
+          sections plus chat, too many for the rest of the app's fixed 2-4 tab
+          bar. Horizontally scrollable so every section (the same list the
+          desktop sidebar / mobile hamburger drawer above already show) stays
+          one tap away. z-20, below the drawer overlay's z-30, so it sits
+          under (not clickable through) the drawer when that's open. */}
+      <nav
+        className="lg:hidden fixed left-0 right-0 bottom-0 z-20 flex items-center gap-0.5 overflow-x-auto px-2 pt-2 font-sans"
+        style={{
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)',
+          background: 'rgba(255,255,255,0.94)',
+          backdropFilter: 'blur(20px) saturate(1.6)',
+          borderTop: '1px solid var(--line)'
+        }}
+        aria-label="Report sections"
+      >
+        {mobileNavItems.map((item) => {
+          const isItemActive = item.id !== 'chat' && selectedTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={item.action}
+              className="flex flex-col items-center gap-1 shrink-0 px-2.5 py-1.5 rounded-xl transition-colors duration-150 cursor-pointer"
+              style={{ color: isItemActive ? 'var(--pink)' : '#94a3b8' }}
+            >
+              <item.icon size={18} />
+              <span className="text-[10px] font-bold whitespace-nowrap">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
