@@ -7,24 +7,29 @@ const logger = require('../utils/logger');
 // malformed JSON) — the real suggestions are always generated fresh per
 // request by generateSuggestions() below, grounded in this specific
 // couple's actual report data and conversation so far, not this static list.
+// This is a premarital health platform — every question here is framed
+// around what a finding means for the marriage/couple/family-planning
+// decision in front of them, not generic "explain my lab result" curiosity
+// (that framing is enforced on the LLM-generated path too, see
+// generateSuggestions' system instruction below).
 const SUGGESTION_FALLBACKS = {
   chronic: [
-    "Explain my glycemic risk simply",
-    "What lifestyle next-steps will help me?",
-    "Can you explain HbA1c vs IDRS?",
-    "Is my cholesterol level alarming?"
+    "Could this affect our life together long-term?",
+    "What should we both work on before the wedding?",
+    "Does this change how we should plan having kids?",
+    "Is this something to fix before we get married?"
   ],
   mfr: [
-    "Explain our Fecundability Index simply",
-    "How can we improve our fertility score?",
-    "What do our semen parameters mean?",
-    "Explain AMH and ovarian reserve"
+    "Does this change when we should plan to have kids?",
+    "How can we improve our chances together?",
+    "What do our fertility markers mean for starting a family?",
+    "Should we act on this before waiting any longer?"
   ],
   usg: [
-    "What does Fatty Liver Grade mean?",
-    "Are there any signs of concern in my kidneys?",
-    "Explain USG findings in plain terms",
-    "What diet changes will help my liver health?"
+    "Does this finding affect our future together?",
+    "Should we be concerned about this before marriage?",
+    "What do these findings mean for our life together?",
+    "What should we change together, not just alone?"
   ]
 };
 
@@ -79,16 +84,19 @@ async function generateSuggestions({ metadata, transcriptMessages, engineType })
   const engineName = engineNameFor(engineType);
   const hasTranscript = Array.isArray(transcriptMessages) && transcriptMessages.length > 0;
 
-  const systemInstruction = `You write short "suggested question" chips for a premarital health chat assistant's ${engineName} section. These are NOT things the assistant says — they are questions the USER (someone planning their marriage) could tap to ask, written in their own first-person voice, as a full natural sentence a real person would actually say out loud.
+  const systemInstruction = `You write short "suggested question" chips for SlayHealth, a PREMARITAL health platform's ${engineName} section. These are NOT things the assistant says — they are questions the USER (someone actively planning their marriage, evaluating this finding as part of that decision) could tap to ask, written in their own first-person voice, as a full natural sentence a real person would actually say out loud.
 
 Rules:
 1. Ground every question in a REAL, SPECIFIC value or finding from the report JSON you're given — never a generic question like "What does my report mean?" or "Tell me more". Name the actual metric, organ, or number.
-2. Write natural, complete, tempting sentences — not clipped keyword fragments. A real person asks "Wait, is my glucose of 118 something to actually worry about?", not "Why 118 glucose?". Keep the subject and verb; don't strip words just to save space.
-   - Bad (too generic): "Tell me about my cholesterol"
+2. Every question must be framed around the MARRIAGE/COUPLE/FAMILY decision in front of them, not generic personal health curiosity — this is the single most important rule. Ask what a finding means for the two of them, their marriage timeline, having kids, or what they should do about it together, not what it means for "me" in isolation.
+   - Bad (generic personal-health curiosity, no premarital angle): "What does a risk of 4.9 mean for me?"
+   - Bad (clinical but still not about the marriage decision): "Is a pathology score of 95 normal?"
+   - Good (same finding, framed as a marriage/couple decision): "Should we fix my risk score before the wedding?"
+   - Good: "Does my glucose of 118 change how soon we should plan kids?"
+3. Write natural, complete, tempting sentences — not clipped keyword fragments. Keep the subject and verb; don't strip words just to save space.
    - Bad (keyword fragment, not a real sentence): "Why 118 glucose?"
-   - Good (specific + a real sentence + creates stakes): "Should I be worried my glucose is 118?"
-3. Create genuine curiosity or personal stakes — lean on "wait", "should I", "is this normal", "what does this mean for us/for kids" framing where it fits naturally.
-4. Aim for roughly 6-12 words — long enough to read as a real question, short enough to sit on one tappable chip.
+   - Good (specific + a real sentence + creates stakes): "Should we be worried my glucose is 118 before we get married?"
+4. Aim for roughly 6-14 words — long enough to read as a real question, short enough to sit on one tappable chip.
 5. Never invent a data point that isn't present in the JSON provided.
 6. ${hasTranscript ? 'A conversation transcript is included below. Every question must be a genuinely NEW angle — never repeat or lightly reword anything already asked in it.' : 'No conversation has happened yet — these are the opening chips, so lead with whatever in the data is most likely to make someone want an explanation immediately.'}
 7. When citing a number, round it the way a person would say it out loud (e.g. "118", "92.5") — never repeat a long raw decimal straight from the JSON.
