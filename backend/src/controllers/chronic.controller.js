@@ -537,15 +537,24 @@ Respond ONLY with JSON matching the schema: { "conversation_needed_summary": "..
         idrsA: idrsProjectionA,
         idrsB: idrsProjectionB
       },
+      // gA/gB and uiRiskA/uiRiskB are raw floating-point results (100 * (1 - pA),
+      // pA itself from an odds-ratio chain) — full of double-precision noise like
+      // 92.52239170382555. partnerARisk/partnerBRisk above already round the same
+      // underlying risk value to 1dp for display; these per-partner copies never
+      // got the same treatment despite sitting right next to name/age as if they
+      // were equally real-facing fields. Rounded here to match, since anything
+      // merged into partner_A/partner_B (unlike the separate `calculations` trace
+      // object below) is real profile data other code — including the chat
+      // assistant's LLM context — treats as display-ready.
       partner_A: {
         ...partnerA,
-        pathologyScore: gA,
-        risk: uiRiskA
+        pathologyScore: parseFloat(gA.toFixed(1)),
+        risk: parseFloat(uiRiskA.toFixed(1))
       },
       partner_B: {
         ...partnerB,
-        pathologyScore: gB,
-        risk: uiRiskB
+        pathologyScore: parseFloat(gB.toFixed(1)),
+        risk: parseFloat(uiRiskB.toFixed(1))
       },
       dynamic_insights,
       calculations,

@@ -39,6 +39,36 @@ function transcriptToText(messages) {
   return messages.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
 }
 
+// The engines' full result objects carry raw double-precision intermediates
+// (odds ratios, probability chains, etc.) alongside their properly-rounded
+// display fields — e.g. a real bug this guards against: chronic.controller.js
+// once merged an unrounded partner_A.pathologyScore like 92.52239170382555
+// right next to already-rounded sibling fields. That specific field is now
+// fixed at the source, but this whole metadata blob (chronicResult/mfrResult/
+// mentalResult, in full) gets JSON.stringify'd straight into every LLM
+// prompt below — any other not-yet-rounded intermediate anywhere in any
+// engine's response is one lucky "ground this in a real number" LLM
+// generation away from becoming the same kind of absurdly-precise, obviously-
+// internal value shown to a user. Rounding every number here, right before
+// it enters a prompt, closes that off at the boundary instead of chasing
+// down every individual field across three separate scoring engines.
+function roundNumbersForPrompt(value) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? Math.round(value * 100) / 100 : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(roundNumbersForPrompt);
+  }
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const key of Object.keys(value)) {
+      out[key] = roundNumbersForPrompt(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
 // Generates the "Suggested Questions" chips shown under the chat — the whole
 // point of this call (as opposed to just reusing SUGGESTION_FALLBACKS) is
 // that these must be grounded in THIS couple's real report numbers/findings
@@ -61,9 +91,10 @@ Rules:
 4. Aim for roughly 6-12 words — long enough to read as a real question, short enough to sit on one tappable chip.
 5. Never invent a data point that isn't present in the JSON provided.
 6. ${hasTranscript ? 'A conversation transcript is included below. Every question must be a genuinely NEW angle — never repeat or lightly reword anything already asked in it.' : 'No conversation has happened yet — these are the opening chips, so lead with whatever in the data is most likely to make someone want an explanation immediately.'}
-7. Return ONLY valid JSON, no markdown, in exactly this shape: {"suggestions": ["...", "...", "..."]} with exactly 3 items.`;
+7. When citing a number, round it the way a person would say it out loud (e.g. "118", "92.5") — never repeat a long raw decimal straight from the JSON.
+8. Return ONLY valid JSON, no markdown, in exactly this shape: {"suggestions": ["...", "...", "..."]} with exactly 3 items.`;
 
-  const prompt = `Report data:\n${JSON.stringify(metadata, null, 2)}${hasTranscript ? `\n\nConversation so far:\n${transcriptToText(transcriptMessages)}` : ''}`;
+  const prompt = `Report data:\n${JSON.stringify(roundNumbersForPrompt(metadata), null, 2)}${hasTranscript ? `\n\nConversation so far:\n${transcriptToText(transcriptMessages)}` : ''}`;
 
   try {
     const result = await openRouter.extractJSON(prompt, systemInstruction);
@@ -219,7 +250,7 @@ async function sendChatMessage(req, res, next) {
 
 Your goal is to explain clinical findings to them in a warm, conversational, and highly specific manner, just like a real human counselor sitting across from them.
 Here is the client's report and analysis data in JSON format:
-${JSON.stringify(metadata, null, 2)}
+${JSON.stringify(roundNumbersForPrompt(metadata), null, 2)}
 
 Strict Guidelines for your Persona and Responses:
 1. **Always Be Positive but Nuanced Regarding Marriage**: If the users ask "Should we get married?" or anything similar, handle it carefully based on their health:
@@ -232,6 +263,7 @@ Strict Guidelines for your Persona and Responses:
 5. **Short & Concise**: Keep your replies brief. Aim for 2 to 3 short, friendly sentences. Do NOT dump the entire report or list out findings unless explicitly asked.
 6. **NO EM DASHES ("—")**: Do NOT use the em dash character "—" under any circumstances.
 7. Do NOT make up any medical values not present in the JSON.
+8. When citing a number, round it the way a person would say it out loud (e.g. "118", "92.5") — never repeat a long raw decimal straight from the JSON.
 
 Please respond to the user's message now, keeping these rules in mind.`;
 
