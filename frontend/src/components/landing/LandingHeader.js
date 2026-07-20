@@ -10,7 +10,7 @@ export default function LandingHeader({ continueHref }) {
     >
       <div className="container mx-auto px-4 sm:px-6 h-16 lg:h-20 flex items-center justify-between max-w-7xl">
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <Image src="/logo.png" alt="SlayHealth" width={140} height={80} priority className="h-8 lg:h-10 w-auto object-contain" />
+          <Image src="/logo.png" alt="SlayHealth" width={869} height={398} priority className="h-8 lg:h-10 w-auto object-contain" />
         </Link>
 
         {continueHref ? (
