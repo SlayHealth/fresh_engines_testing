@@ -127,6 +127,16 @@ export default function MobileBottomNav() {
   if (!user?.name || pathname === '/' || pathname.startsWith('/invite/') || pathname.startsWith('/add-prospect')) return null;
 
   const isActive = (target) => pathname === target || pathname.startsWith(`${target}/`);
+  // The report itself (core-engine/layout.js) already has its own nav for
+  // "Health"/"Analysis"-equivalent destinations — a top-header hamburger
+  // (mobile) / always-visible sidebar (desktop) listing Dashboard, Partner
+  // Sync, Fertility Timeline, Chronic Risk, Stress Resilience, Organ
+  // Wellness, and Genetics Risk. Showing this global bar's own Health
+  // (-> /add-prospect) and Analysis (-> here) tabs on top of that is
+  // redundant at best and confusing at worst (Analysis pointing at the page
+  // already on screen). Home and Chat AI still make sense as an escape
+  // hatch / the report's own counselor feature, so only those two stay.
+  const inReport = pathname.startsWith('/core-engine');
   const hasActiveAnalysis = !!(chronicResult && mfrResult);
   // The FAB treatment (elevated, colored) implies "there's something worth
   // discussing" — that's only true once at least one compatibility check
@@ -193,9 +203,11 @@ export default function MobileBottomNav() {
         <button type="button" className={`tab${isActive('/dashboard') ? ' on' : ''}`} onClick={() => router.push('/dashboard')}>
           <Ico name="home" /><span>Home</span>
         </button>
-        <button type="button" className={`tab${isActive('/add-prospect') ? ' on' : ''}`} onClick={() => router.push('/add-prospect')}>
-          <Ico name="clip" /><span>Health</span>
-        </button>
+        {!inReport && (
+          <button type="button" className={`tab${isActive('/add-prospect') ? ' on' : ''}`} onClick={() => router.push('/add-prospect')}>
+            <Ico name="clip" /><span>Health</span>
+          </button>
+        )}
         {hasCompletedAnalysis ? (
           <button type="button" className="tab fab" onClick={openChat} aria-label="Chat with AI assistant">
             <span className="b"><Ico name="chat" /></span><span>Chat AI</span>
@@ -210,14 +222,16 @@ export default function MobileBottomNav() {
             the one interaction that's supposed to explain why it's muted.
             It stays a real, always-actionable button; only the label and
             opacity communicate "not yet". */}
-        <button
-          type="button"
-          className={`tab${hasCompletedAnalysis && isActive('/core-engine') ? ' on' : ''}${hasCompletedAnalysis ? '' : ' disabled'}`}
-          onClick={handleAnalysisTap}
-          aria-label={hasCompletedAnalysis ? undefined : 'Analysis — locked until your first compatibility check is complete'}
-        >
-          <Ico name="chart" /><span>Analysis</span>
-        </button>
+        {!inReport && (
+          <button
+            type="button"
+            className={`tab${hasCompletedAnalysis && isActive('/core-engine') ? ' on' : ''}${hasCompletedAnalysis ? '' : ' disabled'}`}
+            onClick={handleAnalysisTap}
+            aria-label={hasCompletedAnalysis ? undefined : 'Analysis — locked until your first compatibility check is complete'}
+          >
+            <Ico name="chart" /><span>Analysis</span>
+          </button>
+        )}
       </nav>
 
       {isPickerOpen && (

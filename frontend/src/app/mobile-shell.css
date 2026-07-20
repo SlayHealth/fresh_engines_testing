@@ -334,7 +334,11 @@
 /* ── bottom tab bar (.mnav) ────────────────────────────────────────────── */
 .mnav {
   position:fixed; left:12px; right:12px; bottom:calc(env(safe-area-inset-bottom) + 12px); height:64px; z-index:40;
-  display:grid; grid-template-columns:repeat(4,1fr); align-items:center;
+  /* Flex + space-evenly (not a fixed-column grid) so this stays correctly
+     spaced whether it's showing all 4 tabs or the reduced set MobileBottomNav
+     renders inside the report (see core-engine gating there) — a hardcoded
+     repeat(4,1fr) left dead empty column-width gaps once a tab was dropped. */
+  display:flex; justify-content:space-evenly; align-items:center;
   border-radius:24px; background:var(--glass); border:1px solid var(--glass-line);
   backdrop-filter:blur(20px) saturate(1.6); box-shadow:var(--shadow-m);
   max-width:calc(768px - 24px); margin:0 auto;
