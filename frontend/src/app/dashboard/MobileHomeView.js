@@ -98,10 +98,16 @@ export default function MobileHomeView({
           </button>
         </div>
 
-        {/* signature: weighted confidence gauge */}
+        {/* signature: weighted confidence gauge. Eyebrow names the owner ("Your
+            Full Picture") because this arc reflects the account holder's OWN
+            profile — a QA report read its 0% as inconsistent with a partner
+            draft sitting at 20% in the resume banner below, when they're just
+            two different people's progress. Making ownership explicit here
+            (paired with the banner's "Partner: <name>") removes that apparent
+            contradiction without changing what either number means. */}
         <section className="hero grain rise" style={{ animationDelay: '.06s' }}>
           <div className="hero-top">
-            <span className="eyebrow">The Full Picture</span>
+            <span className="eyebrow">Your Full Picture</span>
             <span className="thr"><Ico name="shield" sm /> Reliable at 70%</span>
           </div>
           <WeightedGauge sections={weighted} confidence={conf} subLabel={`${done} of ${weighted.length} sections`} />
