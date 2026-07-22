@@ -737,6 +737,29 @@ export function CompatibilityProvider({ children }) {
       }
 
       if (!chronicResponse.ok || !mfrResponse.ok) {
+        // A 404 here means an engine was handed a pathology report_id that no
+        // longer exists on the server ("Male/Female report not found"). This
+        // happens when a report_id persisted in the local draft outlives the
+        // report itself (e.g. an older session, or server-side cleanup) — and
+        // since the draft now survives logout, the stale id can linger. Rather
+        // than dead-end on a generic "engines failed", clear the stale
+        // reference so the Pathology step resets to "upload", and tell the user
+        // exactly what to do. (Reported: Generate Insights -> 404 "report not
+        // found" surfaced only as "Clinical engines evaluation failed".)
+        const failed = !chronicResponse.ok ? chronicResponse : mfrResponse;
+        if (failed.status === 404) {
+          const body = await responseJson(failed);
+          const err = (body && body.error) || '';
+          if (/report not found/i.test(err)) {
+            // Map the missing side (male/female) back to whose report it is.
+            const maleMissing = /male report/i.test(err) && !/female report/i.test(err);
+            const userIsTheMissingOne = maleMissing ? isUserMale : !isUserMale;
+            if (userIsTheMissingOne) setUserReport(null); else setProspectReport(null);
+            throw new Error(
+              `We couldn't find the uploaded pathology report for ${userIsTheMissingOne ? 'you' : (prospectForm.name || 'your partner')} — it may have expired. Please re-upload it and run the check again.`
+            );
+          }
+        }
         throw new Error('Clinical engines evaluation failed.');
       }
 
