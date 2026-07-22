@@ -268,6 +268,22 @@ function AddProspectPageInner() {
     }
   }, [user]);
 
+  // Default the partner's gender to the opposite of the user's own. This is a
+  // premarital, one-male-one-female product — the fertility engine needs a
+  // male and a female partner, chronic risk uses sex-specific cutoffs, and a
+  // match is built from a male_report + female_report — so a Male user has
+  // already implied a Female partner. Pre-selecting spares them re-answering a
+  // question they've effectively already answered. It's only a DEFAULT: the
+  // Gender step still shows and is fully changeable, and it never overrides a
+  // value the user (or a restored draft) already set.
+  useEffect(() => {
+    const userGender = onboardingForm.candidateGender;
+    if ((userGender === 'Male' || userGender === 'Female') && !prospectForm.gender) {
+      setProspectForm(prev => (prev.gender ? prev : { ...prev, gender: userGender === 'Male' ? 'Female' : 'Male' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardingForm.candidateGender, prospectForm.gender]);
+
   // Radiology States
   const [userRadiology, setUserRadiology] = useState(() => loadRadiologyDraft()?.userRadiology || null);
   const [prospectRadiology, setProspectRadiology] = useState(() => loadRadiologyDraft()?.prospectRadiology || null);
