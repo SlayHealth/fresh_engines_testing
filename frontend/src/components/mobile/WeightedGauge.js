@@ -61,14 +61,35 @@ export default function WeightedGauge({ sections, confidence, subLabel }) {
   });
 
   return (
-    <div className="gauge-wrap">
-      <svg className="gauge" viewBox="0 0 140 140" aria-hidden="true">
-        <g transform="rotate(-90 70 70)">{arcs}</g>
-      </svg>
-      <div className="gauge-c">
-        <div className="gauge-n serif tnum">{confNum}<i>%</i></div>
-        <div className="gauge-s">{subLabel}</div>
+    <>
+      <div className="gauge-wrap">
+        <svg className="gauge" viewBox="0 0 140 140" aria-hidden="true">
+          <g transform="rotate(-90 70 70)">{arcs}</g>
+        </svg>
+        <div className="gauge-c">
+          <div className="gauge-n serif tnum">{confNum}<i>%</i></div>
+          <div className="gauge-s">{subLabel}</div>
+        </div>
       </div>
-    </div>
+
+      {/* Legend — names each arc in journey order (the `sections` array is
+          already in journey order: About → Lifestyle → Mental → Pathology →
+          Radiology) with its weight. The arcs themselves are drawn in that
+          same order, but because arc LENGTH encodes weight, the biggest slice
+          (Pathology, 35%) visually dominates and a QA reviewer read the donut
+          by slice size as if it were a sequence (Pathology "first"). This maps
+          each colour to its section and shows the weight driving its size, so
+          the donut reads as "one weighted slice per section" rather than an
+          order — without changing the weight encoding itself. */}
+      <ul className="g-legend" aria-label="Sections in order, with each section's weight">
+        {sections.map((s, i) => (
+          <li key={s.id ?? i} className="g-leg">
+            <span className="g-dot" style={{ background: `var(--r-${s.tone})` }} aria-hidden="true" />
+            <span className="g-leg-t">{s.title}</span>
+            <span className="g-leg-w">{s.weight}%</span>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
