@@ -429,7 +429,23 @@ export function CompatibilityProvider({ children }) {
           return true;
         }
       } catch (err) {
-        console.error('Silent refresh failed on mount:', err);
+        // A failed silent refresh on mount usually just means "no session to
+        // resume" — the normal state for a logged-out visitor (no token in
+        // storage, no httpOnly cookie). That's an expected outcome the caller
+        // below already handles (redirect off private paths; stay put on public
+        // ones), NOT an app error — so don't log it at console.error, which
+        // Next's dev overlay surfaces as a scary "Console Error" on every plain
+        // landing-page load. Reserve error-level logging for genuinely
+        // unexpected failures (network down, backend 5xx). If storage said we
+        // HAD a session yet the refresh still 401'd, keep a quiet warning so a
+        // real unexpected logout (e.g. a token-rotation race) stays diagnosable.
+        const hadStoredSession = !!(localStorage.getItem('slayhealth_user') || localStorage.getItem('slayhealth_refresh_token'));
+        if (err?.status === 401) {
+          if (hadStoredSession) console.warn('Session could not be resumed on mount (token expired or revoked).');
+          else console.debug('No session to resume on mount (not signed in).');
+        } else {
+          console.error('Silent refresh failed on mount:', err);
+        }
       }
       return false;
     };

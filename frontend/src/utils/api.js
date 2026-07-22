@@ -37,7 +37,15 @@ export function refreshAuthSession() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: savedRefreshToken })
     });
-    if (!res.ok) throw new Error('Refresh token expired or invalid');
+    if (!res.ok) {
+      // Carry the HTTP status so callers can tell an EXPECTED auth outcome
+      // (401 = no or expired session — the normal state for a logged-out
+      // visitor) apart from a GENUINE failure (network down, backend 5xx).
+      // Without this every caller error-logs a plain not-signed-in state.
+      const err = new Error('Refresh token expired or invalid');
+      err.status = res.status;
+      throw err;
+    }
     const data = await res.json();
     if (!(data.success && data.accessToken)) throw new Error('Refresh response invalid');
     setAccessToken(data.accessToken);
