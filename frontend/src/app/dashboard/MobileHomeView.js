@@ -40,8 +40,22 @@ export default function MobileHomeView({
   const timeOfDay = h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night';
   const greeting = `Good ${timeOfDay}`;
 
-  // next best action = heaviest untouched, unlocked section
-  const next = weighted.filter((s) => s.pct === 0 && s.state !== 'locked').sort((a, b) => b.weight - a.weight)[0];
+  // Gauge guidance — always surface a concrete next action so the hero is
+  // never a silent dead-end (it was: the old `next` used `pct === 0`, so once
+  // every free section was done, the only weighted section left was the paid,
+  // locked Radiology — filtered out — leaving 90% with no CTA and a stale
+  // "biggest lever" caption pointing at an already-finished section).
+  //   next  — heaviest UNLOCKED section still to finish. `pct < 100` (not
+  //           `=== 0`) so a half-finished section, e.g. Mental at 40%, is
+  //           surfaced too, not just untouched ones.
+  //   addOn — set only when nothing unlocked is left to finish but a locked/
+  //           paid weighted section (Radiology) remains: the core free profile
+  //           is complete and the remainder is an OPTIONAL paid add-on, not a
+  //           pending required step (Radiology is optional/paid per the PRD).
+  const next = weighted
+    .filter((s) => s.state !== 'locked' && s.state !== 'soon' && s.pct < 100)
+    .sort((a, b) => b.weight - a.weight)[0];
+  const addOn = !next ? weighted.find((s) => s.state === 'locked' && s.pct < 100) : null;
   const heaviest = [...weighted].sort((a, b) => b.weight - a.weight)[0];
   const leverName = heaviest ? (heaviest.id === 'pathology' ? 'Bloodwork' : heaviest.title) : 'Bloodwork';
 
@@ -91,13 +105,34 @@ export default function MobileHomeView({
             <span className="thr"><Ico name="shield" sm /> Reliable at 70%</span>
           </div>
           <WeightedGauge sections={weighted} confidence={conf} subLabel={`${done} of ${weighted.length} sections`} />
-          <p className="hero-line">Each arc is one section, sized by how much it moves the score. <b>{leverName} is your biggest lever.</b></p>
+          {/* Caption adapts to state so it never points at an already-done
+              section: guide to the next step, or explain the optional paid
+              remainder once the free profile is complete. */}
+          <p className="hero-line">
+            {next ? (
+              <>Each arc is one section, sized by how much it moves the score. <b>{leverName} is your biggest lever.</b></>
+            ) : addOn ? (
+              <>Your core profile is complete. <b>{addOn.title} is an optional add-on for the final +{addOn.weight}%.</b></>
+            ) : (
+              <>You&apos;ve completed every section. <b>You&apos;re all set.</b></>
+            )}
+          </p>
           {next && (
             <button className="next" onClick={() => openSection(next)}>
               <span className="nx-i"><Ico name={next.icon} /></span>
               <span className="nx-t">
                 <b>Continue — {next.title.toLowerCase()}</b>
                 <small>{next.duration ? `≈${next.duration} · ` : ''}+{next.weight}% confidence</small>
+              </span>
+              <span className="nx-a"><Ico name="arrow" /></span>
+            </button>
+          )}
+          {addOn && (
+            <button className="next" onClick={() => openSection(addOn)}>
+              <span className="nx-i"><Ico name="check" /></span>
+              <span className="nx-t">
+                <b>Unlock {addOn.title.toLowerCase()}</b>
+                <small>Optional · +{addOn.weight}% confidence{addOn.price ? ` · ${addOn.price}` : ''}</small>
               </span>
               <span className="nx-a"><Ico name="arrow" /></span>
             </button>
