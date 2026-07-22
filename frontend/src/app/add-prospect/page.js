@@ -89,6 +89,29 @@ function loadWizardPositionDraft() {
   return cachedWizardPositionDraft;
 }
 
+// Reads just enough of the shared profile draft (owned by CompatibilityContext,
+// same key format as its draftStorageKey()) to tell, at init, whether the
+// partner-details routing has already been done — so we don't drop a returning
+// user back into that completed flow.
+function loadProfileDraftForResume() {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(`slayhealth_profile_draft_${getStoredUserId() || 'anon'}`) : null;
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// The "Add Your Partner" routing flow (mode → name → how-you-met → consent) is
+// a one-time transition, not a resumable section. Its data is complete once a
+// mode is chosen and the partner is named with a meeting source. Re-entering it
+// after that — via a persisted showRouting on resume, or the self-hub's
+// "Continue" button — just re-asks information already given (bug: "Partner
+// Journey Redirects Incorrectly"). This is the shared "already done" test.
+function partnerRoutingDataComplete(prospectMode, prospectForm) {
+  return !!(prospectMode && prospectForm?.name && prospectForm?.meetingSource);
+}
+
 const PROSPECT_MODE_OPTIONS = [
   { val: 'self', label: "I'll enter their details myself", desc: 'Fill in your partner’s information right now' },
   { val: 'invite', label: 'Generate a link to send them', desc: "They fill in their own details — you copy and send the link yourself" }
@@ -162,9 +185,23 @@ function AddProspectPageInner() {
   // Whether the paid Radiology engine has been unlocked for this session. There's no
   // payment gateway wired up yet — this just tracks the demo "Unlock" click from the hub.
   const [radiologyUnlocked, setRadiologyUnlocked] = useState(false);
-  const [activePerson, setActivePerson] = useState(() => loadWizardPositionDraft()?.activePerson || 'self'); // 'self' | 'prospect'
+  const [activePerson, setActivePerson] = useState(() => {
+    const wiz = loadWizardPositionDraft();
+    // If routing was showing but its data is already complete, we skip it below
+    // (showRouting -> false) and resume at the partner's hub rather than back on
+    // 'self' — otherwise a stale showRouting could strand the user on the wrong
+    // person's hub.
+    if (wiz?.showRouting && partnerRoutingDataComplete(wiz.prospectMode, loadProfileDraftForResume()?.prospectForm)) return 'prospect';
+    return wiz?.activePerson || 'self';
+  }); // 'self' | 'prospect'
   const [activeCategory, setActiveCategory] = useState(() => loadWizardPositionDraft()?.activeCategory || null); // null = hub view
-  const [showRouting, setShowRouting] = useState(() => loadWizardPositionDraft()?.showRouting || false); // the "how will your prospect share" transition screen
+  // Only resume the routing flow if it was showing AND its data isn't already
+  // collected — never re-enter a completed "Add Your Partner" flow on resume.
+  const [showRouting, setShowRouting] = useState(() => {
+    const wiz = loadWizardPositionDraft();
+    if (!wiz?.showRouting) return false;
+    return partnerRoutingDataComplete(wiz.prospectMode, loadProfileDraftForResume()?.prospectForm) ? false : true;
+  }); // the "how will your prospect share" transition screen
 
   const [prospectMode, setProspectMode] = useState(() => loadWizardPositionDraft()?.prospectMode || null); // 'self' | 'invite' | null
   const [activeInvite, setActiveInvite] = useState(null);
@@ -1658,8 +1695,20 @@ function AddProspectPageInner() {
       : matchError || undefined;
     const onPrimary = () => {
       if (activePerson === 'self') {
-        setShowRouting(true);
-        setStepIndex(0);
+        // "Continue" enters the "Add Your Partner" routing flow ONLY if a
+        // partner hasn't been added yet. If they have (mode + name + how-you-met
+        // already collected on an earlier pass), don't re-run routing and
+        // re-ask all of it — go straight to the partner's profile hub, the real
+        // next step. (bug: "Partner Journey Redirects Incorrectly")
+        if (partnerRoutingDataComplete(prospectMode, prospectForm)) {
+          setActivePerson('prospect');
+          setShowRouting(false);
+          setActiveCategory(null);
+          setStepIndex(0);
+        } else {
+          setShowRouting(true);
+          setStepIndex(0);
+        }
       } else {
         handleMatch();
       }
