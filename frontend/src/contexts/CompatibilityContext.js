@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { API_URL } from '../config/api';
 import { parsePatientMeta, findExtractedParam } from '../utils/reportParser';
-import { apiFetch, setAccessToken } from '../utils/api';
+import { apiFetch, setAccessToken, refreshAuthSession } from '../utils/api';
 import { toast } from '../components/Toast';
 
 const CompatibilityContext = createContext(null);
@@ -413,29 +413,20 @@ export function CompatibilityProvider({ children }) {
   useEffect(() => {
     const silentRefresh = async () => {
       try {
-        const savedRefreshToken = localStorage.getItem('slayhealth_refresh_token');
-        const res = await fetch(`${API_URL}/api/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: savedRefreshToken })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.accessToken) {
-            setAccessToken(data.accessToken);
-            if (data.refreshToken) {
-              localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
-            }
-            if (data.user) {
-              localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
-              setUser(data.user);
-              setRunsUsed(data.user.runs_used || 0);
-              setChatsUsed(data.user.chats_used || 0);
-              fetchRecentMatches(data.user.id);
-              return true;
-            }
-          }
+        // Shared single-flight refresh (see utils/api.js). Previously this did
+        // its own separate raw fetch that didn't coordinate with apiFetch's
+        // refresh, so the two could POST the same refresh token concurrently
+        // (or twice under a StrictMode double-mount) and race the backend's
+        // rotate-and-revoke — the second hitting a revoked token → 401 → a
+        // spurious logout. refreshAuthSession() collapses all of them into one.
+        const data = await refreshAuthSession();
+        if (data?.user) {
+          localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
+          setUser(data.user);
+          setRunsUsed(data.user.runs_used || 0);
+          setChatsUsed(data.user.chats_used || 0);
+          fetchRecentMatches(data.user.id);
+          return true;
         }
       } catch (err) {
         console.error('Silent refresh failed on mount:', err);

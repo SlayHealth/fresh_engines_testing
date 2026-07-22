@@ -1,8 +1,7 @@
 import { API_URL } from '../config/api';
 
 let accessToken = null;
-let isRefreshing = false;
-let refreshSubscribers = [];
+let refreshPromise = null;
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -12,13 +11,48 @@ export function getAccessToken() {
   return accessToken;
 }
 
-function subscribeTokenRefresh(cb) {
-  refreshSubscribers.push(cb);
-}
-
-function onRefreshed(token) {
-  refreshSubscribers.map((cb) => cb(token));
-  refreshSubscribers = [];
+/**
+ * Single-flight refresh. Coalesces every concurrent caller — apiFetch's 401
+ * handler, the CompatibilityContext mount silentRefresh, a React StrictMode
+ * double-mounted effect — onto ONE /api/auth/refresh call.
+ *
+ * Why this matters: the backend rotates AND immediately revokes the refresh
+ * token on every use. If two code paths each POST the same token (they used
+ * to: apiFetch had its own isRefreshing guard, but silentRefresh did a totally
+ * separate raw fetch that didn't share it), the first rotates+revokes it and
+ * the second then hits a now-revoked token → 401 → the app logs the user out
+ * spuriously. One in-flight promise shared across the app removes that race.
+ *
+ * Resolves to the refresh response ({ success, accessToken, refreshToken,
+ * user }); rejects if the refresh genuinely fails. Callers own the
+ * consequences of failure (redirect / logout).
+ */
+export function refreshAuthSession() {
+  if (refreshPromise) return refreshPromise;
+  const p = (async () => {
+    const savedRefreshToken = localStorage.getItem('slayhealth_refresh_token');
+    const res = await fetch(`${API_URL}/api/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: savedRefreshToken })
+    });
+    if (!res.ok) throw new Error('Refresh token expired or invalid');
+    const data = await res.json();
+    if (!(data.success && data.accessToken)) throw new Error('Refresh response invalid');
+    setAccessToken(data.accessToken);
+    if (data.refreshToken) localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
+    return data;
+  })();
+  refreshPromise = p;
+  // Clear the slot once this refresh settles (success OR failure) so a later
+  // genuinely new refresh can start. Uses then(clear, clear) rather than
+  // .finally() so a rejection here doesn't spawn an *unhandled* rejection on
+  // the finally-chain — the real rejection is owned by callers, which await
+  // `p` directly inside their own try/catch.
+  const clearSlot = () => { if (refreshPromise === p) refreshPromise = null; };
+  p.then(clearSlot, clearSlot);
+  return p;
 }
 
 // UX1-01/UX7-01/UX8-09: every auth/invite call site did `await res.json()`
@@ -66,62 +100,24 @@ export async function apiFetch(url, options = {}) {
   try {
     const response = await fetch(url, options);
 
-    // If 401 Unauthorized, check if we can refresh
+    // 401 → attempt a single-flight refresh, then retry the original request
+    // once with the fresh token. Concurrent 401s all await the same refresh.
     if (response.status === 401) {
-      // If we are already refreshing, queue this request
-      if (isRefreshing) {
-        return new Promise((resolve) => {
-          subscribeTokenRefresh((token) => {
-            options.headers['Authorization'] = `Bearer ${token}`;
-            resolve(fetch(url, options));
-          });
-        });
-      }
-
-      isRefreshing = true;
-
       try {
-        console.log('[API Client] Access token expired, attempting silent token refresh...');
-        const savedRefreshToken = localStorage.getItem('slayhealth_refresh_token');
-        const refreshResponse = await fetch(`${API_URL}/api/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: savedRefreshToken })
-        });
-
-        if (!refreshResponse.ok) {
-          throw new Error('Refresh token expired or invalid');
-        }
-
-        const data = await refreshResponse.json();
-        if (data.success && data.accessToken) {
-          console.log('[API Client] Refresh successful, retrying request.');
-          setAccessToken(data.accessToken);
-          if (data.refreshToken) {
-            localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
-          }
-          onRefreshed(data.accessToken);
-          
-          // Retry original request with new token
-          options.headers['Authorization'] = `Bearer ${data.accessToken}`;
-          return await fetch(url, options);
-        } else {
-          throw new Error('Refresh response invalid');
-        }
+        const data = await refreshAuthSession();
+        options.headers['Authorization'] = `Bearer ${data.accessToken}`;
+        return await fetch(url, options);
       } catch (refreshErr) {
         console.error('[API Client] Silent refresh failed:', refreshErr.message);
         setAccessToken(null);
-        // Clear local cache of user to trigger redirect to login page
+        // Clear local cache of user to trigger redirect to login page.
+        // Note: the profile draft is intentionally NOT cleared here (nor in the
+        // context's clearAllSessionStates) so a spurious/transient logout no
+        // longer destroys in-progress work — see CompatibilityContext.
         localStorage.removeItem('slayhealth_user');
         localStorage.removeItem('slayhealth_refresh_token');
-        
-        // Dispatch custom event so context/app knows to redirect
         window.dispatchEvent(new Event('auth_session_expired'));
-        
         throw new Error('Session expired. Please log in again.');
-      } finally {
-        isRefreshing = false;
       }
     }
 
