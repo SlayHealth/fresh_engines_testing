@@ -45,9 +45,15 @@ function stateOf(cat) {
 // Map one real health-profile category into the mockup's section shape.
 export function toMobileSection(cat) {
   const meta = META[cat.key] || { title: cat.label, sub: cat.desc, tone: 'mute', icon: 'user' };
+  // "About" is the one section whose name depends on WHOSE profile this is:
+  // buildCategories sets cat.label dynamically ("About You" for the account
+  // holder, "About <partner>" on the partner journey). Honor that label for
+  // this card rather than META's fixed "About you", which read wrong ("About
+  // You" while entering a partner's details). Every other section's name is the
+  // same regardless of person, so those keep META's exact mockup wording.
   return {
     id: cat.key,
-    title: meta.title,
+    title: cat.key === 'about' ? (cat.label || meta.title) : meta.title,
     sub: meta.sub,
     tone: meta.tone,
     icon: meta.icon,
