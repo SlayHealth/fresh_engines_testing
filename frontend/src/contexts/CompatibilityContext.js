@@ -295,11 +295,16 @@ export function CompatibilityProvider({ children }) {
   const [showCalculations, setShowCalculations] = useState(false);
 
   const clearAllSessionStates = () => {
-    try {
-      localStorage.removeItem(draftStorageKey());
-    } catch (e) {
-      // localStorage unavailable — nothing to clean up
-    }
+    // Deliberately does NOT delete the saved profile draft
+    // (slayhealth_profile_draft_<uid>). It used to (removeItem(draftStorageKey())
+    // here), which meant a logout — including a spurious one from a transient
+    // token-refresh failure — permanently destroyed the user's in-progress
+    // profile: on logging back in they saw a fresh 0% onboarding with no way to
+    // recover. The draft key is already namespaced per user id, so leaving it in
+    // localStorage can't leak into a different account, and lets the same user's
+    // work restore on re-login (see the rehydrate-on-auth effect below). Only
+    // `cachedDraft` is reset, so the next loadDraft() re-reads from storage
+    // rather than serving a stale in-memory copy.
     cachedDraft = undefined;
     setAccessToken(null);
     localStorage.removeItem('slayhealth_user');
@@ -371,6 +376,38 @@ export function CompatibilityProvider({ children }) {
       // Storage full/unavailable — draft persistence is best-effort only.
     }
   }, [onboardingForm, prospectForm, userReport, prospectReport, selfMentalAnswers, prospectMentalAnswers]);
+
+  // Re-hydrate a saved profile draft when a user session is (re-)established on
+  // this already-mounted provider — the important case being logging back in
+  // after a logout. Login navigates client-side (router.push), so the provider
+  // is NOT re-mounted and the one-time useState draft initializers above don't
+  // re-run; clearAllSessionStates also blanked the in-memory forms. The draft
+  // itself now survives in localStorage (see clearAllSessionStates), but without
+  // this it would never repopulate the UI, so the user would still see a fresh
+  // 0% profile after logging back in. Only fills forms still at their empty
+  // defaults, so it can never clobber edits already made this session.
+  const hydratedDraftUserId = useRef(null);
+  useEffect(() => {
+    const uid = user?.id;
+    // Logged out — reset the guard so a subsequent re-login (even as the same
+    // user id) rehydrates instead of being skipped as "already hydrated".
+    if (!uid) { hydratedDraftUserId.current = null; return; }
+    if (hydratedDraftUserId.current === uid) return;
+    hydratedDraftUserId.current = uid;
+
+    cachedDraft = undefined; // force a fresh read scoped to this user id
+    const draft = loadDraft();
+    if (!draft) return;
+
+    const isBlank = (obj) => !obj || Object.values(obj).every((v) => v === '' || v === undefined || v === null);
+    if (draft.onboardingForm && isBlank(onboardingForm)) setOnboardingForm((prev) => ({ ...prev, ...draft.onboardingForm }));
+    if (draft.prospectForm && isBlank(prospectForm)) setProspectForm((prev) => ({ ...prev, ...draft.prospectForm }));
+    if (draft.userReport && !userReport) setUserReport(draft.userReport);
+    if (draft.prospectReport && !prospectReport) setProspectReport(draft.prospectReport);
+    if (draft.selfMentalAnswers && Object.keys(selfMentalAnswers).length === 0) setSelfMentalAnswers(draft.selfMentalAnswers);
+    if (draft.prospectMentalAnswers && Object.keys(prospectMentalAnswers).length === 0) setProspectMentalAnswers(draft.prospectMentalAnswers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Load user session on mount
   useEffect(() => {
