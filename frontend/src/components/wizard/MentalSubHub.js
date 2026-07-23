@@ -44,7 +44,7 @@ function SubRing({ answered, total, color }) {
 // hasMentalEvidence). Without this, a returning user would see the hub
 // card claim "done" while every subcategory here shows 0 — so it's treated
 // as fully answered for display purposes rather than contradicting itself.
-export default function MentalSubHub({ answers, onEnter, onDone, allDone, hasEvidence }) {
+export default function MentalSubHub({ answers, onEnter, onDone, allDone, hasEvidence, subjectName }) {
   const totalQuestions = MENTAL_HEALTH_QUESTIONS.length;
   const totalAnswered = hasEvidence ? totalQuestions : MENTAL_HEALTH_QUESTIONS.filter((q) => answers?.[q.id] !== undefined).length;
   const totalRemaining = totalQuestions - totalAnswered;
@@ -96,7 +96,9 @@ export default function MentalSubHub({ answers, onEnter, onDone, allDone, hasEvi
                 </span>
                 <span className="min-w-0">
                   <b className="block text-sm font-semibold leading-snug" style={{ color: 'var(--ink)' }}>{cat.label}</b>
-                  <span className="block text-[11px] leading-snug mt-0.5 line-clamp-2" style={{ color: 'var(--muted)' }}>{cat.desc}</span>
+                  <span className="block text-[11px] leading-snug mt-0.5 line-clamp-2" style={{ color: 'var(--muted)' }}>
+                    {subjectName && cat.descP ? cat.descP.replace(/\{name\}/g, subjectName) : cat.desc}
+                  </span>
                 </span>
                 <span className="text-[9px] font-semibold" style={{ color: remaining === 0 ? cat.color : 'var(--muted)' }}>
                   {remaining === 0 ? 'Done' : eta}

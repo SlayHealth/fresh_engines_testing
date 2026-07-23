@@ -24,7 +24,7 @@ import {
   GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS,
   FAMILY_HISTORY_DIABETES
 } from '../../constants/lifestyleOptions';
-import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES, mentalCategoryProgress } from '../../constants/mentalHealthQuestions';
+import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES, mentalCategoryProgress, framePerson } from '../../constants/mentalHealthQuestions';
 import MentalSubHub from '../../components/wizard/MentalSubHub';
 import { deriveSubstanceConcern } from '../../utils/mentalAutofill';
 import { maxDobForLegalMarriageAge, isBelowLegalMarriageAge, legalMarriageAgeNotice } from '../../utils/legalMarriageAge';
@@ -1341,9 +1341,15 @@ function AddProspectPageInner() {
   });
 
   // ---- Category step builders (person-agnostic; take a form/setForm pair) ----
+  // `subjectName` is the partner's name when the account holder is filling in
+  // the partner's details themselves (the self-entry partner journey), or null
+  // for the account holder's own journey. When set, each neutral field label is
+  // shown as a third-person possessive ("Priya's Gender") so it's unambiguous
+  // whose details these are; the individual journey keeps the plain labels.
   const buildAboutSteps = (adapter, advance) => {
-    const { form, setForm, nameField, genderField, dobField, cityField, needsNameStep } = adapter;
+    const { form, setForm, nameField, genderField, dobField, cityField, needsNameStep, isSelfPerson } = adapter;
     const set = (patch) => setForm({ ...form, ...patch });
+    const L = (base) => (isSelfPerson ? base : `${prospectForm.name || 'Your partner'}'s ${base}`);
     const arr = [];
 
     // The prospect's name is always collected on the routing screen before this hub
@@ -1352,27 +1358,28 @@ function AddProspectPageInner() {
     if (needsNameStep) {
       arr.push(fieldStep("What's their name?", form[nameField], (v) => set({ [nameField]: v }), { placeholder: 'Enter their name' }));
     }
-    arr.push(choiceStep('Gender', GENDERS, form[genderField], (v) => set({ [genderField]: v })));
-    arr.push(dobStep('Date of Birth', form[dobField], (v) => set({ [dobField]: v }), form[genderField]));
-    arr.push(cityStep('City', form[cityField], (v) => set({ [cityField]: v })));
-    arr.push(measurementStep('Height', 'height', form.height, (v) => set({ height: v })));
-    arr.push(measurementStep('Weight', 'weight', form.weight, (v) => set({ weight: v })));
-    arr.push(measurementStep('Waist', 'waist', form.waist, (v) => set({ waist: v })));
+    arr.push(choiceStep(L('Gender'), GENDERS, form[genderField], (v) => set({ [genderField]: v })));
+    arr.push(dobStep(L('Date of Birth'), form[dobField], (v) => set({ [dobField]: v }), form[genderField]));
+    arr.push(cityStep(L('City'), form[cityField], (v) => set({ [cityField]: v })));
+    arr.push(measurementStep(L('Height'), 'height', form.height, (v) => set({ height: v })));
+    arr.push(measurementStep(L('Weight'), 'weight', form.weight, (v) => set({ weight: v })));
+    arr.push(measurementStep(L('Waist'), 'waist', form.waist, (v) => set({ waist: v })));
 
     return finalizeSteps(arr, advance);
   };
 
-  const buildLifestyleSteps = (form, setForm, advance) => {
+  const buildLifestyleSteps = (form, setForm, advance, subjectName) => {
     const set = (patch) => setForm({ ...form, ...patch });
+    const L = (base) => (subjectName ? `${subjectName}'s ${base}` : base);
     const arr = [
-      choiceStep('Physical Activity Level', LIFESTYLE_ACTIVITIES, form.activity_level, (v) => set({ activity_level: v })),
-      choiceStep('Alcohol Drinking Habits', LIFESTYLE_DRINKING, form.drinking_habits, (v) => set({ drinking_habits: v })),
-      choiceStep('Smoking & Tobacco Habits', LIFESTYLE_SMOKING_TOBACCO, form.smoking_habits, (v) => set({ smoking_habits: v })),
-      choiceStep('Sleep Cycle Patterns', LIFESTYLE_SLEEP, form.sleep_cycle, (v) => set({ sleep_cycle: v })),
-      choiceStep('Family History of Diabetes', FAMILY_HISTORY_DIABETES, form.parentDiabetes, (v) => set({ parentDiabetes: v }))
+      choiceStep(L('Physical Activity Level'), LIFESTYLE_ACTIVITIES, form.activity_level, (v) => set({ activity_level: v })),
+      choiceStep(L('Alcohol Drinking Habits'), LIFESTYLE_DRINKING, form.drinking_habits, (v) => set({ drinking_habits: v })),
+      choiceStep(L('Smoking & Tobacco Habits'), LIFESTYLE_SMOKING_TOBACCO, form.smoking_habits, (v) => set({ smoking_habits: v })),
+      choiceStep(L('Sleep Cycle Patterns'), LIFESTYLE_SLEEP, form.sleep_cycle, (v) => set({ sleep_cycle: v })),
+      choiceStep(L('Family History of Diabetes'), FAMILY_HISTORY_DIABETES, form.parentDiabetes, (v) => set({ parentDiabetes: v }))
     ];
     if (form.gender === 'Female' || form.candidateGender === 'Female') {
-      arr.push(choiceStep('Menstrual Cycle Status', LIFESTYLE_MENSTRUAL, form.menstrualCycle, (v) => set({ menstrualCycle: v }), { subtitle: 'Optional' }));
+      arr.push(choiceStep(L('Menstrual Cycle Status'), LIFESTYLE_MENSTRUAL, form.menstrualCycle, (v) => set({ menstrualCycle: v }), { subtitle: 'Optional' }));
     }
     return finalizeSteps(arr, advance);
   };
@@ -1380,8 +1387,13 @@ function AddProspectPageInner() {
   // Mental health: entering a subcategory from the sub-hub walks just that
   // subcategory's own questions (2-6 of them), then returns to the sub-hub —
   // no more flat 21-question walk with a nested "section within section" bar.
-  const buildMentalSteps = (categoryKey, answers, setAnswers, advance) => {
-    const questions = MENTAL_HEALTH_QUESTIONS.filter((q) => q.category === categoryKey);
+  const buildMentalSteps = (categoryKey, answers, setAnswers, advance, subjectName) => {
+    // framePerson swaps in the hand-authored third-person copy when subjectName
+    // is set (the self-entry partner journey); with no name it returns each
+    // question's default first/second-person wording untouched.
+    const questions = MENTAL_HEALTH_QUESTIONS
+      .filter((q) => q.category === categoryKey)
+      .map((q) => framePerson(q, subjectName));
     const arr = questions.map((q) =>
       choiceStep(q.title, q.options, answers[q.id], (v) => setAnswers({ ...answers, [q.id]: v }), { subtitle: q.desc })
     );
@@ -1473,14 +1485,18 @@ function AddProspectPageInner() {
   const getCategorySteps = (categoryKey, person) => {
     const isSelfTurn = person === 'self';
     const adapter = isSelfTurn ? selfAdapter : prospectAdapter;
+    // Null on the account holder's own turn (first/second-person copy); the
+    // partner's name when they're filling the partner in themselves (third
+    // person). buildAboutSteps derives this from the adapter's isSelfPerson.
+    const subjectName = isSelfTurn ? null : (prospectForm.name || 'Your partner');
 
     if (categoryKey === 'about') return buildAboutSteps(adapter, exitToHub);
-    if (categoryKey === 'lifestyle') return buildLifestyleSteps(adapter.form, adapter.setForm, exitToHub);
+    if (categoryKey === 'lifestyle') return buildLifestyleSteps(adapter.form, adapter.setForm, exitToHub, subjectName);
     if (categoryKey === 'mental') {
       const returnToSubHub = () => setActiveMentalSubcategory(null);
       return isSelfTurn
-        ? buildMentalSteps(activeMentalSubcategory, selfMentalAnswers, setSelfMentalAnswers, returnToSubHub)
-        : buildMentalSteps(activeMentalSubcategory, prospectMentalAnswers, setProspectMentalAnswers, returnToSubHub);
+        ? buildMentalSteps(activeMentalSubcategory, selfMentalAnswers, setSelfMentalAnswers, returnToSubHub, null)
+        : buildMentalSteps(activeMentalSubcategory, prospectMentalAnswers, setProspectMentalAnswers, returnToSubHub, subjectName);
     }
     if (categoryKey === 'pathology') {
       return [uploadStep({
@@ -1662,6 +1678,7 @@ function AddProspectPageInner() {
         onDone={handleMentalCategoryAdvance}
         allDone={allSubcategoriesDone}
         hasEvidence={hasMentalEvidence}
+        subjectName={activePerson === 'self' ? null : (prospectForm.name || 'Your partner')}
       />
     );
   } else if (activeCategory) {
