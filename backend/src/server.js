@@ -21,6 +21,13 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Behind Render's proxy/load balancer (and any CDN in front of it), trust the
+// first forwarding hop so req.ip resolves to the real client IP rather than the
+// proxy's. Without this, express-rate-limit keys every request off the single
+// proxy IP (throttling all users as one) and session records log the proxy's
+// address. Trusting exactly one hop keeps X-Forwarded-For unspoofable past it.
+app.set('trust proxy', 1);
+
 const rateLimit = require('express-rate-limit');
 
 // Middleware
@@ -29,7 +36,9 @@ const envOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((o) => o.t
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'https://fresh-engines-testing.vercel.app',
+  // Production frontend. Hardcoded so cross-origin auth keeps working even if the
+  // ALLOWED_ORIGINS env var is ever unset; add more via ALLOWED_ORIGINS (CSV).
+  'https://demo.slay.health',
   ...envOrigins
 ];
 
