@@ -118,5 +118,7 @@ dist
 .DS_Store
 Thumbs.db
 
-# Contexts directory (explicitly requested by user)
-/contexts/
+# Contexts directory — ignore scratch/assets/mockups, but TRACK the handoff
+# markdown docs so they travel with the repo to the next developer.
+/contexts/*
+!/contexts/*.md
