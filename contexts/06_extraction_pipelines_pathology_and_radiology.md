@@ -210,7 +210,7 @@ A param's top‑level key is: the long `currentSection` id if a header was seen,
 
 `normalizeUnitToken` (`:28‑31`) lower‑cases, strips spaces, maps `µ`→`u` so `µmol/L`/`umol/l`/`u mol / L` all match. These four families are the only ones the deep review validated; the conversion factors are house values pending clinical review — `[interim]`.
 
-**The residual WS2‑01 risk (open):** the other **~150 ontology entries have `expected_units: []`** and there is **no unit‑mismatch flag or rejection anywhere.** A value reported in an unexpected but clinically valid unit for any non‑glucose/cholesterol/creatinine/vitD parameter is consumed as a bare number by scoring, silently mis‑scoring. The comment at `:5‑13` spells out the original failure (a normal `5.5 mmol/L` glucose scored as a critically‑low `5.5 mg/dL`); the fix closes it only for the four families above. Cross‑ref `review/WS2_extraction_pipeline.md`.
+**The residual WS2‑01 risk (open):** the other **~150 ontology entries have `expected_units: []`** and there is **no unit‑mismatch flag or rejection anywhere.** A value reported in an unexpected but clinically valid unit for any non‑glucose/cholesterol/creatinine/vitD parameter is consumed as a bare number by scoring, silently mis‑scoring. The comment at `:5‑13` spells out the original failure (a normal `5.5 mmol/L` glucose scored as a critically‑low `5.5 mg/dL`); the fix closes it only for the four families above.
 
 ---
 
@@ -329,7 +329,7 @@ This is the WS2‑07 fix: previously the LLM's JSON was stored verbatim, so a `f
 | `MRI_RENAL` | 0.01 | `mri.renal.schema` | ❌ (read only for `SHARED_RENAL` couple insight) | ❌ |
 | `MRA_AORTA` | 0.01 | `mra.aorta.schema` | ❌ informational | ❌ |
 
-**The trap:** `XRAY_CHEST` (0.03) and `USG_NECK` (0.02) carry **non‑zero weights but have no scorer branch** in `nuptia.composite.score.js` — they are extracted, validated, and stored, yet contribute **nothing** to the score. Six of 14 modalities are effectively extract‑and‑store‑only. Cross‑ref `review/WS1D_thal_sti_radiology_composite.md`.
+**The trap:** `XRAY_CHEST` (0.03) and `USG_NECK` (0.02) carry **non‑zero weights but have no scorer branch** in `nuptia.composite.score.js` — they are extracted, validated, and stored, yet contribute **nothing** to the score. Six of 14 modalities are effectively extract‑and‑store‑only.
 
 **Sex‑gating** (`nuptia.composite.score.js`): scrotum scored only if `patientSex === 'Male'` (`:50`), TVS only if `'Female'` (`:59`). Risk flags are generated regardless of sex.
 
@@ -359,7 +359,7 @@ This is the WS2‑07 fix: previously the LLM's JSON was stored verbatim, so a `f
 
 Every scorer in `abdomen.score.js` returns **`null`** when a modality was detected but nothing in it was actually assessed (via `hasSignal(obj, keys)`, `:10`, which checks whether any diagnostic field is present, not merely truthy). Examples: `liverScore` returns `null` if none of `fatty_grade/hepatomegaly/ihbr_dilated` and no focal lesions (`:16`); prostate/gallbladder/kidney/bladder/pancreas/spleen/reproductive all have the same `hasSignal` gate.
 
-**Why `null` vs a real 0 is safety‑critical:** `null * weight` silently evaluates to **0** in JS. If a not‑assessed modality were folded in, it would count as a **confirmed catastrophic (score‑0) finding** — exactly the fabrication this fix removes, just inverted. So the composite's `addModalityScore` **explicitly skips `null`/`undefined`** (`nuptia.composite.score.js:25‑30`) and never includes it in `totalWeight`. And a genuine score of 0 (real worst‑case finding) is preserved as 0, not coerced to null by a falsy check (`:111‑115`). **Preserve the null‑vs‑0 distinction anywhere you touch scoring.** This is the WS1D01 fix; cross‑ref `review/WS1D_thal_sti_radiology_composite.md`.
+**Why `null` vs a real 0 is safety‑critical:** `null * weight` silently evaluates to **0** in JS. If a not‑assessed modality were folded in, it would count as a **confirmed catastrophic (score‑0) finding** — exactly the fabrication this fix removes, just inverted. So the composite's `addModalityScore` **explicitly skips `null`/`undefined`** (`nuptia.composite.score.js:25‑30`) and never includes it in `totalWeight`. And a genuine score of 0 (real worst‑case finding) is preserved as 0, not coerced to null by a falsy check (`:111‑115`). **Preserve the null‑vs‑0 distinction anywhere you touch scoring.** This is the WS1D01 fix.
 
 Before this fix, missing organs scored **100** ("healthy"), so a report that assessed only the liver looked fully healthy across every unassessed organ — inflating the radiology domain toward a near‑constant ~100 for most couples (the residual WS1D08 signal‑flatness point in §14).
 
@@ -403,7 +403,7 @@ There are **two live radiology pipelines**, and this is the single most importan
 
 ## 14. Open items (see doc 21 for the authoritative list)
 
-- **Pathology unit handling is a 4‑family patch, not general (WS2‑01 residual).** ~150 canonicals have empty `expected_units` and no mismatch validation — any non‑glucose/cholesterol/creatinine/vitD parameter in an unexpected unit silently mis‑scores. `parameterExtractor.service.js:14‑25`; `review/WS2_extraction_pipeline.md`.
+- **Pathology unit handling is a 4‑family patch, not general (WS2‑01 residual).** ~150 canonicals have empty `expected_units` and no mismatch validation — any non‑glucose/cholesterol/creatinine/vitD parameter in an unexpected unit silently mis‑scores. `parameterExtractor.service.js:14‑25`.
 - **Comparator values dropped (WS2‑05, open).** `<5`/`>90` are recognized by `isValueStr` but `stripValueNoise` does not strip a *leading* `<`/`>`; `Number('<5')=NaN` → stored as a raw string → later `parseFloat`→NaN→silently dropped from numeric scoring (a normal CRP `<5` becomes missing). Fix belongs in `stripValueNoise` (`:43`).
 - **Image uploads rejected (WS2‑09, open) & hemoglobin‑variant hardcode (WS2‑10, open).** Pathology `fileFilter` allows only `application/pdf` though OCR.space handles images; and the carrier card in `reportSummary.service.js` still reads "not assessed" for HbS/C/D/E despite those canonicals existing and being extractable.
 - **Two live radiology pipelines (§12).** The legacy `/api/usg/*` twin still returns `100` for missing organs (un‑fixed WS1D01) and uses the OLD 15% Nuptia model — a second source of truth. Direction: delete it (doc 17); not yet done.

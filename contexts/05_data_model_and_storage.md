@@ -452,7 +452,7 @@ The subtlety: `reports` and `chat_sessions` have **no FK to `users`**, so they'r
 | **`whatsapp_messages`** | table has **no `user_id`** — not reachable by account deletion; rows persist forever. |
 | **`whatsapp_messages` / logs after delete** | append‑only audit, outside the cascade. |
 
-These gaps, plus the no‑general‑retention‑policy point (§7) and an in‑product "DPDP‑compliant" claim shown while the consent‑ledger/DSAR/retention/breach machinery is unbuilt, are the substance of **REG‑06** (`REG-06_DPDP_SUBSTANTIATION_AUDIT.md §3‑§4`; `review/WS_REG_regulatory.md`). This doc states them factually; it takes **no** wellness‑vs‑SaMD position — that's pending your decision and legal counsel (doc 21).
+These gaps, plus the no‑general‑retention‑policy point (§7) and an in‑product "DPDP‑compliant" claim shown while the consent‑ledger/DSAR/retention/breach machinery is unbuilt, are the substance of **REG‑06** (`REG-06_DPDP_SUBSTANTIATION_AUDIT.md §3‑§4`). This doc states them factually; it takes **no** wellness‑vs‑SaMD position — that's pending your decision and legal counsel (doc 21).
 
 ---
 

@@ -156,7 +156,7 @@ Gotcha: the dev LAN regex is **disabled in prod** (`!isProduction`), which is co
 | Body | `{ success: false, error: 'Too many requests from this IP, please try again after a minute.' }` | `server.js:72` — a **JSON object, deliberately** |
 | Headers | `standardHeaders: true` (`RateLimit-*`), `legacyHeaders: false` | `server.js:73‑74` |
 
-**Why the JSON body matters (UX7‑01):** a bare string message makes `express-rate-limit` send `Content-Type: text/html`. The frontend's `apiFetch` blindly `.json()`‑parses every response, so a text/html 429 threw a raw `Unexpected token` error to the user instead of a clean "slow down" message. Keeping `message` a JSON object preserves the JSON contract on the limit path. The **frontend‑side guard** across the ~4 call sites may still be partial — see `review/ux_WS7_states.md:66‑107` and doc 14/19.
+**Why the JSON body matters (UX7‑01):** a bare string message makes `express-rate-limit` send `Content-Type: text/html`. The frontend's `apiFetch` blindly `.json()`‑parses every response, so a text/html 429 threw a raw `Unexpected token` error to the user instead of a clean "slow down" message. Keeping `message` a JSON object preserves the JSON contract on the limit path. The **frontend‑side guard** across the ~4 call sites may still be partial — see doc 14/19.
 
 Gotchas:
 - 60/min is **shared across every endpoint** — a burst of mixed API calls (dashboard load fanning out) can trip the *login* limit. Consider per‑route limits if you see spurious 429s.
@@ -273,7 +273,7 @@ Auth details worth internalising (full treatment in doc 04):
 `quota.js` has three sharp edges a successor must know:
 
 1. **Fail‑open:** if no `userId` is resolvable (`req.user.id || x-user-id header || body.userId`), the request proceeds **unmetered** (`quota.js:9`, `quota.js:39`). All quota tables are marked `[interim]` house limits pending a real billing model.
-2. **Debit before work, never refunded:** the counter is incremented **before** the controller/LLM runs (`quota.js:26`, `quota.js:57`) and never refunded on downstream failure — a dead OpenRouter key, timeout, or 500 still burns 1 of the 5 free chats / 1 free match. See `review/ux_WS7_states.md:217‑221`.
+2. **Debit before work, never refunded:** the counter is incremented **before** the controller/LLM runs (`quota.js:26`, `quota.js:57`) and never refunded on downstream failure — a dead OpenRouter key, timeout, or 500 still burns 1 of the 5 free chats / 1 free match.
 3. **Inconsistent user‑not‑found:** `checkMatchQuota` returns **404** on a missing user (`quota.js:14`); `checkChatQuota` just `next()`s (`quota.js:45`). Harmless today but a latent surprise.
 
 Quota constants `[interim]` (house values, pending a billing decision):

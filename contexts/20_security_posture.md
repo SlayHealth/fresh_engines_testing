@@ -1,6 +1,6 @@
 # Security Posture & Exposures (Consolidated Triage)
 
-**Doc 20 of 22** · Audience: a solo full‑stack successor · Prerequisite: `04_auth_session_and_security.md`, `02_architecture_and_backend_core.md` (and keep `21_known_issues_review_corpus_and_roadmap.md` open).
+**Doc 20 of 22** · Audience: a solo full‑stack successor · Prerequisite: `04_auth_session_and_security.md`, `02_architecture_and_backend_core.md` (and keep `21_known_issues_and_roadmap.md` open).
 
 Goal of this doc: give you **one place to see every known security exposure**, ranked, with a pointer to the doc that owns the fix detail. It is a **triage index, not a replacement** for the owning docs — read it to prioritise, then jump to the deep doc for the how. It also states plainly **what is already sound** so you don't waste a hardening budget re‑securing things that are fine.
 
@@ -15,7 +15,7 @@ This is a **map, not a ledger**. Each exposure below has:
 - an **owning doc** where the mechanism is explained in full, and
 - a **fix direction**.
 
-The single **severity‑ranked backlog of everything still open** (security + clinical + UX + reg) is **doc 21** — that's the authoritative status ledger. When this doc and doc 21 disagree on whether something is fixed, **doc 21 wins**. Finding IDs like `WS8‑02`, `UX3‑05`, `REG‑06`, `UX7‑02` point into the self‑review corpus (repo‑root `SLAYHEALTH_DEEP_REVIEW.md` / `SLAYHEALTH_UX_REVIEW.md` / `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` / `WORKREPORT_2026-07-*.md`, plus `review/*.md` — all present in the working tree; verify with `ls`).
+The single **severity‑ranked backlog of everything still open** (security + clinical + UX + reg) is **doc 21** — that's the authoritative status ledger. When this doc and doc 21 disagree on whether something is fixed, **doc 21 wins**. Finding IDs like `WS8‑02`, `UX3‑05`, `REG‑06`, `UX7‑02` are historical breadcrumbs from the self‑review corpus; of that corpus only `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` remains in the working tree.
 
 One framing note before the list: **the auth foundation is genuinely good.** The exposures below are overwhelmingly **authorization** gaps (who may touch *which* object), not **authentication** gaps (proving *who you are*). Don't let the length of the list convince you the login system is broken — it isn't.
 
@@ -228,4 +228,4 @@ Neither is implemented yet; both are on the roadmap in doc 21.
 
 ---
 
-*Next: `21_known_issues_review_corpus_and_roadmap.md` — the authoritative severity‑ranked backlog and how to read the `review/` corpus behind every finding ID cited here.*
+*Next: `21_known_issues_and_roadmap.md` — the authoritative severity‑ranked known‑issues backlog and roadmap.*

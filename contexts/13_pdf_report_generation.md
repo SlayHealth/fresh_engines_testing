@@ -299,7 +299,7 @@ Verification/upsell figures (page 2: "Verified lab test +16%", "Doctor review +1
 
 ## 10. Open findings (see doc 21 for the authoritative list)
 
-Cross‑referenced against `review/ux_WS3_report.md`, `review/WS_REG_regulatory.md`, and `review/WS1D_thal_sti_radiology_composite.md`. (The root‑level `SLAYHEALTH_UX_REVIEW.md`, `SLAYHEALTH_DEEP_REVIEW.md`, and `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` also exist in the working tree and summarize these.)
+The root‑level `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` also summarizes these.
 
 | ID | Sev | Status | One‑line |
 |---|---|---|---|

@@ -353,7 +353,7 @@ No shared minimum tap‑target height. Observed: report nav rows 208×36, wizard
 
 ## 11. The reconciliation backlog
 
-These are the open review‑corpus findings that own this area. Doc 21 is the authoritative ledger; this is a pointer list. Cross‑reference `review/ux_WS4_visual.md`, `ux_WS6_a11y.md`, `ux_WS5_responsive.md`, plus the root‑level `SLAYHEALTH_UX_REVIEW.md`.
+These are the open review‑corpus findings that own this area. Doc 21 is the authoritative ledger; this is a pointer list.
 
 | ID | Sev | One‑liner |
 |---|---|---|

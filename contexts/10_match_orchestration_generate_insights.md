@@ -297,12 +297,12 @@ The schema promises a max of **96**. But `blood_verified` is **never set anywher
 
 ## 8. Performance reality — the ~53 s synchronous wait
 
-`save-match` is a **real ~53‑second synchronous request** (measured 53,234 ms twice; `ux_WS10_perf.md:76`). It is not a hang. Two inline costs inside `compileMatchReport`:
+`save-match` is a **real ~53‑second synchronous request** (measured 53,234 ms twice). It is not a hang. Two inline costs inside `compileMatchReport`:
 
 1. **Radiology lookups** — `_fetchRadiologyScore` does two DB identity lookups (`reportGeneration.service.js:17‑20`), and the PDF/AI‑PDF paths do more.
 2. **The DeepSeek narrative call** — `narrativeService.generateNarratives` runs *inline* in the request (`reportGeneration.service.js:261`). Its underlying `openrouter.extractJSON` has **no fallback model and no retry**, with a **60 s single‑attempt timeout** — one slow call can stall save‑match up to a minute.
 
-Meanwhile the loading UI is a **fake choreographed animation**. `AnalysisLoadingScreen.js` has 6 steps at `STEP_INTERVAL_MS = 1400` (`:8`), advancing on a `setTimeout` with **no `done`/`onComplete` wiring** (comment at `:24`; effect at `:35‑45`). It reaches the last step ("Formatting your report") in ~7 s and then just **parks there with a pulse for the remaining ~45 s**. This is the product's core moment, so the drop‑off risk is real (P1 `UX10-01`; also `UX1-06`, `ux_WS1_flows.md:295`). Fix directions: make progress honest/async (background the compile, poll for completion), or at minimum add an elapsed‑time counter so the bar isn't lying. **Do not ship a change that adds more inline work to this request** without accounting for the wait.
+Meanwhile the loading UI is a **fake choreographed animation**. `AnalysisLoadingScreen.js` has 6 steps at `STEP_INTERVAL_MS = 1400` (`:8`), advancing on a `setTimeout` with **no `done`/`onComplete` wiring** (comment at `:24`; effect at `:35‑45`). It reaches the last step ("Formatting your report") in ~7 s and then just **parks there with a pulse for the remaining ~45 s**. This is the product's core moment, so the drop‑off risk is real (P1 `UX10-01`; also `UX1-06`). Fix directions: make progress honest/async (background the compile, poll for completion), or at minimum add an elapsed‑time counter so the bar isn't lying. **Do not ship a change that adds more inline work to this request** without accounting for the wait.
 
 ---
 
@@ -381,11 +381,11 @@ Everything in this flow is keyed to exactly one male + one female: the `matches`
 
 ## Open items (see doc 21 for the authoritative list)
 
-- **`UX10-01` / `UX1-06` — the ~53 s save‑match wait behind a fake progress bar.** The compile does inline radiology + DeepSeek narrative synchronously; `AnalysisLoadingScreen` finishes its animation in ~7 s and parks for ~45 s (`ux_WS10_perf.md:76`, `ux_WS1_flows.md:295`). Highest‑impact UX fix in this area. **Open.**
+- **`UX10-01` / `UX1-06` — the ~53 s save‑match wait behind a fake progress bar.** The compile does inline radiology + DeepSeek narrative synchronously; `AnalysisLoadingScreen` finishes its animation in ~7 s and parks for ~45 s. Highest‑impact UX fix in this area. **Open.**
 - **`blood_verified` dead uplift** — never set in the compile path, so `report_confidence.overall` caps at 80, not the schema's 96 (§7.1). Latent; decide whether to wire it or correct the schema/UI.
 - **IDOR / ownership gaps** — only `createShareLink` checks ownership; `getMatch`/`PDF`/`ai-pdf`/`radiology`/`infographics` read any match by id, and `listMatches` trusts a `userId` query param (§9). Owned here, triaged in doc 20.
 - **AI‑PDF divergence** — `generateAIPDFReport` regenerates a presentation via DeepSeek and skips `computeGatedComposite`, so its numbers/statuses can differ from the stored gated ones (§7). Decide whether the AI‑PDF should render the stored presentation instead of re‑deriving one.
-- **Restore placeholder names** (`WS6_frontend_audit.md:138‑150`) — an older/invite‑path match saved without a captured prospect name can fall back to literal test names ("Swati"/"Sachin") when reopened; `handleCompatibilityMatch` itself can't hit this (it requires `prospectForm.name`).
+- **Restore placeholder names** (finding `WS6-05`) — an older/invite‑path match saved without a captured prospect name can fall back to literal test names ("Swati"/"Sachin") when reopened; `handleCompatibilityMatch` itself can't hit this (it requires `prospectForm.name`).
 
 ---
 

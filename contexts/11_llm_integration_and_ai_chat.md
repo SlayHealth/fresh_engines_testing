@@ -157,7 +157,7 @@ The controller then filters to strings, `slice(0, 3)`, and returns them **only i
 
 ### The context_metadata dependency (root of UX3‑07)
 
-Grounding is only as good as the `context_metadata` blob the frontend passes at session create. The LLM cannot cite an STI or carrier finding that isn't in that blob. That is the mechanism behind `UX3‑07` (`review/ux_WS3_report.md`): the counselor **explains** a reactive‑STI or shared‑carrier finding well when asked, but the opening chips and welcome message never *surface* it, so the best explanatory channel is undiscoverable. The fix (`OPP‑UX‑31`) is to seed the opening message and lead chip from `sti_gate`/`carrier_pair_risk` — and to make sure those findings are actually in `context_metadata`.
+Grounding is only as good as the `context_metadata` blob the frontend passes at session create. The LLM cannot cite an STI or carrier finding that isn't in that blob. That is the mechanism behind `UX3‑07`: the counselor **explains** a reactive‑STI or shared‑carrier finding well when asked, but the opening chips and welcome message never *surface* it, so the best explanatory channel is undiscoverable. The fix (`OPP‑UX‑31`) is to seed the opening message and lead chip from `sti_gate`/`carrier_pair_risk` — and to make sure those findings are actually in `context_metadata`.
 
 ---
 
@@ -321,7 +321,7 @@ Degradation summary: **no key** → fetch‑client callers return fallback, axio
 
 ### The ~90s worst case
 
-The chat reply model chains **primary (45s) + hardcoded fallback retry (45s)** on any error (`openrouter.service.js:82,89‑96`) — a **code‑verified ~90s worst case** before the generic "Failed to send message" error. Measured happy‑path replies were **3.9–9.1s** (`review/ux_WS10_perf.md`, `UX10‑05`), and a genuinely dead key 401s in ~466ms (fails fast). The 90s risk is a **slow/hanging provider**, not a dead key. There is no client‑side timeout to cut it short. Recommended fix (`UX10‑05`): client‑side 15‑20s timeout + "taking longer than usual" + a cancel affordance, and shorter per‑attempt backend timeouts.
+The chat reply model chains **primary (45s) + hardcoded fallback retry (45s)** on any error (`openrouter.service.js:82,89‑96`) — a **code‑verified ~90s worst case** before the generic "Failed to send message" error. Measured happy‑path replies were **3.9–9.1s** (finding `UX10‑05`), and a genuinely dead key 401s in ~466ms (fails fast). The 90s risk is a **slow/hanging provider**, not a dead key. There is no client‑side timeout to cut it short. Recommended fix (`UX10‑05`): client‑side 15‑20s timeout + "taking longer than usual" + a cancel affordance, and shorter per‑attempt backend timeouts.
 
 Separately, `extractJSON` (narrative/suggestions) has a **single 60s timeout and NO fallback‑model retry** (`openrouter.service.js:30`), so a hang blocks report‑narrative generation up to 60s before `narrative.service` returns flagged safe copy (`UX10‑06`).
 
@@ -329,11 +329,11 @@ Separately, `extractJSON` (narrative/suggestions) has a **single 60s timeout and
 
 ## 13. Open findings (see doc 21 for the authoritative list)
 
-- **`UX10‑05` (P2, `review/ux_WS10_perf.md`):** no client‑side chat timeout + a ~90s backend worst case (45s primary + 45s hardcoded fallback) with locked input and no cancel button. Add a 15‑20s client timeout, a "taking longer than usual" state, and a cancel affordance; shorten backend per‑attempt timeouts.
-- **`UX3‑07` (P1, `review/ux_WS3_report.md`):** the drawer's static `DEFAULT_SUGGESTIONS` and `getWelcomeMessage` never surface a couple's actual reactive‑STI or shared‑carrier finding, making the counselor (which explains them well when asked) undiscoverable and rate‑limited into a "lucky escape hatch." Seed the opening message + lead chip from `sti_gate`/`carrier_pair_risk` (`OPP‑UX‑31`) — and ensure those findings are actually inside `context_metadata`.
+- **`UX10‑05` (P2):** no client‑side chat timeout + a ~90s backend worst case (45s primary + 45s hardcoded fallback) with locked input and no cancel button. Add a 15‑20s client timeout, a "taking longer than usual" state, and a cancel affordance; shorten backend per‑attempt timeouts.
+- **`UX3‑07` (P1):** the drawer's static `DEFAULT_SUGGESTIONS` and `getWelcomeMessage` never surface a couple's actual reactive‑STI or shared‑carrier finding, making the counselor (which explains them well when asked) undiscoverable and rate‑limited into a "lucky escape hatch." Seed the opening message + lead chip from `sti_gate`/`carrier_pair_risk` (`OPP‑UX‑31`) — and ensure those findings are actually inside `context_metadata`.
 - **Clinical thresholds enforced by prompt only:** STI gate (score ≤50), star bands, carrier HbA2 >3.5%, and body‑health colors are trusted from the LLM and not re‑validated in code (only `report_confidence` and `annualChance` are). On a health product this is a correctness/trust risk — reconcile the gate against the deterministic scoring layer (doc 09).
 - **Two config‑divergent OpenRouter clients** and **placeholder‑looking model names** (`deepseek/deepseek-v4-flash`, stale `deepseek-v4-pro` comment): unify the clients; verify the model IDs resolve on OpenRouter or chat silently doubles latency via the fallback path. (Not yet a numbered finding — log it in doc 21.)
-- **Fail‑open chat quota** (`quota.js:39‑46`): a missing/forged userId bypasses the 5‑message lifetime cap; session‑create and history‑load make LLM calls but aren't gated. Env ambiguity: `review/_ux_env_recipe.md` flags the OpenRouter key as DEAD (401) while `ux_WS3` found it working — the key state is environment‑dependent (doc 03 §10).
+- **Fail‑open chat quota** (`quota.js:39‑46`): a missing/forged userId bypasses the 5‑message lifetime cap; session‑create and history‑load make LLM calls but aren't gated. Env ambiguity: one audit context flagged the OpenRouter key as DEAD (401) while another found it working — the key state is environment‑dependent (doc 03 §10).
 
 ---
 

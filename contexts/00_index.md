@@ -39,7 +39,7 @@ These 22 documents live in `contexts/`. They are numbered in **reading order** (
 | 18 | `18_design_system_and_styling.md` | Design tokens, the three‑greens palette issue, typography, dead dark mode | reference |
 | 19 | `19_testing_and_qa.md` | The 5 backend suites, `npm test` is a stub, zero frontend tests, **what's untested** | core |
 | 20 | `20_security_posture.md` | One‑page consolidated triage of exposures with pointers to owning docs | core |
-| 21 | `21_known_issues_review_corpus_and_roadmap.md` | Consolidated backlog by severity + how to read the `review/` corpus | reference (consult throughout) |
+| 21 | `21_known_issues_and_roadmap.md` | Consolidated still‑open known‑issues backlog by severity + roadmap + DPDP posture | reference (consult throughout) |
 
 ---
 
@@ -104,20 +104,17 @@ If you're staring at a file and want the doc that explains it:
 
 - **`file.js:123`** means that exact file and line (relative to repo root or an obvious package root). Line numbers are from git `HEAD` at mapping time and may drift slightly as the code changes — treat them as strong hints, not guarantees.
 - **`[interim]`** next to a clinical number means "house value, no cited source — pending clinical review."
-- **Finding IDs** like `WS1D02`, `UX8‑05`, `REG‑06`, `OPP‑W4‑15` refer to the self‑review corpus (below). Any doc that mentions a finding points you to it.
-- Each doc ends with an **"Open items"** tail. The **single source of truth for what's fixed vs still open is doc 21** — the per‑doc tails are pointers, not their own status ledgers.
+- **Finding IDs** like `WS1D02`, `UX8‑05`, `OPP‑W4‑15` are **historical markers** from a prior internal engineering/UX review that has since been actioned and **removed from the repo**. You'll still meet these codes in **code comments** (e.g. `WS1D02` in `reportSummary.service.js`) — they explain *why* a line exists. Treat them as breadcrumbs, not links: there are no review files to open anymore. (`REG‑06` is the one still‑live one — see below.)
+- Each doc ends with an **"Open items"** tail. The **single source of truth for what's still open is doc 21** — the per‑doc tails are pointers, not their own status ledgers.
 - Clinical constants have **one canonical home** to prevent drift: e.g. the composite weights and the confidence formula live verbatim in doc 09; other docs reference them.
 
 ---
 
-## The self‑review corpus (rationale trail)
+## History: the self‑review corpus (removed)
 
-Before this handoff, the codebase was put through a deep engineering + UX + regulatory review. Those documents still live in the repo and are the **"why is it like this"** trail — read them when a doc points you to a finding ID:
+Before this handoff the codebase was put through a deep engineering + UX review whose findings were **actioned and then deleted from the repo** (the two summary spines, their 29 detailed `WS*`/`ux_WS*` workstream files, and the daily work‑report logs). You may still see their finding‑IDs (`WS1D02`, `UX8‑05`, …) in code comments and in these docs — those are **historical breadcrumbs**, not links to files.
 
-- **Repo root:** `SLAYHEALTH_DEEP_REVIEW.md` (backend/medical engines), `SLAYHEALTH_UX_REVIEW.md` (frontend/UX), `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` (regulatory/DPDP claim audit), and `WORKREPORT_2026-07-*.md` (day‑by‑day fix logs).
-- **`review/` directory (29 files):** the workstream detail behind those summaries — `WS0`–`WS8`, `WS1A`–`WS1D` (the four medical engines), `WS2` (extraction), `WS3A/WS3B` (clinical validation), `WS_REG` (regulatory), and the UX workstreams `ux_WS1`–`ux_WS12`.
-
-Doc 21 explains how to read them (finding‑ID scheme, what's fixed vs open, ideation vs defects) and consolidates every still‑open item into one severity‑ranked table.
+The **one surviving review artifact** is `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` (repo root): the regulatory/DPDP claim audit, kept because its findings are **not yet resolved** — the platform's regulatory posture is still an open risk (see warning #7 above and doc 21). Doc 21 carries forward the consolidated, still‑open known‑issues backlog and the roadmap.
 
 > **Note:** the `contexts/` folder these handoff docs live in also historically held mental‑engine spec docs (`mental_health_engine_update.md`, `mental_questionnaire_research_backing.md`) that the code cites but which are **no longer present**. Doc 08 therefore uses the engine's own acceptance tests as ground truth. If you have those specs, drop them back in `contexts/` and doc 08 can be enriched.
 

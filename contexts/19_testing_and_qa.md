@@ -172,7 +172,7 @@ Why it's built this way:
 - **Both viewports, every time.** Mobile is the locked design reference and web is the backlog (doc 16, doc 17), so a fix isn't "verified" until it's screenshotted at both widths.
 - **Disposable data, on the *shared* Supabase Postgres.** There is no separate test DB — `DATABASE_URL` points at the real Supabase instance (doc 03, doc 05). That's why the **delete step is mandatory**: seed with obviously‑disposable identities (`Sachin`/`Swati`), verify, then `DELETE ... WHERE patient_slay_id IN (...)`. Leaving seed rows behind pollutes the one shared datastore for everyone.
 
-These scripts are **not** a test suite — they're single‑use probes named after the finding they validated (`browser_verify_1d`, `browser_verify_ux8_01`, …), the evidence trail behind the work reports (`WORKREPORT_2026-07-*.md`) and the `review/` corpus (doc 21). Keep the *pattern*; don't expect the individual scripts to be re‑runnable regression tests.
+These scripts are **not** a test suite — they're single‑use probes named after the finding they validated (`browser_verify_1d`, `browser_verify_ux8_01`, …), the evidence trail behind the fixes made during that work. Keep the *pattern* (seed → mint → drive → screenshot → delete); don't expect the individual scripts to be re‑runnable regression tests.
 
 ---
 

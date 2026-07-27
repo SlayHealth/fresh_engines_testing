@@ -31,8 +31,7 @@ fresh_build_slayHealth/
 │   ├── AGENTS.md       "This is NOT the Next.js you know"  (imported by CLAUDE.md)
 │   └── .env.example    template (NEXT_PUBLIC_API_URL only)
 ├── contexts/           ← these handoff docs live here
-├── review/             the self-review corpus (doc 21)
-├── SLAYHEALTH_*.md, REG-06_*.md, WORKREPORT_*.md   review summaries + fix logs
+├── REG-06_*.md         regulatory substantiation audit
 └── run.sh              one-command dev launcher
 ```
 
@@ -154,7 +153,7 @@ PROD:  browser → demo.slay.health ──(NEXT_PUBLIC_API_URL)──▶  <rende
   - **CORS** (`server.js`): `allowedOrigins` **hardcodes** `http://localhost:3000`, `http://localhost:3001`, and `https://demo.slay.health`, then appends `ALLOWED_ORIGINS` (CSV). In non‑prod it also regex‑allows `localhost`/`127.0.0.1`/`192.168.x`/`10.x`/`172.16‑31.x` origins. `credentials: true`.
   - **Cookies** (`auth.controller.js`): the refresh cookie is `httpOnly`, and `secure` + `sameSite:'none'` **only when `NODE_ENV==='production'`**. So **`NODE_ENV` must be `production`** on the deployed backend, or the cross‑site login cookie is dropped and users can't stay logged in.
 
-*(A recent commit already added `https://demo.slay.health` to the allowlist and set `trust proxy`; see doc 20 and the work reports.)*
+*(A recent commit already added `https://demo.slay.health` to the allowlist and set `trust proxy`; see doc 20.)*
 
 ---
 

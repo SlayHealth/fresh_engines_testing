@@ -356,11 +356,11 @@ The account‑holder page keeps a live view of the invite via **SSE plus a polli
 
 ## 13. Open compliance / UX debt
 
-Pointers only — doc 21 is the authoritative ledger. The corpus lives at repo‑root `SLAYHEALTH_UX_REVIEW.md` / `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` and in `review/ux_WS8_trust_consent.md`, `review/WS_REG_regulatory.md`, `review/ux_WS11_funnel.md` (all present in the working tree — verify with `ls`).
+Pointers only — doc 21 is the authoritative ledger. The corpus lives at repo‑root `REG-06_DPDP_SUBSTANTIATION_AUDIT.md`.
 
 | ID | Status | The gap |
 |---|---|---|
-| **UX8‑02** | open | Trust copy tells the prospect their data "stays private to the two of you," but the invite page's **only** post‑submission state is a static thank‑you (`invite/[token]/page.js:345‑360`) — the prospect **never sees the compiled report**. A false‑privacy / one‑sided‑value promise. (`review/ux_WS8_trust_consent.md:119`) |
+| **UX8‑02** | open | Trust copy tells the prospect their data "stays private to the two of you," but the invite page's **only** post‑submission state is a static thank‑you (`invite/[token]/page.js:345‑360`) — the prospect **never sees the compiled report**. A false‑privacy / one‑sided‑value promise. |
 | **UX8‑04** | **verified open** | The mental section's "Skip this section" (`mentalSteps[0].onSkip = handleSubmit`), the radiology step's `onSkip`, and the pink final‑Submit **`nextVariant`** are all set on the step objects (`invite/[token]/page.js:578`, `:626‑631`) but the `<QuestionScreen>` render **never forwards `onSkip`/`skipLabel`/`nextVariant`** (`:661‑676`). `QuestionScreen` *supports* them — the add‑prospect page wires them correctly. Net effect: once in the mental section, a prospect must answer **all 27 questions** to submit. Fix = thread those three props through the render call. |
 | **UX8‑06** | open | No UI moment tells the account holder (self mode) they are controlling a **third party's** sensitive health data. The consent is logged (`self_entry_consents`) but never surfaced. |
 | **UX8‑11** | open | The ~39‑step one‑sitting questionnaire (6 about + lifestyle + pathology + radiology + 27 mental) under social pressure. Mitigated cross‑reload by `localStorage` (`slayhealth_invite_progress_{token}`) but **not cross‑device**; compounded by UX8‑04. |

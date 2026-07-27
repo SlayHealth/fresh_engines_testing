@@ -19,7 +19,7 @@ There are **two** intake pages, and they do very different jobs. Don't confuse t
 
 This is a thin 3‑step `QuestionScreen` wizard. The redirect guard (`onboarding/page.js:29-41`) is the whole point: if `localStorage.slayhealth_user` has a `name`, it bounces to `/dashboard`; only a **nameless** user falls through to `setOnboardingStep(1)`. `finishOnboarding` (`onboarding/page.js:46`) POSTs **only the name** to `/api/auth/profile`; `userRelation` and `marriageTimeline` are merged into the local `slayhealth_user` object and set on the context user but are **never persisted server‑side** (`onboarding/page.js:57-64`). Setting `userRelation === 'Self'` auto‑copies `userName` into `candidateName` (`onboarding/page.js:107`).
 
-> **Gotcha (UX9‑07, `review/ux_WS9_copy.md`):** this page **duplicates** the identical name/relation/ETA trio that `login/page.js` also renders, and the two have already drifted (straight vs. curly apostrophes). A copy change to one must be mirrored in the other or they diverge further. Consider extracting the trio into one shared step array.
+> **Gotcha (finding UX9‑07):** this page **duplicates** the identical name/relation/ETA trio that `login/page.js` also renders, and the two have already drifted (straight vs. curly apostrophes). A copy change to one must be mirrored in the other or they diverge further. Consider extracting the trio into one shared step array.
 
 ### 1b. `add-prospect/page.js` — the real wizard, and the deep‑link path
 
@@ -60,7 +60,7 @@ else (activeCategory === null)   → the Category Hub            (:1716)
 
 `headerTitle` is chosen alongside `body` in the same chain (`'New Compatibility Check'` default `:1568`, `'Add Your Partner'` `:1575`, `'Mental Wellbeing'` `:1665`, category label `:1689-1691`, `'Your Health Profile'` / `"<name>'s Health Profile"` `:1721`). `isLoadingResults = isSavingProfile || isMatching` (`:1542`).
 
-> **Gotcha:** because the flow is component‑local state, a **hard refresh mid‑match‑result loses the computed match** (WS8‑01, `review/WS8_edge_cases.md`) — `/core-engine/*` is Context‑only. The three drafts (§8) rescue the *wizard's* position and answers, but not a finished match.
+> **Gotcha:** because the flow is component‑local state, a **hard refresh mid‑match‑result loses the computed match** (finding WS8‑01) — `/core-engine/*` is Context‑only. The three drafts (§8) rescue the *wizard's* position and answers, but not a finished match.
 
 ---
 
@@ -75,11 +75,11 @@ Two orthogonal forks live here. Keep them straight:
 
 Entered from the self hub's **Continue** (`:1729-1748`) when `!partnerRoutingDataComplete`. `partnerRoutingDataComplete(mode, form)` (`:111-113`) returns true once `mode && form.name && form.meetingSource` are all set — its job is to **never re‑ask** a completed "Add Your Partner" flow on resume or on a second Continue (the "Partner Journey Redirects Incorrectly" bug it guards against). The routing steps are built inline (`:1576-1605`): mode choice (`PROSPECT_MODE_OPTIONS`, `:115-118`) → partner name → "How did you meet?" (`MEETING_SOURCES`) → optional matrimonial platform → a mode‑specific terminal step.
 
-> **UX1‑05 (largely fixed, `review/ux_WS1_flows.md`):** "How did you meet?" moved here — *after* the partner is named — so it has a referent (`:1580-1589`); "Relationship Status" was removed entirely.
+> **UX1‑05 (largely fixed):** "How did you meet?" moved here — *after* the partner is named — so it has a referent (`:1580-1589`); "Relationship Status" was removed entirely.
 
 ### `prospectMode === 'self'` — the consent gate
 
-Before the account holder can type someone else's clinical/psychological data, an **explicit, logged consent step** is appended (`:1618-1644`). It renders a checkbox and calls `handleConfirmSelfEntryConsent(advanceToProspectHub)` (`:850`), which POSTs `/api/invite/self-entry-consent` with `prospectName`. On success `advanceToProspectHub` (`:1607-1612`) flips `activePerson='prospect'`. This closes **UX8‑01** (`review/ux_WS8_trust_consent.md`) — the path previously had **zero** consent artifact.
+Before the account holder can type someone else's clinical/psychological data, an **explicit, logged consent step** is appended (`:1618-1644`). It renders a checkbox and calls `handleConfirmSelfEntryConsent(advanceToProspectHub)` (`:850`), which POSTs `/api/invite/self-entry-consent` with `prospectName`. On success `advanceToProspectHub` (`:1607-1612`) flips `activePerson='prospect'`. This closes **UX8‑01** — the path previously had **zero** consent artifact.
 
 > **Observed copy bug (~`:1635`):** the checkbox reads `` I confirm I have {prospectForm.name || "my partner's"}'s permission… `` — when the name is blank this renders **"my partner's's permission"** (double possessive). Fix by dropping the trailing `'s` from the fallback string.
 
@@ -214,7 +214,7 @@ Radiology lives here (not Context) because radiology upload state is page‑loca
 
 Pathology success renders `TestCoverageSummary` (`:127`) — the backend's real ontology‑based "which named tests were in this PDF vs. missing, and what each missing one costs the report" (doc 06). The mock radiology path builds a **large hardcoded** findings/scores/risk_flags payload inline (`:550-645`) — sex‑branched organ data, ECHO, DEXA, etc.
 
-> **Hazard WS6‑05 (open, `review/WS6_frontend_audit.md`):** radiology upload requires Name/Gender/DOB first (`:467-477`), then computes `sex` and `age = calculateAge(dob)` (`:489-492`). `calculateAge` returns **30** when `dob` is missing, and `restoreMatchSession` never rehydrates `prospectForm.gender`/`dob`. So after a match restore, a radiology re‑upload can silently send **age 30 and the wrong sex** into real organ scoring. Validate `gender`/`dob` are actually populated before calling this path.
+> **Hazard WS6‑05 (open):** radiology upload requires Name/Gender/DOB first (`:467-477`), then computes `sex` and `age = calculateAge(dob)` (`:489-492`). `calculateAge` returns **30** when `dob` is missing, and `restoreMatchSession` never rehydrates `prospectForm.gender`/`dob`. So after a match restore, a radiology re‑upload can silently send **age 30 and the wrong sex** into real organ scoring. Validate `gender`/`dob` are actually populated before calling this path.
 
 > **UX7‑02 (open):** `handleFileUpload` throws a generic hardcoded `'Pathology extraction failed'` / `'Radiology extraction failed'` (`:1107`, `:506`), discarding the backend's real reason. **UX1‑08 (open):** the radiology `Locked · ₹999 one‑time unlock` badge (`:1474`) gates **nothing** — `radiologyUnlocked` is a demo click (`:1784`), there's no payment gateway; tapping opens the full upload.
 
@@ -277,8 +277,8 @@ The mobile bridge is real and live: `utils/mobileSections.js` (`toMobileSections
 
 ## Open items (see doc 21 for the authoritative list)
 
-- **Accessibility, this area's biggest gap:** `UX6‑01` [P0] no visible keyboard focus indicator on any field; `UX6‑04` [P1] no programmatic label association on any wizard field (radiogroup/date/city/measurement all label‑less); `UX6‑07` [P2] white‑on‑pink CTA at 4.0:1 fails AA; `UX6‑09` [P3] Tab‑stop options instead of roving‑tabindex. See `review/ux_WS6_a11y.md`.
-- **Trust asymmetry `UX8‑06` [P1]:** no ongoing "you're holding someone else's data" acknowledgment beyond the one‑time entry checkbox; `consent_timestamp` never surfaced (`review/ux_WS8_trust_consent.md`, doc 12).
+- **Accessibility, this area's biggest gap:** `UX6‑01` [P0] no visible keyboard focus indicator on any field; `UX6‑04` [P1] no programmatic label association on any wizard field (radiogroup/date/city/measurement all label‑less); `UX6‑07` [P2] white‑on‑pink CTA at 4.0:1 fails AA; `UX6‑09` [P3] Tab‑stop options instead of roving‑tabindex.
+- **Trust asymmetry `UX8‑06` [P1]:** no ongoing "you're holding someone else's data" acknowledgment beyond the one‑time entry checkbox; `consent_timestamp` never surfaced (doc 12).
 - **The `WS6‑05` age/sex hazard** (§9) — radiology upload can feed age 30 / wrong sex into real scoring after a match restore. Validate `prospectForm.gender`/`dob` before the upload path.
 - **Fake progress + non‑gating unlock:** `AnalysisLoadingScreen` is a timer decoupled from real completion (`UX1‑06`/`UX7‑03`); the `₹999` radiology unlock (`UX1‑08`) gates nothing.
 - **Observed code issues:** the double‑possessive consent copy (`~:1635`), `MeasurementSlider` auto‑committing defaults (170/65/32) on mount while its step is always `canAdvance:true` (`MeasurementSlider.js:52-55`) — body measurements the user never chose count as "answered" and feed BMI/waist classification — dead `ScoreBar`/`CategoryTileList`, and the stale "21" comments.

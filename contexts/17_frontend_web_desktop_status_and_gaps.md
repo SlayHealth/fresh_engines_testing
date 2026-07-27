@@ -95,17 +95,17 @@ This is the highest‑severity desktop bug and it is a **two‑constant mismatch
 | Bottom‑nav hide (Tailwind utility) | **1024px** | `MobileBottomNav.js:196` — `<nav className="mnav lg:hidden">` |
 | Bottom‑nav hide (CSS override) | **1024px** | `mobile-shell.css:380` — `@media (min-width:1024px){ .mnav{display:none} }` |
 
-**The consequence:** at any viewport width **768–1023px**, `useIsMobile` returns `false` (so `dashboard`/`profile` mount the **desktop** tree), but `.mnav` is still ≥767px so the **mobile bottom nav is still visible**. You get **two chrome systems on screen at once** — a desktop page under a floating mobile tab bar. Live‑measured at 800/900/1000px in the review (`review/ux_WS5_responsive.md:48`).
+**The consequence:** at any viewport width **768–1023px**, `useIsMobile` returns `false` (so `dashboard`/`profile` mount the **desktop** tree), but `.mnav` is still ≥767px so the **mobile bottom nav is still visible**. You get **two chrome systems on screen at once** — a desktop page under a floating mobile tab bar. Live‑measured at 800/900/1000px in the review.
 
 > Why two hide mechanisms for the nav? `mobile-shell.css:373-379` documents it: `.mnav { display:grid }` (unconditional) and Tailwind's `lg:hidden` have **equal selector specificity**, and `mobile-shell.css` is imported *after* globals.css in `app/layout.js`, so `.mnav` was silently winning and the bar stayed visible on desktop. The explicit `@media (min-width:1024px)` override at `:380` was added so hiding no longer depends on import order. Net effect: **1024px is the authoritative nav breakpoint.**
 
-**The fix (effort S, per `review/ux_WS5_responsive.md:85`):** widen `useIsMobile` to `'(max-width: 1023px)'` so the tree switch agrees with the nav. `.mnav` already treats 1024 as the boundary, so aligning the JS to it closes the dead‑zone with one constant change. Verify no desktop‑only surface assumes ≥768.
+**The fix (effort S):** widen `useIsMobile` to `'(max-width: 1023px)'` so the tree switch agrees with the nav. `.mnav` already treats 1024 as the boundary, so aligning the JS to it closes the dead‑zone with one constant change. Verify no desktop‑only surface assumes ≥768.
 
 ---
 
 ## 5. The desktop‑lags‑mobile divergences (the reconcile backlog)
 
-All of these are one‑directional "bring desktop up to the mobile design," none touch mobile. Sourced from `review/ux_WS5_responsive.md` and `review/ux_WS2_ia_nav.md`.
+All of these are one‑directional "bring desktop up to the mobile design," none touch mobile.
 
 | ID | Sev | Surface | Gap | Anchor |
 |---|---|---|---|---|
@@ -115,11 +115,11 @@ All of these are one‑directional "bring desktop up to the mobile design," none
 | UX5‑04 | P2 | add‑prospect hub | Desktop "Health Profile" hub has **no back‑to‑dashboard** control | `app/add-prospect/*` |
 | UX5‑05 | P2 | profile | Desktop column is 512px in bare 1440px canvas, no ambient bg (dashboard has one) | `profile/page.js:275` (`max-w-lg`) |
 | UX5‑06 | P2 | shared nav | Recurring sub‑44px tap targets (report nav rows 208×36, wizard back 32×32) | multiple |
-| UX2‑07 | P2 | global | **No persistent desktop global nav** outside the report — desktop users have no app‑wide chrome | `review/ux_WS2_ia_nav.md:158` |
+| UX2‑07 | P2 | global | **No persistent desktop global nav** outside the report — desktop users have no app‑wide chrome | — |
 
-UX5‑05 is worth calling out: it is the single clearest "nobody did a desktop pass here." The profile desktop branch (`profile/page.js:275`, `max-w-lg mx-auto`) is a narrow form floating in undecorated paper while the dashboard next door has a full ambient‑art background. Measured: `dash_desktop_colW {w:1024}` vs `profile_desktop_colW {w:512}` (`review/ux_WS5_responsive.md:182`).
+UX5‑05 is worth calling out: it is the single clearest "nobody did a desktop pass here." The profile desktop branch (`profile/page.js:275`, `max-w-lg mx-auto`) is a narrow form floating in undecorated paper while the dashboard next door has a full ambient‑art background. Measured: `dash_desktop_colW {w:1024}` vs `profile_desktop_colW {w:512}`.
 
-**Positive findings (don't "fix" these):** zero horizontal‑overflow bugs anywhere; the login wizard is viewport‑identical; the story tabs do true responsive reflow (`review/ux_WS5_responsive.md`).
+**Positive findings (don't "fix" these):** zero horizontal‑overflow bugs anywhere; the login wizard is viewport‑identical; the story tabs do true responsive reflow.
 
 ---
 
@@ -148,7 +148,7 @@ All copy lives in `frontend/src/constants/landingContent.js` (`HEALTH_TOPICS`, `
 
 ### 6.2 Unsubstantiated marketing claims (REG/DPDP lane)
 
-These are presented as fact and were flagged by the regulatory review (see `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` at repo root, and `review/WS_REG_regulatory.md`). Treat every number here as `[interim]` marketing copy pending substantiation — do not add clinical authority the product has not earned:
+These are presented as fact and were flagged by the regulatory review (see `REG-06_DPDP_SUBSTANTIATION_AUDIT.md` at repo root). Treat every number here as `[interim]` marketing copy pending substantiation — do not add clinical authority the product has not earned:
 
 | Claim | Where | Note |
 |---|---|---|
@@ -245,7 +245,7 @@ USG composite weights, verbatim in the on‑page calculations trace (`usg/page.j
 
 ---
 
-## 10. IA / naming debt (from `review/ux_WS2_ia_nav.md`)
+## 10. IA / naming debt
 
 Mostly lives in the report shell, which — being desktop‑styled everywhere — is a web concern too.
 

@@ -242,9 +242,9 @@ Two consequences: (a) share‑link validity **bypasses the DB session check enti
 
 Route map recap for reference — public: `POST /api/auth/{login,verify,refresh,logout}`; `authenticateToken`‑gated: `POST /profile`, `POST /reset-quota`, `GET /profile/:userId`, `DELETE /account` (`auth.routes.js:16‑25`). `/refresh` is public by design — the refresh token *is* the credential.
 
-The findings to carry forward (see the review corpus: `SLAYHEALTH_DEEP_REVIEW.md`, `SLAYHEALTH_UX_REVIEW.md`, `WORKREPORT_2026-07-22.md`, `review/ux_WS1_flows.md`, `review/ux_WS7_states.md`):
+The findings to carry forward:
 
-- **No‑grace‑window two‑tab race (the primary residual, flagged‑not‑done, `WORKREPORT_2026-07-22` commit `8856e83`).** The single‑flight `refreshAuthSession` only coalesces callers *within one browser context*. Two genuinely separate contexts (e.g. two tabs) can each POST the same refresh token — the first rotates+revokes it, the second hits a revoked token → 401 → spurious logout. The documented, un‑implemented mitigation is a short server‑side **rotation‑family grace** (accept the immediately‑prior token in a family for a few seconds) or **refresh‑token reuse detection**.
+- **No‑grace‑window two‑tab race (the primary residual, flagged‑not‑done, commit `8856e83`).** The single‑flight `refreshAuthSession` only coalesces callers *within one browser context*. Two genuinely separate contexts (e.g. two tabs) can each POST the same refresh token — the first rotates+revokes it, the second hits a revoked token → 401 → spurious logout. The documented, un‑implemented mitigation is a short server‑side **rotation‑family grace** (accept the immediately‑prior token in a family for a few seconds) or **refresh‑token reuse detection**.
 - **Refresh token duplicated into XSS‑readable `localStorage`.** It's returned in the JSON body of `/verify` and `/refresh` and mirrored to `localStorage.slayhealth_refresh_token` *in addition to* the httpOnly cookie (`auth.controller.js:133`, `utils/api.js:52`). The httpOnly protection is undermined by the readable copy; any XSS reads a valid 7‑day credential.
 - **Access token accepted via `?token=` query param** (`auth.middleware.js:17`). Query strings leak into server logs, proxy access logs, and `Referer` headers — a credential‑leak surface. Prefer Bearer‑only.
 - **`/db` authorization gap** (§10): any logged‑in user can CRUD any table row; add `requireAdmin`.
@@ -253,7 +253,7 @@ The findings to carry forward (see the review corpus: `SLAYHEALTH_DEEP_REVIEW.md
 - **Unbounded `user_sessions` / `otp_requests` growth** (§6): no pruning job; every `/refresh` does an O(n) bcrypt scan.
 - **Share token signed with the access secret** (§11): couples share‑link lifetime to access‑key rotation; no server‑side revocation.
 - **Hardcoded bypass phone `+917063992027`** compiled into `otp.service.js` (§4).
-- **UX session‑race items:** `UX1‑01` (non‑JSON error body rendered as raw `SyntaxError`, mitigated by `safeJson` but the backend non‑JSON responders are the deeper fix); `UX1‑02` (abandoning mid‑signup between OTP success and the name step strands a nameless session, `review/ux_WS1_flows.md`).
+- **UX session‑race items:** `UX1‑01` (non‑JSON error body rendered as raw `SyntaxError`, mitigated by `safeJson` but the backend non‑JSON responders are the deeper fix); `UX1‑02` (abandoning mid‑signup between OTP success and the name step strands a nameless session).
 
 > **Regulatory note (REG‑06):** the DPDP substantiation audit explicitly **scoped auth/JWT findings OUT** and deferred them to the deep review; it only flags `otp_requests.expires_at` as a legitimate retention exception. A dedicated security pass on *this* subsystem is therefore still outstanding — treat the happy path as complete and the hardening as needs‑work. This doc states the gaps factually and takes no wellness‑vs‑SaMD position; that call is doc 21 / legal counsel's.
 
