@@ -5,6 +5,24 @@ const jwtService = require('../services/auth/jwt.service');
 const notificationService = require('../services/notification/notification.service');
 const logger = require('../utils/logger');
 
+// Shared read-only sample account behind the one-click "live demo" login on the
+// sign-in page (lets judges/visitors explore a pre-populated report without an
+// OTP). Resolved server-side so the client never sends or receives the real
+// phone number. Override via env; falls back to the seeded sample account.
+const DEMO_ACCOUNT_PHONE = process.env.DEMO_ACCOUNT_PHONE || '+917063992027';
+// What the client sees instead of the demo account's real number, everywhere a
+// user object is returned (profile UI + any network payload).
+const DEMO_DISPLAY_PHONE = 'Demo account';
+
+// Strip the demo account's real phone number out of anything sent to the client.
+// Applied to every response that returns this user (demo-login, refresh, profile).
+function sanitizeDemoUser(user) {
+  if (user && user.phone_number === DEMO_ACCOUNT_PHONE) {
+    return { ...user, phone_number: DEMO_DISPLAY_PHONE };
+  }
+  return user;
+}
+
 /**
  * Request an OTP via WhatsApp.
  */
@@ -131,11 +149,68 @@ async function verifyOtp(req, res, next) {
       success: true,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      user,
+      user: sanitizeDemoUser(user),
       message: 'Verification successful'
     });
   } catch (error) {
     logger.error(`[Auth][CID: ${correlationId}] Error in verifyOtp: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+/**
+ * One-click "live demo" login. Issues a session for the shared read-only sample
+ * account WITHOUT an OTP, so a visitor (e.g. a hackathon judge) can explore the
+ * platform with a pre-populated report. Privacy/safety by design:
+ *  - The client never sends or receives the real phone number (resolved here).
+ *  - The session is signed with a NON-identifying, NON-admin phone, so the real
+ *    number never lands in the JWT payload a client could decode, and a demo
+ *    visitor never inherits admin privileges tied to the real number.
+ *  - The account's usage counters are reset each time so every demo starts clean.
+ */
+async function demoLogin(req, res, next) {
+  const correlationId = req.headers['x-correlation-id'] || uuidv4();
+  req.correlationId = correlationId;
+  res.setHeader('x-correlation-id', correlationId);
+
+  try {
+    const userRes = await db.query('SELECT * FROM users WHERE phone_number = $1', [DEMO_ACCOUNT_PHONE]);
+    if (userRes.rows.length === 0) {
+      logger.warn(`[Auth][CID: ${correlationId}] Demo login requested but the demo account is not set up`);
+      return res.status(404).json({ success: false, error: 'Demo account is not available.' });
+    }
+
+    // Fresh start for each demo session (also corrects any stale counter so the
+    // dashboard shows a clean "1 match left" rather than a nonsensical value).
+    const updated = await db.query(
+      'UPDATE users SET runs_used = 0, chats_used = 0 WHERE id = $1 RETURNING *',
+      [userRes.rows[0].id]
+    );
+    const user = updated.rows[0];
+
+    // 'demo' is a deliberate NON-real, NON-admin token identity — see the doc
+    // comment above. The DB record (and thus the session) is still keyed by user.id.
+    const tokens = jwtService.generateTokens(user.id, 'demo');
+    await jwtService.saveSession(user.id, tokens.refreshToken, req.headers['user-agent'], req.ip, correlationId);
+
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    logger.info(`[Auth][CID: ${correlationId}] Demo session started for account ${user.id}`);
+
+    res.json({
+      success: true,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: sanitizeDemoUser(user),
+      message: 'Demo session started'
+    });
+  } catch (error) {
+    logger.error(`[Auth][CID: ${correlationId}] Error in demoLogin: ${error.message}`);
     res.status(500).json({ success: false, error: error.message });
   }
 }
@@ -204,7 +279,7 @@ async function refreshSession(req, res, next) {
       success: true,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      user
+      user: sanitizeDemoUser(user)
     });
   } catch (error) {
     logger.error(`[Auth][CID: ${correlationId}] Error in refreshSession: ${error.message}`);
@@ -364,7 +439,7 @@ async function getUserProfile(req, res, next) {
 
     res.json({
       success: true,
-      user: result.rows[0]
+      user: sanitizeDemoUser(result.rows[0])
     });
   } catch (error) {
     logger.error(`[Auth][CID: ${correlationId}] Error in getUserProfile: ${error.message}`);
@@ -452,6 +527,7 @@ async function deleteAccount(req, res, next) {
 module.exports = {
   loginUser,
   verifyOtp,
+  demoLogin,
   refreshSession,
   logoutUser,
   updateProfile,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, RefreshCw, Phone, ClipboardPaste } from 'lucide-react';
+import { AlertCircle, RefreshCw, Phone, ClipboardPaste, Sparkles } from 'lucide-react';
 import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
 import { apiFetch, setAccessToken, safeJson } from '../../utils/api';
@@ -286,6 +286,37 @@ export default function LoginPage() {
     }
   };
 
+  // One-click "live demo": logs into the shared read-only sample account (with a
+  // pre-populated report) via /api/auth/demo-login — no phone/OTP. The backend
+  // resolves the account server-side and never sends back the real phone number,
+  // so nothing identifying appears in the network tab or the profile screen.
+  const startDemo = async () => {
+    setIsAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/demo-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      const data = await safeJson(res);
+      if (!data.success) throw new Error(data.error || 'Could not start the demo. Please try again.');
+
+      setAccessToken(data.accessToken);
+      if (data.refreshToken) localStorage.setItem('slayhealth_refresh_token', data.refreshToken);
+      localStorage.setItem('slayhealth_user', JSON.stringify(data.user));
+      setUser(data.user);
+      setRunsUsed(data.user.runs_used || 0);
+      setChatsUsed(data.user.chats_used || 0);
+      fetchRecentMatches(data.user.id);
+      router.push('/dashboard');
+    } catch (err) {
+      setAuthError(err.message || 'Could not start the demo. Please try again.');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
   // Final step of new-user signup (called after name/relation/eta are all answered):
   // saves the name collected earlier now that OTP has verified a real user id, then
   // finalizes the session the same way the returning-user path does.
@@ -381,6 +412,26 @@ export default function LoginPage() {
             className={`${fieldInputClass} flex-1 min-w-0`}
             style={fieldInputStyle}
           />
+        </div>
+
+        {/* One-tap demo — no phone/OTP. Drops the visitor into a pre-populated
+            sample report so judges/first-time visitors can see the product
+            instantly. Backend resolves the account server-side and returns no
+            identifying number. */}
+        <div className="mt-6 pt-5" style={{ borderTop: '1px solid var(--line)' }}>
+          <button
+            type="button"
+            onClick={startDemo}
+            disabled={isAuthLoading}
+            className="w-full p-4 rounded-xl text-base font-semibold flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+            style={{ background: 'var(--soft-teal, #E3F9F0)', color: 'var(--teal-d)', border: '1px solid var(--teal-d)' }}
+          >
+            <Sparkles className="w-4 h-4" />
+            {isAuthLoading ? 'Starting demo…' : 'Explore a live demo'}
+          </button>
+          <p className="text-xs text-center mt-2" style={{ color: 'var(--muted)' }}>
+            No sign-up needed — jump straight into a sample couple&apos;s report.
+          </p>
         </div>
       </div>
     );

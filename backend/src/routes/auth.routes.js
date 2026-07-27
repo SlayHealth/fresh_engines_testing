@@ -2,6 +2,7 @@ const express = require('express');
 const {
   loginUser,
   verifyOtp,
+  demoLogin,
   refreshSession,
   logoutUser,
   updateProfile,
@@ -15,6 +16,7 @@ const router = express.Router();
 
 router.post('/login', loginUser);
 router.post('/verify', verifyOtp);
+router.post('/demo-login', demoLogin);
 router.post('/refresh', refreshSession);
 router.post('/logout', logoutUser);
 
