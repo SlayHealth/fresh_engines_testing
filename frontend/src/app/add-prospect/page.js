@@ -22,7 +22,8 @@ import {
   LIFESTYLE_ACTIVITIES, LIFESTYLE_DRINKING,
   LIFESTYLE_SMOKING_TOBACCO, LIFESTYLE_SLEEP, LIFESTYLE_MENSTRUAL,
   GENDERS, MEETING_SOURCES, MATRIMONIAL_PLATFORMS,
-  FAMILY_HISTORY_DIABETES
+  FAMILY_HISTORY_DIABETES,
+  RELATIONS, MARRIAGE_TIMELINES, RELATIONSHIP_STATUSES
 } from '../../constants/lifestyleOptions';
 import { MENTAL_HEALTH_QUESTIONS, MENTAL_HEALTH_CATEGORIES, mentalCategoryProgress, framePerson } from '../../constants/mentalHealthQuestions';
 import MentalSubHub from '../../components/wizard/MentalSubHub';
@@ -119,6 +120,41 @@ const PROSPECT_MODE_OPTIONS = [
 
 const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
+
+// A themed native <select>, used for the relation / how-you-met / relationship-status /
+// marriage-timeline dropdowns. Native on purpose: these are short, well-known option
+// lists where a compact dropdown reads better than a full-screen tile list — and it
+// lets several of them stack together on a single "card" step (the How did you meet?
+// card) instead of one question per screen. `options` are {val,label} like the other
+// lifestyleOptions lists. A caret is drawn via background-image since appearance is
+// stripped for consistent cross-browser styling.
+function Dropdown({ label, options, value, onChange, placeholder = 'Select…' }) {
+  return (
+    <label className="block">
+      {label && (
+        <span className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>{label}</span>
+      )}
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full p-4 pr-10 border rounded-xl text-base appearance-none cursor-pointer"
+        style={{
+          borderColor: 'var(--line)',
+          color: value ? 'var(--ink)' : 'var(--muted)',
+          background: 'var(--surface)',
+          backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236B6459' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 14px center'
+        }}
+      >
+        <option value="" disabled>{placeholder}</option>
+        {options.map((o) => (
+          <option key={o.val} value={o.val} style={{ color: 'var(--ink)' }}>{o.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 // Real, per-upload test coverage from the backend's ontology-based extraction
 // (see backend/src/services/pathology/testCoverage.service.js) — which named
@@ -1229,6 +1265,17 @@ function AddProspectPageInner() {
     canAdvance: !!value
   });
 
+  // Single-dropdown step — same shape as choiceStep, but rendered as a compact
+  // native <select> rather than a full-screen tile list. Used for the relation
+  // dropdown in the "Your Information" section.
+  const dropdownStep = (title, options, value, onChange, extra = {}) => ({
+    title,
+    subtitle: extra.subtitle,
+    kind: 'dropdown',
+    content: <Dropdown options={options} value={value} onChange={onChange} placeholder={extra.placeholder} />,
+    canAdvance: !!value
+  });
+
   const fieldStep = (title, value, onChange, extra = {}) => ({
     title,
     subtitle: extra.subtitle,
@@ -1352,6 +1399,21 @@ function AddProspectPageInner() {
     const L = (base) => (isSelfPerson ? base : `${prospectForm.name || 'Your partner'}'s ${base}`);
     const arr = [];
 
+    // Relation to the person getting married — moved here from onboarding (which is
+    // now name-only). Only on the account holder's own "Your Information" section:
+    // it's a self attribute (am I the one marrying, or filling this in for a
+    // relative/friend), and it drives isSelf/needsNameStep. Picking a non-Self
+    // relation makes the "What's their name?" step below appear on the next render.
+    if (isSelfPerson) {
+      arr.push(dropdownStep(
+        'Your relation to the person getting married',
+        RELATIONS,
+        form.userRelation || 'Self',
+        (v) => set({ userRelation: v, candidateName: v === 'Self' ? (form.userName || '') : form.candidateName }),
+        { subtitle: 'Are you the one getting married, or filling this in for someone else?', placeholder: 'Select your relation' }
+      ));
+    }
+
     // The prospect's name is always collected on the routing screen before this hub
     // is reached; the "self" candidate only needs it here when someone else (a
     // parent/sibling/etc.) is filling the form in on the candidate's behalf.
@@ -1445,8 +1507,8 @@ function AddProspectPageInner() {
 
     return [
       {
-        key: 'about', label: isSelfTurn ? 'About You' : `About ${prospectForm.name || 'Your Partner'}`,
-        desc: 'Basics, body & relationship context', icon: UserRound,
+        key: 'about', label: isSelfTurn ? 'Your Information' : `About ${prospectForm.name || 'Your Partner'}`,
+        desc: 'Relation, basics, body & context', icon: UserRound,
         progress: aboutProgress(adapter), answered: aboutC.answered, total: aboutC.total, required: true
       },
       {
@@ -1577,19 +1639,61 @@ function AddProspectPageInner() {
     routingSteps.push(choiceStep('How will your partner share their details?', PROSPECT_MODE_OPTIONS, prospectMode, (v) => setProspectMode(v)));
     if (prospectMode) {
       routingSteps.push(fieldStep("What's your partner's name?", prospectForm.name, (v) => setProspectForm({ ...prospectForm, name: v }), { placeholder: 'Enter their name' }));
-      // Previously asked inside the self person's own "About You" section —
-      // which runs before any prospect exists at all (a user just exploring,
-      // or without a partner yet, would still be asked "how did you meet"
-      // someone they haven't named). Now that a specific prospect is named,
-      // asking about the two of you together has an actual referent.
-      routingSteps.push(choiceStep('How did you meet?', MEETING_SOURCES, prospectForm.meetingSource, (v) => setProspectForm({
-        ...prospectForm,
-        meetingSource: v,
-        platformName: v !== 'Matrimonial Platform' ? '' : prospectForm.platformName
-      })));
-      if (prospectForm.meetingSource === 'Matrimonial Platform') {
-        routingSteps.push(choiceStep('Which platform?', MATRIMONIAL_PLATFORMS, prospectForm.platformName, (v) => setProspectForm({ ...prospectForm, platformName: v })));
-      }
+      // A single "How did you meet?" card grouping the couple-context dropdowns:
+      // how you met (+ which platform, when it's a matrimonial site), your current
+      // relationship status, and your marriage timeline. Relationship status and
+      // marriage timeline moved here from the now name-only onboarding — asked only
+      // now that a specific partner is named, so "the two of you" has a referent
+      // (previously how-you-met lived in the self "About You" section, which runs
+      // before any prospect exists at all).
+      routingSteps.push({
+        title: 'How did you meet?',
+        subtitle: 'A little context about the two of you.',
+        canAdvance: !!(
+          prospectForm.meetingSource &&
+          (prospectForm.meetingSource !== 'Matrimonial Platform' || prospectForm.platformName) &&
+          onboardingForm.relationshipStatus &&
+          onboardingForm.marriageTimeline
+        ),
+        content: (
+          <div className="space-y-4">
+            <Dropdown
+              label="How did you meet?"
+              options={MEETING_SOURCES}
+              value={prospectForm.meetingSource}
+              onChange={(v) => setProspectForm({
+                ...prospectForm,
+                meetingSource: v,
+                platformName: v !== 'Matrimonial Platform' ? '' : prospectForm.platformName
+              })}
+              placeholder="Select how you met"
+            />
+            {prospectForm.meetingSource === 'Matrimonial Platform' && (
+              <Dropdown
+                label="Which platform?"
+                options={MATRIMONIAL_PLATFORMS}
+                value={prospectForm.platformName}
+                onChange={(v) => setProspectForm({ ...prospectForm, platformName: v })}
+                placeholder="Select platform"
+              />
+            )}
+            <Dropdown
+              label="Relationship Status"
+              options={RELATIONSHIP_STATUSES}
+              value={onboardingForm.relationshipStatus}
+              onChange={(v) => setOnboardingForm({ ...onboardingForm, relationshipStatus: v })}
+              placeholder="Select relationship status"
+            />
+            <Dropdown
+              label="Marriage Timeline"
+              options={MARRIAGE_TIMELINES}
+              value={onboardingForm.marriageTimeline}
+              onChange={(v) => setOnboardingForm({ ...onboardingForm, marriageTimeline: v })}
+              placeholder="Select marriage timeline"
+            />
+          </div>
+        )
+      });
     }
     if (prospectMode === 'invite') {
       routingSteps.push({

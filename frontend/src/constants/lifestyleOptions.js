@@ -135,6 +135,16 @@ export const MARRIAGE_TIMELINES = [
   { val: 'Not sure yet', label: 'Not sure yet' }
 ];
 
+// The couple's current relationship status. Display/context only — never sent to
+// the backend or used in any scoring engine (same as userRelation/marriageTimeline).
+// Re-introduced (was removed in 6b20794) now that the "How did you meet?" card in
+// add-prospect collects it alongside how-you-met and the marriage timeline.
+export const RELATIONSHIP_STATUSES = [
+  { val: 'Single', label: 'Single' },
+  { val: 'In a Relationship', label: 'In a Relationship' },
+  { val: 'Engaged', label: 'Engaged' }
+];
+
 export const CITIES = [
   'Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Ahmedabad', 'Chennai', 'Kolkata', 'Surat',
   'Pune', 'Jaipur', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Thane', 'Bhopal',

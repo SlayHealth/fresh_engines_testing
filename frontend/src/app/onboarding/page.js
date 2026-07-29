@@ -7,8 +7,10 @@ import { API_URL } from '../../config/api';
 import { apiFetch } from '../../utils/api';
 import { toast } from '../../components/Toast';
 import QuestionScreen from '../../components/wizard/QuestionScreen';
-import ChoiceList from '../../components/wizard/ChoiceList';
-import { RELATIONS, MARRIAGE_TIMELINES } from '../../constants/lifestyleOptions';
+// Onboarding now collects only the account holder's name. Relation to the person
+// getting married, the marriage timeline, and relationship status moved into the
+// "New Compatibility Check" flow (add-prospect), where they have an actual
+// referent — a specific candidate/couple — rather than being asked up front.
 
 const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
@@ -91,32 +93,6 @@ export default function OnboardingPage() {
           autoFocus
           className={fieldInputClass}
           style={fieldInputStyle}
-        />
-      )
-    },
-    {
-      title: 'Who are you in relation to the person getting married?',
-      canAdvance: !!onboardingForm.userRelation,
-      content: (
-        <ChoiceList
-          options={RELATIONS}
-          value={onboardingForm.userRelation}
-          onChange={(v) => setOnboardingForm({
-            ...onboardingForm,
-            userRelation: v,
-            candidateName: v === 'Self' ? (onboardingForm.userName || '') : onboardingForm.candidateName
-          })}
-        />
-      )
-    },
-    {
-      title: "What's your ETA for marriage?",
-      canAdvance: !!onboardingForm.marriageTimeline,
-      content: (
-        <ChoiceList
-          options={MARRIAGE_TIMELINES}
-          value={onboardingForm.marriageTimeline}
-          onChange={(v) => setOnboardingForm({ ...onboardingForm, marriageTimeline: v })}
         />
       )
     }

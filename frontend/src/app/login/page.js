@@ -7,9 +7,7 @@ import { useCompatibility } from '../../contexts/CompatibilityContext';
 import { API_URL } from '../../config/api';
 import { apiFetch, setAccessToken, safeJson } from '../../utils/api';
 import QuestionScreen from '../../components/wizard/QuestionScreen';
-import ChoiceList from '../../components/wizard/ChoiceList';
 import SplashScreen from '../../components/wizard/SplashScreen';
-import { RELATIONS, MARRIAGE_TIMELINES } from '../../constants/lifestyleOptions';
 
 const COUNTRIES = [
   { code: '+91', flag: '🇮🇳', name: 'India' },
@@ -23,7 +21,9 @@ const COUNTRIES = [
 const fieldInputClass = 'w-full p-4 border rounded-xl text-base';
 const fieldInputStyle = { borderColor: 'var(--line)', color: 'var(--ink)', background: 'var(--surface)' };
 
-const STEP_ORDER_NEW = ['phone', 'otp', 'name', 'relation', 'eta'];
+// New-user signup now collects only the name after OTP; relation, marriage
+// timeline, and relationship status moved into the New Compatibility Check flow.
+const STEP_ORDER_NEW = ['phone', 'otp', 'name'];
 const STEP_ORDER_RETURNING = ['phone', 'otp'];
 
 export default function LoginPage() {
@@ -436,9 +436,13 @@ export default function LoginPage() {
       </div>
     );
   } else if (authStep === 'name') {
+    // Terminal step of new-user signup: name only, then completeSignup writes the
+    // final user + heads to the dashboard. Relation/timeline are collected later,
+    // inside the New Compatibility Check flow.
     title = 'What’s your name?';
-    onNext = goNext;
-    nextDisabled = !onboardingForm.userName?.trim();
+    onNext = completeSignup;
+    nextLabel = isAuthLoading ? 'Finishing…' : "Let's go";
+    nextDisabled = !onboardingForm.userName?.trim() || isAuthLoading;
     onBack = goBack;
     content = (
       <input
@@ -451,31 +455,6 @@ export default function LoginPage() {
         autoComplete="name"
         className={fieldInputClass}
         style={fieldInputStyle}
-      />
-    );
-  } else if (authStep === 'relation') {
-    title = 'Who are you in relation to the person getting married?';
-    onBack = goBack;
-    onNext = goNext;
-    nextDisabled = !onboardingForm.userRelation;
-    content = (
-      <ChoiceList
-        options={RELATIONS}
-        value={onboardingForm.userRelation}
-        onChange={(v) => setOnboardingForm({ ...onboardingForm, userRelation: v })}
-      />
-    );
-  } else if (authStep === 'eta') {
-    title = 'What’s your ETA for marriage?';
-    onBack = goBack;
-    onNext = completeSignup;
-    nextLabel = isAuthLoading ? 'Finishing…' : "Let's go";
-    nextDisabled = !onboardingForm.marriageTimeline || isAuthLoading;
-    content = (
-      <ChoiceList
-        options={MARRIAGE_TIMELINES}
-        value={onboardingForm.marriageTimeline}
-        onChange={(v) => setOnboardingForm({ ...onboardingForm, marriageTimeline: v })}
       />
     );
   } else if (authStep === 'otp') {
