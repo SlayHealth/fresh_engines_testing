@@ -2,6 +2,13 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Build a self-contained production server (.next/standalone/server.js) that
+  // bundles only the runtime files + traced node_modules it actually needs — so
+  // the Docker image copies a small standalone tree instead of the whole repo +
+  // full node_modules. The standalone server honors PORT/HOSTNAME env vars; the
+  // container sets HOSTNAME=0.0.0.0 so it binds all interfaces (it defaults to
+  // localhost otherwise). See frontend/Dockerfile.
+  output: 'standalone',
   // Hides the dev-mode route indicator badge (bottom-left "N" button) — it's
   // Next.js tooling chrome, not app UI, and was showing up in every screen.
   devIndicators: false,

@@ -1,0 +1,19 @@
+# Keep the build context small and never bake host artifacts / secrets into the
+# image. node_modules is excluded so the Dockerfile's compiled-in-image copy is
+# authoritative (host modules may be the wrong arch); .env is excluded so secrets
+# are injected at runtime, never layered into the image.
+node_modules
+npm-debug.log*
+.env
+.env.*
+.git
+.gitignore
+Dockerfile
+.dockerignore
+*.md
+logs
+*.log
+coverage
+scratch
+src/scratch
+.DS_Store

@@ -1,0 +1,15 @@
+# Keep the build context small and reproducible. .next is excluded so the image
+# always builds fresh (no stale host artifacts); node_modules is rebuilt in-image;
+# .env* is excluded so NEXT_PUBLIC_API_URL comes solely from the build ARG.
+node_modules
+.next
+npm-debug.log*
+.env
+.env.*
+.git
+.gitignore
+Dockerfile
+.dockerignore
+*.md
+coverage
+.DS_Store

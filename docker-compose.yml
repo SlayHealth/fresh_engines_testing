@@ -1,0 +1,62 @@
+# Local orchestration for the two SlayHealth containers.
+#
+#   docker compose up --build      # build + run both, foreground
+#   docker compose up -d --build   # ... detached
+#   docker compose down            # stop + remove
+#
+# By default the backend talks to your existing managed Postgres / Redis / AI
+# providers via backend/.env, so there's no local data to seed to get running.
+# Uncomment the postgres/redis services at the bottom to run a fully-local stack.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Local testing is over plain http, so keep cookies non-Secure (auth breaks
+      # if Secure cookies are set without TLS). In real prod behind HTTPS, set
+      # NODE_ENV=production so cookies are Secure + SameSite is handled correctly.
+      NODE_ENV: development
+      PORT: "3001"
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked at build time. The browser (on your host) reaches the backend at
+        # the port published below. In prod, build with your real backend URL, or
+        # leave empty and route /api at the edge (see frontend/Dockerfile).
+        NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ---- Optional fully-local data stores (mirror RDS + ElastiCache) ----
+  # Enable these + point backend/.env's DATABASE_URL / REDIS_URL at them to run
+  # offline. Note: postgres starts EMPTY — load your schema before first use.
+  #
+  # postgres:
+  #   image: postgres:16
+  #   environment:
+  #     POSTGRES_USER: slay
+  #     POSTGRES_PASSWORD: slay
+  #     POSTGRES_DB: slayhealth
+  #   ports: ["5432:5432"]
+  #   volumes: ["pgdata:/var/lib/postgresql/data"]
+  #
+  # redis:
+  #   image: redis:7
+  #   ports: ["6379:6379"]
+
+# volumes:
+#   pgdata:
