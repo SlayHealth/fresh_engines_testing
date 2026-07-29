@@ -162,7 +162,9 @@ export default function CategoryHub({
   primaryDisabled,
   primaryHint,
   embedded = false,
-  confidenceLabel = 'The Full Picture'
+  confidenceLabel = 'The Full Picture',
+  hideSummary = false,
+  columns = 1
 }) {
   const confidence = computeConfidence(categories);
   return (
@@ -174,26 +176,32 @@ export default function CategoryHub({
         </div>
       )}
 
-      <div className="rounded-2xl p-4 mb-4 shrink-0 border border-(--teal)/25" style={{ background: 'var(--soft-teal)' }}>
-        <div className="flex items-center justify-between mb-2">
-          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--teal-d)' }}>
-            <Gauge className="w-3.5 h-3.5" />
-            {confidenceLabel}
-          </span>
-          <span className="text-sm font-extrabold" style={{ color: 'var(--teal-d)' }}>{confidence}%</span>
+      {/* Confidence summary bar. Hidden when the caller already shows the
+          weighted gauge (e.g. the desktop dashboard hero), which owns this. */}
+      {!hideSummary && (
+        <div className="rounded-2xl p-4 mb-4 shrink-0 border border-(--teal)/25" style={{ background: 'var(--soft-teal)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--teal-d)' }}>
+              <Gauge className="w-3.5 h-3.5" />
+              {confidenceLabel}
+            </span>
+            <span className="text-sm font-extrabold" style={{ color: 'var(--teal-d)' }}>{confidence}%</span>
+          </div>
+          <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.6)' }}>
+            <div
+              className="h-full rounded-full transition-[width] duration-500 ease-out"
+              style={{ width: `${confidence}%`, background: 'var(--teal)' }}
+            />
+          </div>
+          <p className="text-[11px] mt-2" style={{ color: 'var(--teal-d)' }}>
+            Fill in each section below to raise your engine&apos;s confidence in the analysis.
+          </p>
         </div>
-        <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.6)' }}>
-          <div
-            className="h-full rounded-full transition-[width] duration-500 ease-out"
-            style={{ width: `${confidence}%`, background: 'var(--teal)' }}
-          />
-        </div>
-        <p className="text-[11px] mt-2" style={{ color: 'var(--teal-d)' }}>
-          Fill in each section below to raise your engine&apos;s confidence in the analysis.
-        </p>
-      </div>
+      )}
 
-      <div className={embedded ? 'space-y-3' : 'flex-1 overflow-y-auto space-y-3 pb-2'}>
+      <div className={columns === 2
+        ? 'grid grid-cols-1 md:grid-cols-2 gap-3 items-start'
+        : (embedded ? 'space-y-3' : 'flex-1 overflow-y-auto space-y-3 pb-2')}>
         {categories.map((cat) => (
           <CategoryCard key={cat.key} category={cat} onEnter={onEnter} onUnlock={onUnlock} />
         ))}

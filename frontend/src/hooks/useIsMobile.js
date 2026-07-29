@@ -2,7 +2,11 @@
 
 import { useSyncExternalStore } from 'react';
 
-const QUERY = '(max-width: 767px)';
+// 1023px (not 767) so the JS tree-switch agrees with the bottom-nav hide point
+// (mobile-shell.css hides .mnav at >=1024px). This closes the old 768-1023px
+// dead-zone where the desktop tree mounted UNDER the still-visible mobile nav.
+// <1024px => mobile shell + bottom nav; >=1024px => desktop sidebar shell.
+const QUERY = '(max-width: 1023px)';
 
 function subscribe(callback) {
   const mql = window.matchMedia(QUERY);
