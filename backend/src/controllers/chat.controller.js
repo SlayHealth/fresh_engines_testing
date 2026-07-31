@@ -3,6 +3,34 @@ const openRouter = require('../services/llm/openrouter.service');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 
+function extractPartnerNames(metadata) {
+  const names = [];
+  if (!metadata) return names;
+
+  // 1. Try analysisResult partner info
+  const ar = metadata.analysisResult;
+  if (ar) {
+    if (ar.partner_A?.name) names.push(ar.partner_A.name);
+    if (ar.partner_B?.name) names.push(ar.partner_B.name);
+    if (names.length === 0) {
+      if (ar.maleName) names.push(ar.maleName);
+      if (ar.femaleName) names.push(ar.femaleName);
+    }
+  }
+
+  // 2. Try report sections / patient profiles
+  if (metadata.maleReportExtracted?.patient?.name) names.push(metadata.maleReportExtracted.patient.name);
+  if (metadata.femaleReportExtracted?.patient?.name) names.push(metadata.femaleReportExtracted.patient.name);
+  if (metadata.patient?.name) names.push(metadata.patient.name);
+
+  // Filter out duplicates and placeholder texts
+  const uniqueNames = [...new Set(names)].filter(
+    (n) => typeof n === 'string' && n.trim() && !n.toLowerCase().includes('partner') && !n.toLowerCase().includes('prospect')
+  );
+  return uniqueNames;
+}
+
+
 // Only reached if the LLM call itself fails (no API key, network error,
 // malformed JSON) — the real suggestions are always generated fresh per
 // request by generateSuggestions() below, grounded in this specific
@@ -253,8 +281,10 @@ async function sendChatMessage(req, res, next) {
 
     // 5. Construct the system prompt using the metadata and persona instructions
     const engineName = engineNameFor(engineType);
+    const partnerNames = extractPartnerNames(metadata);
+    const namesHeading = partnerNames.length > 0 ? `\nPartner Names to address: ${partnerNames.join(' and ')}` : '';
 
-    const systemPrompt = `You are a friendly, highly empathetic, and human-like premarital health counselor for SlayHealth, specializing in explaining results for the ${engineName} engine. You are talking to a couple (or an individual) planning their life together.
+    const systemPrompt = `You are a friendly, highly empathetic, and human-like premarital health counselor for SlayHealth, specializing in explaining results for the ${engineName} engine. You are talking to a couple (or an individual) planning their life together.${namesHeading}
 
 Your goal is to explain clinical findings to them in a warm, conversational, and highly specific manner, just like a real human counselor sitting across from them.
 Here is the client's report and analysis data in JSON format:
@@ -265,10 +295,10 @@ Strict Guidelines for your Persona and Responses:
    - If they are completely healthy (green flags): Enthusiastically say yes!
    - If there are minor issues: Say yes, but gently suggest they work on fixing these minor health tweaks as they plan their marriage.
    - If there are severe/major flaws: Do NOT explicitly say yes or no. Handle it very diplomatically by warmly advising them that they have some significant health challenges to address first, and encourage them to tackle these together as a supportive team before finalizing major life decisions. NEVER advise against marriage.
-2. **Human-like & Conversational**: Do NOT sound like an AI. Use natural, everyday language. Avoid generic or vague statements. Reference their specific names, ages, or exact data points from the report naturally.
+2. **Human-like, Customised & Conversational**: Do NOT sound like an AI. Use natural, everyday, warm language. Always personalize your responses by addressing or referring to the users by their first names ${partnerNames.length > 0 ? `(specifically: ${partnerNames.join(' and ')})` : ''} where appropriate. Avoid generic or vague statements.
 3. **Specific & Actionable**: Provide specific, actionable next steps based on their exact biomarkers, rather than vague "eat healthy" advice. 
 4. **Clear & Plain Language**: Avoid heavy, scary, or complex medical jargon. Explain medical terms simply.
-5. **Short & Concise**: Keep your replies brief. Aim for 2 to 3 short, friendly sentences. Do NOT dump the entire report or list out findings unless explicitly asked.
+5. **Short, Concise & Conversational**: Keep your replies extremely brief—aim for a **maximum of 2 to 3 short sentences (under 60 words total)**. Do NOT write long paragraphs, bullet points, or lists. Keep it conversational so they can easily chat back and forth.
 6. **NO EM DASHES ("—")**: Do NOT use the em dash character "—" under any circumstances.
 7. Do NOT make up any medical values not present in the JSON.
 8. When citing a number, round it the way a person would say it out loud (e.g. "118", "92.5") — never repeat a long raw decimal straight from the JSON.
