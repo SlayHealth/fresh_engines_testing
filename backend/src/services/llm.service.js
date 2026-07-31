@@ -5,9 +5,17 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
 
 // Using a fast model for real-time inference
-const DEFAULT_MODEL = "openai/gpt-4o-mini"; 
+const DEFAULT_MODEL = "openai/gpt-4o-mini";
 
 const redis = require('./storage/redis.service');
+const bedrock = require('./llm/bedrock.service');
+
+// When LLM_PROVIDER=bedrock (and a Bedrock key is present), completions route to
+// the Bedrock Converse provider (Kimi K2.5) instead of OpenRouter. The Redis
+// caching and fallback-text safety wrapper below are unchanged either way.
+function useBedrock() {
+  return process.env.LLM_PROVIDER === 'bedrock';
+}
 
 /**
  * Generate a dynamic clinical insight using OpenRouter.
@@ -19,8 +27,8 @@ const redis = require('./storage/redis.service');
  * @returns {String} Generated text or fallback text
  */
 async function generateInsight(messages, fallbackText, options = {}) {
-  if (!OPENROUTER_API_KEY) {
-    console.warn("[LLM Service] No OPENROUTER_API_KEY found, using fallback text.");
+  if (!useBedrock() && !OPENROUTER_API_KEY) {
+    console.warn("[LLM Service] No LLM provider configured (no Bedrock key, no OPENROUTER_API_KEY), using fallback text.");
     return fallbackText;
   }
 
@@ -38,50 +46,61 @@ async function generateInsight(messages, fallbackText, options = {}) {
   }
 
   try {
-    const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://slayhealth.com", // Optional, required by some openrouter providers
-        "X-Title": "SlayHealth Compatibility" // Optional
-      },
-      body: JSON.stringify({
-        model: options.model || DEFAULT_MODEL,
-        messages: messages,
-        temperature: options.temperature ?? 0.3, // Low temp for clinical consistency
-        max_tokens: options.max_tokens ?? 300
-      })
-    });
+    // 2. Generate the completion via the configured provider.
+    let generatedText;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[LLM Service] OpenRouter API Error: ${response.status} - ${errorText}`);
-      return fallbackText;
-    }
+    if (useBedrock()) {
+      const text = await bedrock.generateChat(messages, options);
+      if (!text) {
+        console.warn("[LLM Service] Bedrock returned empty text, using fallback.");
+        return fallbackText;
+      }
+      generatedText = text.trim();
+    } else {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://slayhealth.com", // Optional, required by some openrouter providers
+          "X-Title": "SlayHealth Compatibility" // Optional
+        },
+        body: JSON.stringify({
+          model: options.model || DEFAULT_MODEL,
+          messages: messages,
+          temperature: options.temperature ?? 0.3, // Low temp for clinical consistency
+          max_tokens: options.max_tokens ?? 300
+        })
+      });
 
-    const data = await response.json();
-    
-    if (data.choices && data.choices.length > 0 && data.choices[0].message) {
-      const generatedText = data.choices[0].message.content.trim();
-      
-      // 2. Set Redis Cache (TTL: 30 days = 2592000 seconds)
-      if (redis && options.cacheKey) {
-        try {
-          // Fire and forget caching
-          redis.setex(options.cacheKey, 2592000, generatedText).catch(e => 
-            console.error(`[LLM Service] Redis set error for ${options.cacheKey}:`, e.message)
-          );
-        } catch (err) {
-          console.error(`[LLM Service] Redis set error for ${options.cacheKey}:`, err.message);
-        }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[LLM Service] OpenRouter API Error: ${response.status} - ${errorText}`);
+        return fallbackText;
       }
 
-      return generatedText;
-    } else {
-      console.warn("[LLM Service] Unexpected response structure from OpenRouter:", JSON.stringify(data));
-      return fallbackText;
+      const data = await response.json();
+
+      if (!(data.choices && data.choices.length > 0 && data.choices[0].message)) {
+        console.warn("[LLM Service] Unexpected response structure from OpenRouter:", JSON.stringify(data));
+        return fallbackText;
+      }
+      generatedText = data.choices[0].message.content.trim();
     }
+
+    // 3. Set Redis Cache (TTL: 30 days = 2592000 seconds)
+    if (redis && options.cacheKey) {
+      try {
+        // Fire and forget caching
+        redis.setex(options.cacheKey, 2592000, generatedText).catch(e =>
+          console.error(`[LLM Service] Redis set error for ${options.cacheKey}:`, e.message)
+        );
+      } catch (err) {
+        console.error(`[LLM Service] Redis set error for ${options.cacheKey}:`, err.message);
+      }
+    }
+
+    return generatedText;
   } catch (error) {
     console.error("[LLM Service] Inference failed, using fallback. Error:", error.message);
     return fallbackText;

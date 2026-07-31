@@ -1,8 +1,20 @@
 const axios = require('axios');
 const logger = require('../../utils/logger');
+const bedrock = require('./bedrock.service');
+
+// When LLM_PROVIDER=bedrock (and a Bedrock key is present), these calls route to
+// the Bedrock Converse provider (Kimi K2.5) instead of OpenRouter. Default stays
+// OpenRouter, so nothing changes unless the env is set.
+function useBedrock() {
+  return process.env.LLM_PROVIDER === 'bedrock';
+}
 
 class OpenRouterService {
   async extractJSON(prompt, systemInstruction, model = 'meta-llama/llama-3.3-70b-instruct') {
+    if (useBedrock()) {
+      return await bedrock.extractJSON(prompt, systemInstruction);
+    }
+
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       throw new Error("OPENROUTER_API_KEY is missing from environment variables.");
@@ -59,6 +71,10 @@ class OpenRouterService {
   }
 
   async chatCompletion(messages, model = 'deepseek/deepseek-v4-flash') {
+    if (useBedrock()) {
+      return await bedrock.chatCompletion(messages);
+    }
+
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       throw new Error("OPENROUTER_API_KEY is missing from environment variables.");
