@@ -414,9 +414,9 @@ export default function UsgPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '24px' }}>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         {/* Top Row: Overall scores */}
-        <div style={{ gridColumn: 'span 4' }}>
+        <div className="min-w-0 lg:col-span-4">
           <NuptiaScoreUSGSlice 
             contributionA={data.partner_A?.nuptia_score_usg_contribution} 
             contributionB={data.partner_B?.nuptia_score_usg_contribution}
@@ -424,7 +424,7 @@ export default function UsgPage() {
             nameB={femaleName}
           />
         </div>
-        <div style={{ gridColumn: 'span 4' }}>
+        <div className="min-w-0 lg:col-span-4">
            <MetabolicHealthDashboard 
              indexA={data.partner_A?.scores?.metabolic_index} 
              indexB={data.partner_B?.scores?.metabolic_index}
@@ -432,7 +432,7 @@ export default function UsgPage() {
              nameB={femaleName}
            />
         </div>
-        <div style={{ gridColumn: 'span 4' }}>
+        <div className="min-w-0 lg:col-span-4">
            <FattyLiverVisual 
              gradeA={data.partner_A?.raw_data?.findings?.liver?.fatty_grade} 
              gradeB={data.partner_B?.raw_data?.findings?.liver?.fatty_grade}
@@ -442,7 +442,7 @@ export default function UsgPage() {
         </div>
 
         {/* Middle Row: Radar and Status Grid */}
-        <div style={{ gridColumn: 'span 6' }}>
+        <div className="min-w-0 lg:col-span-6">
           <CoupleRadarComparison 
             scoresA={data.partner_A?.scores} 
             scoresB={data.partner_B?.scores}
@@ -450,7 +450,7 @@ export default function UsgPage() {
             nameB={femaleName}
           />
         </div>
-        <div style={{ gridColumn: 'span 6' }}>
+        <div className="min-w-0 lg:col-span-6">
           <OrganStatusGrid 
             scoresA={data.partner_A?.scores} 
             scoresB={data.partner_B?.scores}
@@ -460,7 +460,7 @@ export default function UsgPage() {
         </div>
 
         {/* Reproductive Row */}
-        <div style={{ gridColumn: 'span 6' }}>
+        <div className="min-w-0 lg:col-span-6">
           {data.partner_A ? (
             <MaleReproductivePanel 
               prostate={data.partner_A.raw_data?.findings?.prostate} 
@@ -481,7 +481,7 @@ export default function UsgPage() {
           )}
         </div>
 
-        <div style={{ gridColumn: 'span 6' }}>
+        <div className="min-w-0 lg:col-span-6">
           {data.partner_B ? (
             <FemaleReproductivePanel 
               ovaries={data.partner_B.raw_data?.findings?.ovaries} 
@@ -506,13 +506,13 @@ export default function UsgPage() {
         {(data.partner_A?.findings_all?.USG_SCROTUM_DOPPLER || data.partner_B?.findings_all?.USG_SCROTUM_DOPPLER) && (
           <>
             {data.partner_A?.findings_all?.USG_SCROTUM_DOPPLER && (
-              <div style={{ gridColumn: data.partner_B?.findings_all?.USG_SCROTUM_DOPPLER ? 'span 6' : 'span 12' }}>
+              <div className={`min-w-0 ${data.partner_B?.findings_all?.USG_SCROTUM_DOPPLER ? 'lg:col-span-6' : 'lg:col-span-12'}`}>
                 <div className="mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">{maleName}'s Scrotal Health & Doppler</div>
                 <ScrotalHealthPanel scrotumData={data.partner_A.findings_all.USG_SCROTUM_DOPPLER} />
               </div>
             )}
             {data.partner_B?.findings_all?.USG_SCROTUM_DOPPLER && (
-              <div style={{ gridColumn: data.partner_A?.findings_all?.USG_SCROTUM_DOPPLER ? 'span 6' : 'span 12' }}>
+              <div className={`min-w-0 ${data.partner_A?.findings_all?.USG_SCROTUM_DOPPLER ? 'lg:col-span-6' : 'lg:col-span-12'}`}>
                 <div className="mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">{femaleName}'s Scrotal Health & Doppler</div>
                 <ScrotalHealthPanel scrotumData={data.partner_B.findings_all.USG_SCROTUM_DOPPLER} />
               </div>
@@ -523,13 +523,13 @@ export default function UsgPage() {
         {(data.partner_A?.findings_all?.ECHO || data.partner_B?.findings_all?.ECHO) && (
           <>
             {data.partner_A?.findings_all?.ECHO && (
-              <div style={{ gridColumn: data.partner_B?.findings_all?.ECHO ? 'span 6' : 'span 12' }}>
+              <div className={`min-w-0 ${data.partner_B?.findings_all?.ECHO ? 'lg:col-span-6' : 'lg:col-span-12'}`}>
                 <div className="mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">{maleName}'s Echocardiography (Echo)</div>
                 <EchoPanel echoData={data.partner_A.findings_all.ECHO} />
               </div>
             )}
             {data.partner_B?.findings_all?.ECHO && (
-              <div style={{ gridColumn: data.partner_A?.findings_all?.ECHO ? 'span 6' : 'span 12' }}>
+              <div className={`min-w-0 ${data.partner_A?.findings_all?.ECHO ? 'lg:col-span-6' : 'lg:col-span-12'}`}>
                 <div className="mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">{femaleName}'s Echocardiography (Echo)</div>
                 <EchoPanel echoData={data.partner_B.findings_all.ECHO} />
               </div>
@@ -540,13 +540,13 @@ export default function UsgPage() {
         {(data.partner_A?.findings_all?.DEXA || data.partner_B?.findings_all?.DEXA) && (
           <>
             {data.partner_A?.findings_all?.DEXA && (
-              <div style={{ gridColumn: data.partner_B?.findings_all?.DEXA ? 'span 6' : 'span 12' }}>
+              <div className={`min-w-0 ${data.partner_B?.findings_all?.DEXA ? 'lg:col-span-6' : 'lg:col-span-12'}`}>
                 <div className="mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">{maleName}'s Bone Density (DEXA)</div>
                 <DexaPanel dexaData={data.partner_A.findings_all.DEXA} />
               </div>
             )}
             {data.partner_B?.findings_all?.DEXA && (
-              <div style={{ gridColumn: data.partner_A?.findings_all?.DEXA ? 'span 6' : 'span 12' }}>
+              <div className={`min-w-0 ${data.partner_A?.findings_all?.DEXA ? 'lg:col-span-6' : 'lg:col-span-12'}`}>
                 <div className="mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">{femaleName}'s Bone Density (DEXA)</div>
                 <DexaPanel dexaData={data.partner_B.findings_all.DEXA} />
               </div>
@@ -555,7 +555,7 @@ export default function UsgPage() {
         )}
 
         {/* Risk & Shared Risk Row */}
-        <div style={{ gridColumn: 'span 6' }}>
+        <div className="min-w-0 lg:col-span-6">
           <RiskMatrix 
             flagsA={data.partner_A?.risk_flags} 
             flagsB={data.partner_B?.risk_flags}
@@ -563,12 +563,12 @@ export default function UsgPage() {
             nameB={femaleName}
           />
         </div>
-        <div style={{ gridColumn: 'span 6' }}>
+        <div className="min-w-0 lg:col-span-6">
           {data.partner_B ? (
              <SharedRiskIntelligence insights={data.shared_insights} />
           ) : (
-             <div className="glass-panel" style={{ padding: '20px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '350px' }}>
-               <p className="text-slate-400">Add {femaleName}'s report to view Shared Risk Intelligence.</p>
+             <div className="glass-panel flex h-full min-h-[140px] items-center justify-center p-5 lg:min-h-[350px]">
+               <p className="text-center text-slate-400">Add {femaleName}'s report to view Shared Risk Intelligence.</p>
              </div>
           )}
         </div>
