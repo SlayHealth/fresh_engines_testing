@@ -944,6 +944,10 @@ export function CompatibilityProvider({ children }) {
     }
   };
 
+  // The shared demo account (phone masked to 'Demo account' by the backend) has
+  // no run/chat caps server-side, so never let its counters lock the UI either.
+  const isDemoAccount = user?.phone_number === 'Demo account';
+
   return (
     <CompatibilityContext.Provider value={{
       user, setUser,
@@ -952,8 +956,8 @@ export function CompatibilityProvider({ children }) {
       authStep, setAuthStep,
       isAuthLoading, setIsAuthLoading,
       authError, setAuthError,
-      runsUsed, setRunsUsed,
-      chatsUsed, setChatsUsed,
+      runsUsed: isDemoAccount ? 0 : runsUsed, setRunsUsed,
+      chatsUsed: isDemoAccount ? 0 : chatsUsed, setChatsUsed,
       isUpgradingQuota, setIsUpgradingQuota,
       matchesList, setMatchesList,
       isMatchesLoading, setIsMatchesLoading,

@@ -4,15 +4,7 @@ const otpService = require('../services/auth/otp.service');
 const jwtService = require('../services/auth/jwt.service');
 const notificationService = require('../services/notification/notification.service');
 const logger = require('../utils/logger');
-
-// Shared read-only sample account behind the one-click "live demo" login on the
-// sign-in page (lets judges/visitors explore a pre-populated report without an
-// OTP). Resolved server-side so the client never sends or receives the real
-// phone number. Override via env; falls back to the seeded sample account.
-const DEMO_ACCOUNT_PHONE = process.env.DEMO_ACCOUNT_PHONE || '+917063992027';
-// What the client sees instead of the demo account's real number, everywhere a
-// user object is returned (profile UI + any network payload).
-const DEMO_DISPLAY_PHONE = 'Demo account';
+const { DEMO_ACCOUNT_PHONE, DEMO_DISPLAY_PHONE } = require('../utils/demoAccount');
 
 // Strip the demo account's real phone number out of anything sent to the client.
 // Applied to every response that returns this user (demo-login, refresh, profile).

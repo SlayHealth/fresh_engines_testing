@@ -1,5 +1,6 @@
 const { db } = require('../services/storage/postgres.service');
 const logger = require('../utils/logger');
+const { DEMO_ACCOUNT_PHONE } = require('../utils/demoAccount');
 
 async function checkMatchQuota(req, res, next) {
   try {
@@ -9,12 +10,16 @@ async function checkMatchQuota(req, res, next) {
     if (!userId) {
       return next();
     }
-    const userRes = await db.query('SELECT runs_used FROM users WHERE id = $1', [userId]);
+    const userRes = await db.query('SELECT runs_used, phone_number FROM users WHERE id = $1', [userId]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User profile not found' });
     }
 
     const user = userRes.rows[0];
+    // The shared demo account is unlimited — skip both the cap and the counter.
+    if (user.phone_number === DEMO_ACCOUNT_PHONE) {
+      return next();
+    }
     if (user.runs_used >= 1) {
       return res.status(403).json({
         success: false,
@@ -40,12 +45,16 @@ async function checkChatQuota(req, res, next) {
       return next();
     }
 
-    const userRes = await db.query('SELECT chats_used FROM users WHERE id = $1', [userId]);
+    const userRes = await db.query('SELECT chats_used, phone_number FROM users WHERE id = $1', [userId]);
     if (userRes.rows.length === 0) {
       return next();
     }
 
     const user = userRes.rows[0];
+    // The shared demo account is unlimited — skip both the cap and the counter.
+    if (user.phone_number === DEMO_ACCOUNT_PHONE) {
+      return next();
+    }
     if (user.chats_used >= 5) {
       return res.status(403).json({
         success: false,
