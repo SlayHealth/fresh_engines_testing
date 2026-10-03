@@ -1241,7 +1241,7 @@ function AddProspectPageInner() {
       setUser(mergedUser);
 
       const matchResult = await handleCompatibilityMatch(mergedUser);
-      if (matchResult.success) {
+      if (matchResult?.success) {
         const hasMentalAnswers = Object.keys(selfMentalAnswers).length > 0 || Object.keys(prospectMentalAnswers).length > 0;
         if (hasMentalAnswers) {
           await handleMentalAnalysis(selfMentalAnswers, prospectMentalAnswers, matchResult.matchId);

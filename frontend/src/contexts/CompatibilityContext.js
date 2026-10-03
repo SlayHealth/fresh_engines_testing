@@ -582,7 +582,8 @@ export function CompatibilityProvider({ children }) {
   const handleCompatibilityMatch = async (selfUser = user) => {
     if (!userReport || !prospectReport) {
       toast.error('Please upload pathology reports for both yourself and your prospect first.');
-      return;
+      setMatchError('Please upload pathology reports for both yourself and your prospect first.');
+      return { success: false, matchId: null };
     }
 
     const missing = [];
@@ -601,7 +602,7 @@ export function CompatibilityProvider({ children }) {
 
     if (missing.length > 0) {
       setMatchError(`Please fill in the following columns to proceed: ${missing.join(", ")}`);
-      return;
+      return { success: false, matchId: null };
     }
 
     setIsMatching(true);
