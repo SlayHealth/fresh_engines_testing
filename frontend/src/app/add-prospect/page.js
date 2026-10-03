@@ -1242,8 +1242,13 @@ function AddProspectPageInner() {
 
       const matchResult = await handleCompatibilityMatch(mergedUser);
       if (matchResult?.success) {
-        const hasMentalAnswers = Object.keys(selfMentalAnswers).length > 0 || Object.keys(prospectMentalAnswers).length > 0;
-        if (hasMentalAnswers) {
+        // /api/mental/analyze 400s unless BOTH partners answered every question,
+        // so a half-finished (optional) questionnaire is skipped here rather than
+        // sent — same completeness check as handleMentalCategoryAdvance.
+        const mentalComplete =
+          Object.keys(selfMentalAnswers).length >= MENTAL_HEALTH_QUESTIONS.length &&
+          Object.keys(prospectMentalAnswers).length >= MENTAL_HEALTH_QUESTIONS.length;
+        if (mentalComplete) {
           await handleMentalAnalysis(selfMentalAnswers, prospectMentalAnswers, matchResult.matchId);
         }
         router.push('/core-engine/story');
